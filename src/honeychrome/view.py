@@ -47,14 +47,13 @@ from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import QMessageBox, QWidget, QFileDialog, QApplication
 from PySide6.QtCore import Signal, QObject, Slot, QTimer, Qt
 
-import settings
-from view_components.event_bus import EventBus
-from view_components.splash_dialog import SplashScreen
-from view_components.main_window import MainWindow
-
-from controller_components.functions import add_recent_file
-from settings import experiments_folder, file_extension
-from view_components.new_file_dialog import NewFileDialog
+import honeychrome.settings as settings
+from honeychrome.view_components.event_bus import EventBus
+from honeychrome.view_components.splash_dialog import SplashScreen
+from honeychrome.view_components.main_window import MainWindow
+from honeychrome.controller_components.functions import add_recent_file
+from honeychrome.settings import experiments_folder, file_extension
+from honeychrome.view_components.new_file_dialog import NewFileDialog
 
 import pyqtgraph as pg
 

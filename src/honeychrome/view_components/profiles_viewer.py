@@ -1,9 +1,8 @@
 from PySide6.QtCore import QPointF, QRectF, Qt, QRect, QSize, QPoint, Slot
-from PySide6.QtGui import QPen, QColor
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QLayout, QWidget, QHBoxLayout, QLabel, QSizePolicy
 import pyqtgraph as pg
 
-from settings import heading_style, line_colors
+from honeychrome.settings import heading_style, line_colors
 
 
 # --------------------- Flow Layout -------------------------
@@ -260,7 +259,7 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
 
-    from controller import Controller
+    from honeychrome.controller import Controller
     from pathlib import Path
     from event_bus import EventBus
 

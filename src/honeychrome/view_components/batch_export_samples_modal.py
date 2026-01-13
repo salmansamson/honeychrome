@@ -4,7 +4,7 @@ from PySide6.QtGui import QRegularExpressionValidator, Qt
 from PySide6.QtCore import QRegularExpression
 import sys
 
-from controller_components.functions import get_all_subfolders_recursive
+from honeychrome.controller_components.functions import get_all_subfolders_recursive
 
 
 class BatchExportSamplesModal(QDialog):

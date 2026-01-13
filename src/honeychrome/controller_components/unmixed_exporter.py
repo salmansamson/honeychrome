@@ -1,16 +1,15 @@
-import json
-from pathlib import Path
-from unicodedata import category
+# import json
+# from pathlib import Path
+# from unicodedata import category
 
 import numpy as np
 from PySide6.QtCore import QObject, Signal, QTimer, QSettings
-from PySide6.QtWidgets import QApplication
-
-from controller_components.functions import timer, apply_gates_in_place, apply_transfer_matrix, calc_stats, export_unmixed_sample
+# from PySide6.QtWidgets import QApplication
 import flowkit as fk
 
-import settings
-from view_components.busy_cursor import with_busy_cursor
+from honeychrome.controller_components.functions import apply_transfer_matrix, export_unmixed_sample
+import honeychrome.settings as settings
+from honeychrome.view_components.busy_cursor import with_busy_cursor
 
 class UnmixedExporter(QObject):
     def __init__(self, folder, subsample_bool, bus, controller):
@@ -85,8 +84,8 @@ class UnmixedExporter(QObject):
 
 if __name__ == "__main__":
     from pathlib import Path
-    from controller import Controller
-    from view_components.event_bus import EventBus
+    from honeychrome.controller import Controller
+    # from honeychrome.view_components.event_bus import EventBus
 
     kc = Controller()
     base_directory = Path.home() / 'spectral_cytometry'

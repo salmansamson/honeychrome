@@ -2,13 +2,12 @@ import numpy as np
 import flowkit as fk
 from PySide6.QtCore import QSettings
 from queue import Empty
-
-from controller_components.transform import Transform
-from settings import linear_a, logicle_w, logicle_m, logicle_a, log_m
-
 from time import perf_counter
 from functools import wraps
 from pathlib import Path
+
+from honeychrome.controller_components.transform import Transform
+from honeychrome.settings import linear_a, logicle_w, logicle_m, logicle_a, log_m
 
 q_settings = QSettings("honeychrome", "ExperimentSelector")
 

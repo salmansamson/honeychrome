@@ -5,9 +5,8 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QFileDialog, Q
 from PySide6.QtCore import Qt, QSettings, QStringListModel, QPoint, QObject, QModelIndex
 from PySide6.QtGui import QPixmap, QPainter
 
-from controller_components.functions import q_settings, add_recent_file
-from settings import experiments_folder, file_extension
-from view_components.new_file_dialog import NewFileDialog
+from honeychrome.controller_components.functions import q_settings, add_recent_file
+from honeychrome.settings import experiments_folder, file_extension
 
 base_directory = str(Path.home() / experiments_folder)
 

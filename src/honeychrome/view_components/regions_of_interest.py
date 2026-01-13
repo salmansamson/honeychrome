@@ -7,7 +7,7 @@ import pyqtgraph as pg
 
 import warnings
 
-from settings import label_offset, roi_handle_size
+from honeychrome.settings import label_offset, roi_handle_size
 
 warnings.filterwarnings("ignore", message="t.core.qobject.connect: QObject::connect(QStyleHints, QStyleHints): unique connections require a pointer to member function of a QObject subclass")
 

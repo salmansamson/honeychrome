@@ -5,11 +5,11 @@ from pathlib import Path
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QDialog, QScrollArea, QFormLayout, QLineEdit, QCheckBox, QSpinBox, QDoubleSpinBox, QDialogButtonBox, QComboBox, QLabel, QButtonGroup)
 from PySide6.QtCore import Qt, QSettings
 
-from settings import (colourmap_choice, graphics_export_formats, colormap_name, graphics_export_format, cytometry_plot_width_target,
+from honeychrome.settings import (colourmap_choice, graphics_export_formats, colormap_name, graphics_export_format, cytometry_plot_width_target,
                       tile_size_nxn_grid, subsample, hist_bins, trigger_channel, adc_channels, width_channels, height_channels,
                       use_dummy_instrument, magnitude_ceilings, magnitude_ceiling, raw_settings, unmixed_settings, experiments_folder,
                       magnitude_ceilings_int, spectral_positive_gate_percent, spectral_negative_gate_percent, report_include_raw, report_include_unmixed, report_include_process)
-import settings
+import honeychrome.settings as settings
 
 
 import sys
@@ -385,8 +385,8 @@ class ExperimentSettings(QDialog):
             self.magnitude_ceiling_combo.setCurrentIndex(index)
 
 if __name__ == '__main__':
-    from experiment_model import ExperimentModel
-    from view_components.event_bus import EventBus
+    from honeychrome.experiment_model import ExperimentModel
+    from honeychrome.view_components.event_bus import EventBus
 
     base_directory = Path.home() / experiments_folder
 

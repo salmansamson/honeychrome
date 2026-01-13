@@ -1,9 +1,8 @@
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
-from PySide6.QtCore import QDir
 from pathlib import Path
 import sys
 
-from settings import experiments_folder, file_extension
+from honeychrome.settings import experiments_folder, file_extension
 base_directory = str(Path.home() / experiments_folder)
 
 class NewFileDialog(QFileDialog):

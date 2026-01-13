@@ -4,10 +4,10 @@ from PySide6.QtGui import QColor, QPalette, QResizeEvent
 from PySide6.QtCore import Qt, QTimer, Slot
 import sys
 
-import settings
-from view_components.cytometry_plot_widget import CytometryPlotWidget
-from view_components.cytometry_toolbar_popout import CytometryToolbarPopout
-from view_components.new_plot_widget import NewPlotWidget
+import honeychrome.settings as settings
+from honeychrome.view_components.cytometry_plot_widget import CytometryPlotWidget
+from honeychrome.view_components.cytometry_toolbar_popout import CytometryToolbarPopout
+from honeychrome.view_components.new_plot_widget import NewPlotWidget
 
 class CytometryGridWidget(QScrollArea):
     def __init__(self, bus=None, mode=None, gating_tree=None, *args, **kwargs):
@@ -341,7 +341,7 @@ class CytometryGridWidget(QScrollArea):
 
 
 if __name__ == "__main__":
-    from controller import Controller
+    from honeychrome.controller import Controller
     from pathlib import Path
     import pyqtgraph as pg
     app = QApplication(sys.argv)

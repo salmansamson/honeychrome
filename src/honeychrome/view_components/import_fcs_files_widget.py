@@ -4,9 +4,9 @@ from PySide6.QtGui import QRegularExpressionValidator, QDesktopServices
 from PySide6.QtCore import QRegularExpression, Qt, QUrl, QThread
 import sys
 
-from controller_components.functions import get_all_subfolders_recursive
-from controller_components.import_fcs_controller import ImportFCSController
-from view_components.icon_loader import icon
+from honeychrome.controller_components.functions import get_all_subfolders_recursive
+from honeychrome.controller_components.import_fcs_controller import ImportFCSController
+from honeychrome.view_components.icon_loader import icon
 
 
 class ImportFCSFilesWidget(QDialog):
@@ -97,7 +97,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
 
 
-    from controller import Controller
+    from honeychrome.controller import Controller
     from pathlib import Path
     from event_bus import EventBus
 

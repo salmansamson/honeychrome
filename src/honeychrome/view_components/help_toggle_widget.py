@@ -2,8 +2,8 @@ import sys
 from PySide6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QHBoxLayout)
 from PySide6.QtCore import Qt
 
-from view_components.help_texts import process_help_text
-from view_components.icon_loader import icon
+from honeychrome.view_components.help_texts import process_help_text
+from honeychrome.view_components.icon_loader import icon
 
 class HelpToggleWidget(QWidget):
     def __init__(self, title="Show Help", text=''):

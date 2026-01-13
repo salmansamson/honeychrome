@@ -1,7 +1,7 @@
 import networkx as nx
 from flowkit import GatingStrategy
 from flowkit._models.gates import QuadrantGate, BooleanGate
-from flowkit._resources import gml_schema
+# from flowkit._resources import gml_schema
 from flowkit._utils.gml_write import _add_transform_to_gml, _add_matrix_to_gml, _add_gates_from_gate_dict, \
     _add_gate_to_gml
 from flowkit._utils.xml_utils import _construct_gates, _construct_transforms, _construct_matrices

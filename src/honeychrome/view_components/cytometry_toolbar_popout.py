@@ -2,7 +2,7 @@
 from PySide6.QtGui import QAction, QPalette
 from PySide6.QtWidgets import QToolBar
 
-from view_components.icon_loader import icon
+from honeychrome.view_components.icon_loader import icon
 
 
 class CytometryToolbarPopout(QToolBar):

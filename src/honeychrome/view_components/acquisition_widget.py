@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QPushButton, 
                                QVBoxLayout, QDockWidget, QLabel, QToolBar, QSizePolicy, QFrame, QGraphicsOpacityEffect)
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve
 
-from view_components.icon_loader import icon
+from honeychrome.view_components.icon_loader import icon
 
 
 class AcquisitionWidget(QWidget):

@@ -10,13 +10,14 @@ from PySide6.QtWidgets import QApplication, QWidget, QHeaderView
 import pyqtgraph as pg
 import docx
 from docx.shared import Mm, Inches, Pt
+from docx.oxml import parse_xml
 
-from settings import cytometry_plot_width_export
-import settings
-from view_components.cytometry_plot_widget import CytometryPlotWidget, pm_to_png_buffer, get_widget_pixmap, export_widget_png
-from view_components.heatmap_viewedit import HeatmapViewEditor
-from view_components.nxn_grid import NxNGrid
-from view_components.profiles_viewer import ProfilesViewer
+from honeychrome.settings import cytometry_plot_width_export
+import honeychrome.settings as settings
+from honeychrome.view_components.cytometry_plot_widget import CytometryPlotWidget, pm_to_png_buffer, get_widget_pixmap, export_widget_png
+from honeychrome.view_components.heatmap_viewedit import HeatmapViewEditor
+from honeychrome.view_components.nxn_grid import NxNGrid
+from honeychrome.view_components.profiles_viewer import ProfilesViewer
 
 
 def resize_tableview(widget):
@@ -81,7 +82,6 @@ def add_inline_picture(doc, png_buffer, own_line):
 
 def reliable_table_autofit(table):
     """Always use this for reliable auto-fit"""
-    from docx.oxml import parse_xml
 
     tbl_pr = table._element.tblPr
 

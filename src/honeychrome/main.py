@@ -17,7 +17,7 @@ Instrument Communicator:
 -Listens for start event
 -Listens for stop event
 '''
-from instrument_driver import Instrument
+from honeychrome.instrument_driver import Instrument
 
 '''
 Trace Analyser:
@@ -27,7 +27,7 @@ Trace Analyser:
 -Copies latest trace with peak measurements
 -Signals when new events chunk is ready
 '''
-from trace_analyst import TraceAnalyser
+from honeychrome.trace_analyst import TraceAnalyser
 
 
 '''
@@ -39,7 +39,7 @@ Controller:
 -Creates live sample and carries out live analysis
 -Sends and receives signals to GUI
 '''
-from controller import Controller
+from honeychrome.controller import Controller
 
 '''
 View:
@@ -54,7 +54,7 @@ View:
 --instrument control
 --oscilloscope
 '''
-from view import View
+from honeychrome.view import View
 
 
 def main():
@@ -62,9 +62,9 @@ def main():
     define objects for communication between processes
     '''
     mp.set_start_method("spawn")
-    from instrument_configuration import traces_cache_size, dtype, max_events_in_traces_cache, trace_n_points, n_channels_trace, adc_rate
-    from settings import max_events_in_cache, n_channels_per_event, channel_dict, event_channels_pnn
-    import settings
+    from honeychrome.instrument_configuration import traces_cache_size, dtype, max_events_in_traces_cache, trace_n_points, n_channels_trace, adc_rate
+    from honeychrome.settings import max_events_in_cache, n_channels_per_event, channel_dict, event_channels_pnn
+    import honeychrome.settings as settings
 
     # Allocate shared memory block, plus head and tail indices
     traces_cache_shm = shared_memory.SharedMemory(create=True, size=np.zeros(traces_cache_size, dtype=dtype).nbytes)

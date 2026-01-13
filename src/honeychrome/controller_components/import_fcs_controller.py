@@ -3,10 +3,11 @@ import numpy as np
 from PySide6.QtCore import QObject, Signal, QTimer
 import flowkit as fk
 from flowio import FlowData
-from controller_components.functions import timer, apply_gates_in_place, apply_transfer_matrix, calc_stats, all_same, assign_default_transforms, generate_transformations
-from controller_components.gml_functions_mod_from_flowkit import to_gml
-from settings import settings_default, process_default, cytometry_default
-from view_components.busy_cursor import with_busy_cursor
+
+from honeychrome.controller_components.functions import timer, apply_gates_in_place, apply_transfer_matrix, calc_stats, all_same, assign_default_transforms, generate_transformations
+from honeychrome.controller_components.gml_functions_mod_from_flowkit import to_gml
+from honeychrome.settings import settings_default, process_default, cytometry_default
+from honeychrome.view_components.busy_cursor import with_busy_cursor
 
 class ImportFCSController(QObject):
     finished = Signal()
@@ -236,7 +237,7 @@ class ImportFCSController(QObject):
 
 if __name__ == "__main__":
     from pathlib import Path
-    from controller import Controller
+    from honeychrome.controller import Controller
 
     kc = Controller()
     base_directory = Path.home() / 'spectral_cytometry'

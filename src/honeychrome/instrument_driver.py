@@ -28,8 +28,8 @@ import numpy as np
 import time
 import warnings
 
-from controller_components.dummy_instrument import DummyInstrument
-from instrument_configuration import traces_cache_size, dtype, max_events_in_traces_cache, trace_n_points, operation_register, operation_memory, dummy_bytes, memory_start_address, memory_end_address, transfer_target_repeat_time, registers_map
+from honeychrome.controller_components.dummy_instrument import DummyInstrument
+from honeychrome.instrument_configuration import traces_cache_size, dtype, max_events_in_traces_cache, trace_n_points, operation_register, operation_memory, dummy_bytes, memory_start_address, memory_end_address, transfer_target_repeat_time, registers_map
 
 class Instrument(mp.Process):
     def __init__(self, use_dummy_instrument=False,

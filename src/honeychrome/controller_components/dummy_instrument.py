@@ -2,8 +2,8 @@ from pathlib import Path
 import flowkit as fk
 import numpy as np
 
-from instrument_configuration import n_channels_trace, n_time_points_in_event
-from settings import adc_channels, magnitude_ceiling
+from honeychrome.instrument_configuration import n_channels_trace, n_time_points_in_event
+from honeychrome.settings import adc_channels, magnitude_ceiling
 
 fcs_file = Path(__file__).parent / 'example_for_dummy_acquisition.fcs'
 

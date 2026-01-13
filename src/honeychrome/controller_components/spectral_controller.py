@@ -4,15 +4,14 @@ import warnings
 
 import numpy as np
 from PySide6.QtCore import QObject, Signal, QTimer
-from PySide6.QtWidgets import QApplication
-
-from controller_components.functions import timer
-from controller_components.spectral_functions import get_best_channel, get_profile
-from controller_components.spectral_librarian import SpectralLibrary
+# from PySide6.QtWidgets import QApplication
 import flowkit as fk
 
-from experiment_model import check_fcs_matches_experiment
-from view_components.busy_cursor import with_busy_cursor
+from honeychrome.controller_components.functions import timer
+from honeychrome.controller_components.spectral_functions import get_best_channel, get_profile
+from honeychrome.controller_components.spectral_librarian import SpectralLibrary
+from honeychrome.experiment_model import check_fcs_matches_experiment
+from honeychrome.view_components.busy_cursor import with_busy_cursor
 
 # connect to spectral library
 spectral_library = SpectralLibrary()

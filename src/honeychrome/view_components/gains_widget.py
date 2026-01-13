@@ -2,7 +2,7 @@ import sys
 from PySide6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QSlider, QSpinBox, QLabel, QPushButton,
                                QFrame)
 from PySide6.QtCore import Qt
-from settings import fluorescence_channels, default_gains_immuno, default_gains_xfp
+from honeychrome.settings import fluorescence_channels, default_gains_immuno, default_gains_xfp
 
 class GainsWidget(QWidget):
     def __init__(self, bus, *args, **kwargs):

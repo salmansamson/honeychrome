@@ -33,20 +33,21 @@ import numpy as np
 from pathlib import Path
 from PySide6.QtCore import QObject, Slot, QTimer, QSettings
 from deepdiff import DeepDiff
-from controller_components.spectral_controller import SpectralAutoGenerator
-from experiment_model import ExperimentModel, check_fcs_matches_experiment
 import flowkit as fk
 import threading
 from copy import deepcopy
-from controller_components.functions import apply_gates_in_place, apply_transfer_matrix, generate_transformations, update_transforms, initialise_hists, calc_hists, calc_stats, initialise_stats, assign_default_transforms, define_quad_gates, define_range_gate, define_polygon_gate, define_rectangle_gate, define_ellipse_gate, add_recent_file, empty_queue_nowait, define_process_plots
-from controller_components.gml_functions_mod_from_flowkit import from_gml, to_gml
-from instrument_configuration import traces_cache_size, dtype, adc_rate
-import settings
-from settings import max_events_in_cache, n_channels_per_event, experiments_folder, live_data_process_repeat_time, settings_default, process_default, samples_default
-from controller_components.spectral_functions import calculate_spectral_process
 from multiprocessing import shared_memory
 import time
-from view_components.busy_cursor import with_busy_cursor
+
+from honeychrome.controller_components.spectral_controller import SpectralAutoGenerator
+from honeychrome.experiment_model import ExperimentModel, check_fcs_matches_experiment
+from honeychrome.controller_components.functions import apply_gates_in_place, apply_transfer_matrix, generate_transformations, update_transforms, initialise_hists, calc_hists, calc_stats, initialise_stats, assign_default_transforms, define_quad_gates, define_range_gate, define_polygon_gate, define_rectangle_gate, define_ellipse_gate, add_recent_file, empty_queue_nowait, define_process_plots
+from honeychrome.controller_components.gml_functions_mod_from_flowkit import from_gml, to_gml
+from honeychrome.instrument_configuration import traces_cache_size, dtype, adc_rate
+import honeychrome.settings as settings
+from honeychrome.settings import max_events_in_cache, n_channels_per_event, experiments_folder, live_data_process_repeat_time, settings_default, process_default, samples_default, channel_dict
+from honeychrome.controller_components.spectral_functions import calculate_spectral_process
+from honeychrome.view_components.busy_cursor import with_busy_cursor
 
 base_directory = Path.home() / experiments_folder
 
@@ -329,7 +330,6 @@ class Controller(QObject):
 
     def initialise_ephemeral_data(self, scope=None):
         # called when an experiment is created or loaded (or spectral process is refreshed)
-        from settings import channel_dict
         self.experiment_compatible_with_acquisition = channel_dict['event_channels_pnn'] == self.experiment.settings['raw']['event_channels_pnn'] #todo should refer to instrument/analyst/acq config rather than defaults
         self.filtered_raw_fluorescence_channel_ids = None
 
@@ -1255,7 +1255,7 @@ if __name__ == '__main__':
     Then, set up instrument
     '''
     # start instrument dummy
-    from instrument_driver import Instrument
+    from honeychrome.instrument_driver import Instrument
 
     instrument = Instrument(use_dummy_instrument=True, traces_cache_name=traces_cache_shm.name,
         traces_cache_lock=traces_cache_lock, index_head_traces_cache=index_head_traces_cache,
@@ -1265,7 +1265,7 @@ if __name__ == '__main__':
     '''
     Then, set up analyst
     '''
-    from trace_analyst import TraceAnalyser
+    from honeychrome.trace_analyst import TraceAnalyser
 
     trace_analyser = TraceAnalyser(traces_cache_name=traces_cache_shm.name, traces_cache_lock=traces_cache_lock,
         index_head_traces_cache=index_head_traces_cache, index_tail_traces_cache=index_tail_traces_cache,

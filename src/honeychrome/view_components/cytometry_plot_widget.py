@@ -6,21 +6,18 @@ import numpy as np
 from PySide6.QtCore import QRectF, Slot, Qt, QTimer, QEvent, QObject
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QVBoxLayout, QMenu, QFrame, QFileDialog, QApplication
-import pyqtgraph as pg
 import colorcet as cc
 import flowkit as fk
 from flowkit.exceptions import GateReferenceError
 
-from controller_components.functions import define_quad_gates, define_range_gate, define_ellipse_gate, define_rectangle_gate, \
-    define_polygon_gate
-from controller_components.transform import transforms_menu_items
-import settings
+from honeychrome.controller_components.functions import define_quad_gates, define_range_gate, define_ellipse_gate, define_rectangle_gate, define_polygon_gate
+from honeychrome.controller_components.transform import transforms_menu_items
+import honeychrome.settings as settings
 
 import warnings
 
-from view_components.cytometry_plot_components import InteractiveLabel, NoPanViewBox, ZoomAxis, WheelEventFilter
-from view_components.regions_of_interest import RangeROI, EllipseROI, RectangleROI, \
-    QuadROI, PolygonROI, PolygonROIConstructor
+from honeychrome.view_components.cytometry_plot_components import InteractiveLabel, NoPanViewBox, ZoomAxis, WheelEventFilter
+from honeychrome.view_components.regions_of_interest import RangeROI, EllipseROI, RectangleROI, QuadROI, PolygonROI, PolygonROIConstructor
 
 warnings.filterwarnings("ignore", message="t.core.qobject.connect: QObject::connect(QStyleHints, QStyleHints): unique connections require a pointer to member function of a QObject subclass")
 

@@ -71,13 +71,13 @@ dependencies = [
 dev = []
 
 [project.scripts]
-mycli = "mypackage.cli:main"
+honeychrome = "honeychrome.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-dir]
-mypackage = "src/honeychrome"
+"" = "src"
 
 # Optional: Testing configuration
 [tool.pytest.ini_options]

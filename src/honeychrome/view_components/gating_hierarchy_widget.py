@@ -417,7 +417,7 @@ class GatingHierarchyWidget(QWidget):
 
 if __name__ == "__main__":
     import sys
-    from controller import Controller
+    from honeychrome.controller import Controller
 
     class MainWindow(QMainWindow):
         def __init__(self):

@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor
 import pyqtgraph as pg
 import colorcet as cc
 
-from settings import heading_style
+from honeychrome.settings import heading_style
 
 # ---------------------------
 # Model
@@ -355,7 +355,7 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
 
-    from controller import Controller
+    from honeychrome.controller import Controller
     from pathlib import Path
     from event_bus import EventBus
 

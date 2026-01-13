@@ -6,9 +6,9 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from queue import Empty
 import pyqtgraph as pg
 
-from instrument_configuration import n_time_points_in_event, adc_rate
-from settings import analyser_target_repeat_time, line_colors, adc_channels, scatter_channels, fluorescence_channels
-from view_components.profiles_viewer import FlowLayout, LegendEntry
+from honeychrome.instrument_configuration import n_time_points_in_event, adc_rate
+from honeychrome.settings import analyser_target_repeat_time, line_colors, adc_channels, scatter_channels, fluorescence_channels
+from honeychrome.view_components.profiles_viewer import FlowLayout, LegendEntry
 
 class OscilloscopeWidget(QWidget):
     _instance = None

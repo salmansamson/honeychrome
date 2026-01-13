@@ -7,7 +7,7 @@ from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_similarity
 import pandas as pd
 
-import settings
+import honeychrome.settings as settings
 
 
 def get_best_channel(sample, gating_strategy, base_gate_label, fluorescence_channel_ids):

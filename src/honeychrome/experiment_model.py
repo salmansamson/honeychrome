@@ -37,24 +37,11 @@ import flowkit as fk
 import numpy as np
 import warnings
 import os
-
-from controller_components.functions import generate_transformations, assign_default_transforms
-from controller_components.gml_functions_mod_from_flowkit import to_gml
-
-from settings import settings_default, samples_default, process_default, cytometry_default, sample_name_source
-
-# #### do all the following to use flowio 1.4.0 while not breaking flowkit #### this was necessary in FlowKit 1.2.3
-# # pip install flowio==1.4.0 --target ./vendor/flowio_v14
-# import importlib.util, sys
-#
-# spec = importlib.util.spec_from_file_location(
-#     "flowio_v14",
-#     Path(__file__).resolve().parent / "vendor/flowio_v14/flowio/__init__.py"
-# )
-# flowio_v14 = importlib.util.module_from_spec(spec)
-# sys.modules["flowio_v14"] = flowio_v14
-# spec.loader.exec_module(flowio_v14)
 from flowio import FlowData
+
+from honeychrome.controller_components.functions import generate_transformations, assign_default_transforms
+from honeychrome.controller_components.gml_functions_mod_from_flowkit import to_gml
+from honeychrome.settings import settings_default, samples_default, process_default, cytometry_default, sample_name_source
 
 def safe_save(content, filename):
     temp_name = filename + '.tmp'
@@ -249,7 +236,7 @@ if __name__ == '__main__':
     '''
     import os
     from deepdiff import DeepDiff
-    from controller_components.import_fcs_controller import ImportFCSController
+    from honeychrome.controller_components.import_fcs_controller import ImportFCSController
 
     base_directory = Path.home() / 'spectral_cytometry'
     os.chdir(base_directory)

@@ -6,9 +6,8 @@ from PySide6.QtGui import QColor, QPalette, QImage, QPixmap
 
 import colorcet as cc
 
-import settings
-from controller_components.functions import define_process_plots
-from view_components.busy_cursor import with_busy_cursor
+import honeychrome.settings as settings
+from honeychrome.controller_components.functions import define_process_plots
 
 # ---------------------------
 # Model

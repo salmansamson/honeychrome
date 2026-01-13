@@ -2,8 +2,6 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QComboBox, QPushButton
 )
-from PySide6.QtCore import Signal, QPoint
-
 max_visible_items = 15
 
 class NewPlotWidget(QWidget):
@@ -101,8 +99,8 @@ class NewPlotWidget(QWidget):
 if __name__ == "__main__":
     from PySide6.QtWidgets import QApplication
     from pathlib import Path
-    from controller import Controller
-    from view_components.event_bus import EventBus
+    from honeychrome.controller import Controller
+    from honeychrome.view_components.event_bus import EventBus
 
     app = QApplication([])
 

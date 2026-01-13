@@ -6,11 +6,11 @@ from PySide6 import QtCore
 from PySide6.QtCore import Qt, QModelIndex, QTimer, QThread, Slot, QObject, QEvent, QSize
 from PySide6.QtWidgets import (QApplication, QFrame, QVBoxLayout, QHBoxLayout, QTableView, QPushButton, QStyledItemDelegate, QComboBox, QLineEdit, QMessageBox, QHeaderView, QLabel, QWidget)
 
-from controller_components.functions import raw_gates_list
-from controller_components.spectral_controller import SpectralAutoGenerator, ProfileUpdater, spectral_library
-from controller_components.spectral_functions import sanitise_control_in_place
-from view_components.icon_loader import icon
-from settings import spectral_model_column_labels, heading_style
+from honeychrome.controller_components.functions import raw_gates_list
+from honeychrome.controller_components.spectral_controller import SpectralAutoGenerator, ProfileUpdater, spectral_library
+from honeychrome.controller_components.spectral_functions import sanitise_control_in_place
+from honeychrome.view_components.icon_loader import icon
+from honeychrome.settings import spectral_model_column_labels, heading_style
 
 COLUMNS = list(spectral_model_column_labels.keys())
 CONTROL_TYPES = ["Single Stained Spectral Control", "Single Stained Spectral Control from Library", "Channel Assignment"]
@@ -529,7 +529,7 @@ if __name__ == "__main__":
 
     app = QApplication(sys.argv)
 
-    from controller import Controller
+    from honeychrome.controller import Controller
     from pathlib import Path
     from event_bus import EventBus
 

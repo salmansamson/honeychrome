@@ -3,15 +3,15 @@ from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QSplitter, QTab
 from PySide6.QtCore import Qt
 
 
-from view_components.nxn_grid import NxNGrid
+from honeychrome.view_components.nxn_grid import NxNGrid
 
 
 if __name__ == "__main__":
     import sys
     from PySide6.QtWidgets import QApplication
-    from controller import Controller
+    from honeychrome.controller import Controller
     from pathlib import Path
-    from view_components.event_bus import EventBus
+    from honeychrome.view_components.event_bus import EventBus
 
     app =  QApplication(sys.argv)
 

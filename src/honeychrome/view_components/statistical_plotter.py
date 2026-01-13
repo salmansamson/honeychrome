@@ -1,10 +1,10 @@
 from PySide6.QtCore import QThread, QTimer, Qt, QSettings
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QComboBox, QLabel, QVBoxLayout, QScrollArea, QMessageBox
 
-from controller_components.functions import get_all_subfolders_recursive
-from controller_components.statistical_controller import StatisticsCalculator
-import settings
-from view_components.busy_cursor import with_busy_cursor
+from honeychrome.controller_components.functions import get_all_subfolders_recursive
+from honeychrome.controller_components.statistical_controller import StatisticsCalculator
+import honeychrome.settings as settings
+from honeychrome.view_components.busy_cursor import with_busy_cursor
 
 class StatisticalComparisonWidget(QWidget):
     def __init__(self, bus=None, controller=None, parent=None):
@@ -373,8 +373,8 @@ class StatisticsPlotWidget(QWidget):
 if __name__ == "__main__":
     from PySide6.QtWidgets import QApplication
     from pathlib import Path
-    from controller import Controller
-    from view_components.event_bus import EventBus
+    from honeychrome.controller import Controller
+    from honeychrome.view_components.event_bus import EventBus
 
     app = QApplication([])
 

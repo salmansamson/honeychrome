@@ -1,13 +1,12 @@
 import os
 from pathlib import Path
 
-from controller_components.exporter import ReportGenerator
-from settings import file_extension, experiments_folder
-from view_components.configuration_dialogs import AppConfigDialog, ExperimentSettings, InstrumentConfigDialog
-from view_components.help_toggle_widget import HelpToggleWidget
-from view_components.import_fcs_files_widget import ImportFCSFilesWidget
-from view_components.oscilloscope_widget import OscilloscopeWidget
-from view_components.statistical_plotter import StatisticalComparisonWidget
+from honeychrome.settings import file_extension, experiments_folder
+from honeychrome.view_components.configuration_dialogs import AppConfigDialog, ExperimentSettings, InstrumentConfigDialog
+from honeychrome.view_components.help_toggle_widget import HelpToggleWidget
+from honeychrome.view_components.import_fcs_files_widget import ImportFCSFilesWidget
+from honeychrome.view_components.oscilloscope_widget import OscilloscopeWidget
+from honeychrome.view_components.statistical_plotter import StatisticalComparisonWidget
 
 os.environ["QT_LOGGING_RULES"] = "qt.core.qobject.connect=false" #suppress pyqtgraph graphicslayoutwidget warning
 
@@ -15,18 +14,18 @@ from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMainWindow, QFileDialog, QWidget, QHBoxLayout, QSplitter, QTabWidget, QStatusBar, QVBoxLayout, QLabel, QProgressBar, QScrollArea, QPushButton
 from PySide6.QtCore import Qt, QSettings, QByteArray, Slot, QTimer
 
-from view_components.gating_hierarchy_widget import GatingHierarchyWidget
-from view_components.heatmap_viewedit import HeatmapViewEditor
-from view_components.nxn_grid import NxNGrid
-from view_components.profiles_viewer import ProfilesViewer
-from view_components.spectral_model_editor import SpectralControlsEditor
-from view_components.cytometry_grid_widget import CytometryGridWidget
-from view_components.cytometry_toolbar import CytometryToolbar
-from view_components.acquisition_widget import AcquisitionWidget
-from view_components.gains_widget import GainsWidget
-from view_components.icon_loader import icon
-from view_components.sample_widget import SampleWidget
-from view_components.help_texts import process_help_text
+from honeychrome.view_components.gating_hierarchy_widget import GatingHierarchyWidget
+from honeychrome.view_components.heatmap_viewedit import HeatmapViewEditor
+from honeychrome.view_components.nxn_grid import NxNGrid
+from honeychrome.view_components.profiles_viewer import ProfilesViewer
+from honeychrome.view_components.spectral_model_editor import SpectralControlsEditor
+from honeychrome.view_components.cytometry_grid_widget import CytometryGridWidget
+from honeychrome.view_components.cytometry_toolbar import CytometryToolbar
+from honeychrome.view_components.acquisition_widget import AcquisitionWidget
+from honeychrome.view_components.gains_widget import GainsWidget
+from honeychrome.view_components.icon_loader import icon
+from honeychrome.view_components.sample_widget import SampleWidget
+from honeychrome.view_components.help_texts import process_help_text
 
 base_directory = Path.home() / experiments_folder
 
@@ -394,9 +393,9 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     import sys
     from PySide6.QtWidgets import QApplication
-    from controller import Controller
+    from honeychrome.controller import Controller
     from pathlib import Path
-    from view_components.event_bus import EventBus
+    from honeychrome.view_components.event_bus import EventBus
 
     app =  QApplication(sys.argv)
 

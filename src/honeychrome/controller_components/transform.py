@@ -1,8 +1,6 @@
 import flowkit as fk
 import numpy as np
-from PySide6.QtCore import QSettings
-
-import settings
+import honeychrome.settings as settings
 
 transforms_menu_items = ['Linear', 'Logicle', 'Log']
 

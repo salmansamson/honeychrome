@@ -5,17 +5,17 @@ from PySide6.QtGui import QAction, QDesktopServices
 from PySide6.QtWidgets import (QApplication, QMainWindow, QTreeView, QWidget, QVBoxLayout, QHeaderView, QToolBar, QMenu,
                                QMessageBox, QDialogButtonBox, QLineEdit, QDialog, QFileDialog)
 from PySide6.QtCore import Qt, QAbstractItemModel, QModelIndex, Slot, QUrl, QThread
-
-from controller import base_directory
-from controller_components.exporter import ReportGenerator
-from controller_components.functions import get_all_subfolders_recursive
-from controller_components.unmixed_exporter import UnmixedExporter
-from view_components.batch_export_samples_modal import BatchExportSamplesModal
-from view_components.busy_cursor import with_busy_cursor
-from view_components.icon_loader import icon as load_icon, icon
-from view_components.new_sample_modal import NewSampleModal
 import csv
 from pathvalidate import sanitize_filename
+
+from honeychrome.controller import base_directory
+from honeychrome.controller_components.exporter import ReportGenerator
+from honeychrome.controller_components.functions import get_all_subfolders_recursive
+from honeychrome.controller_components.unmixed_exporter import UnmixedExporter
+from honeychrome.view_components.batch_export_samples_modal import BatchExportSamplesModal
+from honeychrome.view_components.busy_cursor import with_busy_cursor
+from honeychrome.view_components.icon_loader import icon as load_icon, icon
+from honeychrome.view_components.new_sample_modal import NewSampleModal
 
 class SampleRenameDialog(QDialog):
     """Minimal dialog with just a QLineEdit for editing text."""
@@ -529,8 +529,8 @@ class SampleWidget(QWidget):
 
 if __name__ == "__main__":
     import sys
-    from controller import Controller
-    from view_components.event_bus import EventBus
+    from honeychrome.controller import Controller
+    from honeychrome.view_components.event_bus import EventBus
 
     bus = EventBus()
     bus.loadSampleRequested.connect(lambda path: print(path))

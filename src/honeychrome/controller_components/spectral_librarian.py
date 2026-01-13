@@ -11,7 +11,7 @@ from pathlib import Path
 import pandas as pd
 import json
 
-from settings import experiments_folder, library_file
+from honeychrome.settings import experiments_folder, library_file
 
 base_directory = Path.home() / experiments_folder
 
