@@ -57,6 +57,7 @@ matplotlib==3.10.8
 narwhals==2.15.0
     # via bokeh
 networkx==3.6.1
+networkx==3.6.1
     # via
     #   -r requirements.in
     #   flowkit
