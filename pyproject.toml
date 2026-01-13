@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "honeychrome"
+version = "0.6.0"
+description = "Open Source GUI App for Cytometry Acquisition and Analysis "
+readme = "README.md"
+requires-python = "=3.12"
+dependencies = [
+    # Production dependencies - will auto-generate these
+]
+
+[project.optional-dependencies]
+dev = []
+
+[project.scripts]
+mycli = "mypackage.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+mypackage = "src/honeychrome"
+
+# Optional: Testing configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
