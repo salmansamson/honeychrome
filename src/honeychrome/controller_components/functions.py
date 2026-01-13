@@ -230,13 +230,13 @@ def define_ellipse_gate(pos, size, angle, channel_x, channel_y, transformations)
     dim_y = fk.Dimension(channel_y, compensation_ref='uncompensated', transformation_ref=transformation_ref_y, range_min=0,
                          range_max=1)
 
-    print(pos, size, angle)
-    print(coordinates)
-    print(w, h)
-    print(covariance_matrix)
-    print(distance_square)
-    print(transformations[channel_x].limits)
-    print(transformations[channel_y].limits)
+    # print(pos, size, angle)
+    # print(coordinates)
+    # print(w, h)
+    # print(covariance_matrix)
+    # print(distance_square)
+    # print(transformations[channel_x].limits)
+    # print(transformations[channel_y].limits)
 
     return dim_x, dim_y, coordinates, covariance_matrix, distance_square
 
