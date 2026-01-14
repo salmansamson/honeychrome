@@ -389,6 +389,7 @@ class SpectralControlsEditor(QFrame):
 
     def _add_comboboxes_to_row(self, row):
         current_control_list = []
+        unused_raw_channels = []
         if self.model._data[row]['control_type'] == 'Single Stained Spectral Control':
             enable_particle_types_cb = True
             enable_gate_channel_cb = False
@@ -409,6 +410,7 @@ class SpectralControlsEditor(QFrame):
             enable_gate_channel_cb = True
             enable_sample_name_cb = False
             enable_gate_label_cb = False
+            unused_raw_channels = self.model.unused_raw_channels(self.model._data[row]['gate_channel'])
 
         elif self.model._data[row]['control_type'] == 'Single Stained Spectral Control from Library':
             enable_particle_types_cb = False
@@ -452,7 +454,7 @@ class SpectralControlsEditor(QFrame):
                 self._add_or_replace_combobox_if_enabled(idx, enable_particle_types_cb, [""] + PARTICLE_TYPES)
             elif col_name == "gate_channel":
                 self.update_fluorescence_channels_pnn()
-                self._add_or_replace_combobox_if_enabled(idx, enable_gate_channel_cb, [""] + self.model.unused_raw_channels(self.model._data[row]['gate_channel']))
+                self._add_or_replace_combobox_if_enabled(idx, enable_gate_channel_cb, [""] + unused_raw_channels)
             elif col_name == "sample_name":
                 self._add_or_replace_combobox_if_enabled(idx, enable_sample_name_cb, [""] + current_control_list)
             elif col_name == "gate_label":
@@ -533,6 +535,9 @@ class SpectralControlsEditor(QFrame):
     def _on_update_control(self, index):
         # sanitise data and regenerate profile if control is valid
         control = self.model._data[index]
+        unused_raw_channels = self.model.unused_raw_channels(control['gate_channel'])
+        if control['control_type'] == 'Channel Assignment' and not control['gate_channel'] and unused_raw_channels:
+            control['gate_channel'] = unused_raw_channels[0]
         sanitise_control_in_place(control)
         self.profile_updater.flush() # remove profiles that are not in the model
         control_valid = self.profile_updater.generate(control, self.spectral_library_search_results) # pass in search results in case control is from library
