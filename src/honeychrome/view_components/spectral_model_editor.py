@@ -119,16 +119,19 @@ class ListTableModel(QtCore.QAbstractTableModel):
         new_row = {c: None for c in COLUMNS}
 
         # if entering channel assignment, give the next unused raw channel
-        if position > 1:
+        if position > 0:
             if self._data[-1]['control_type'] == 'Channel Assignment':
                 new_row['control_type'] = 'Channel Assignment'
-                unused_raw_channels = list(set(self.fluorescence_channels_pnn) - {row['gate_channel'] for row in self._data})
-                new_row['gate_channel'] = unused_raw_channels[0] if unused_raw_channels else None
+                unused_raw_channels = self.unused_raw_channels()
+                new_row['gate_channel'] = unused_raw_channels[0] if self.unused_raw_channels() else None
 
         self._data.insert(position, new_row)
         self.endInsertRows()
         # self.dataEditedSignal.emit(position)
         return True
+
+    def unused_raw_channels(self, exception=None):
+        return sorted(list(set(self.fluorescence_channels_pnn) - ({row['gate_channel'] for row in self._data} - {exception})))
 
     def removeRows(self, position, rows=1, parent=QModelIndex()):
         if rows <= 0:
@@ -305,9 +308,6 @@ class SpectralControlsEditor(QFrame):
                                          QMessageBox.Yes | QMessageBox.No)
             if reply == QMessageBox.Yes:
                 self.model.delete_rows_by_indices(list(range(len(self.model._data))))
-                if self.bus:
-                    self.bus.spectralModelUpdated.emit()
-                    self.bus.showSelectedProfiles.emit(None)
             else:
                 self.fluorescence_channel_filter_combo.blockSignals(True)
                 self.update_combos()
@@ -321,6 +321,10 @@ class SpectralControlsEditor(QFrame):
             self.controller.experiment.process['fluorescence_channel_filter'] = 'area_only'
             self.fluorescence_channel_filter_combo.setToolTip('Ignoring height channels in spectral model')
         print(f'SpectralModelEditor: set fluorescence channel filter to {self.controller.experiment.process['fluorescence_channel_filter']}')
+
+        if self.bus:
+            self.bus.spectralModelUpdated.emit()
+            self.bus.showSelectedProfiles.emit(None)
 
     def update_combos(self):
         if self.controller.experiment.process['negative_type'] == 'unstained':
@@ -430,7 +434,7 @@ class SpectralControlsEditor(QFrame):
                 self._add_or_replace_combobox_if_enabled(idx, enable_particle_types_cb, [""] + PARTICLE_TYPES)
             elif col_name == "gate_channel":
                 self.update_fluorescence_channels_pnn()
-                self._add_or_replace_combobox_if_enabled(idx, enable_gate_channel_cb, [""] + self.fluorescence_channels_pnn)
+                self._add_or_replace_combobox_if_enabled(idx, enable_gate_channel_cb, [""] + self.model.unused_raw_channels(self.model._data[row]['gate_channel']))
             elif col_name == "sample_name":
                 self._add_or_replace_combobox_if_enabled(idx, enable_sample_name_cb, [""] + current_control_list)
             elif col_name == "gate_label":
