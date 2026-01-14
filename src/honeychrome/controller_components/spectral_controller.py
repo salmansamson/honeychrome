@@ -25,16 +25,16 @@ class ProfileUpdater:
         self.spectral_model = controller.experiment.process['spectral_model']
         self.profiles = controller.experiment.process['profiles']
         self.event_channels_pnn = controller.experiment.settings['raw']['event_channels_pnn']
-        self.fluorescence_channel_ids = controller.filtered_raw_fluorescence_channel_ids
         self.raw_gating = controller.raw_gating
         self.n_fluorophore_channels = None
-        self.fluorescence_channels_pnn = None
+        self.fluorescence_channels_pnn = []
         self.refresh()
 
     def refresh(self):
         self.controller.filter_raw_fluorescence_channels()
-        self.n_fluorophore_channels = len(self.fluorescence_channel_ids)
-        self.fluorescence_channels_pnn = [self.event_channels_pnn[i] for i in self.fluorescence_channel_ids]
+        self.n_fluorophore_channels = len(self.controller.filtered_raw_fluorescence_channel_ids)
+        self.fluorescence_channels_pnn.clear()
+        self.fluorescence_channels_pnn.extend([self.event_channels_pnn[i] for i in self.controller.filtered_raw_fluorescence_channel_ids])
 
     def flush(self):
         self.refresh()
@@ -67,7 +67,7 @@ class ProfileUpdater:
                     full_sample_path = str(self.experiment_dir / sample_path)
                     sample = fk.Sample(full_sample_path)
                     control['sample_path'] = full_sample_path
-                    profile = get_profile(sample, control, self.raw_gating, self.fluorescence_channel_ids)
+                    profile = get_profile(sample, control, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
                     control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
                     profile = profile.tolist()
                     self.profiles[control['label']] = profile

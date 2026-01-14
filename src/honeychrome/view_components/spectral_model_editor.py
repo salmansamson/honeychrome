@@ -131,7 +131,8 @@ class ListTableModel(QtCore.QAbstractTableModel):
         return True
 
     def unused_raw_channels(self, exception=None):
-        return sorted(list(set(self.fluorescence_channels_pnn) - ({row['gate_channel'] for row in self._data} - {exception})))
+        allowed_channels = set(self.fluorescence_channels_pnn) - ({row['gate_channel'] for row in self._data} - {exception})
+        return [c for c in self.fluorescence_channels_pnn if c in allowed_channels]
 
     def removeRows(self, position, rows=1, parent=QModelIndex()):
         if rows <= 0:
@@ -179,7 +180,7 @@ class SpectralControlsEditor(QFrame):
         self.controller = controller
 
         # initialise data
-        self.fluorescence_channels_pnn = None
+        self.fluorescence_channels_pnn = []
         self.update_fluorescence_channels_pnn()
         self.model = ListTableModel(self.controller.experiment.process['spectral_model'], self.fluorescence_channels_pnn)
         self.samples = self.controller.experiment.samples
@@ -288,7 +289,8 @@ class SpectralControlsEditor(QFrame):
     def update_fluorescence_channels_pnn(self):
         event_channels_pnn = self.controller.experiment.settings['raw']['event_channels_pnn']
         fluorescence_channel_ids = self.controller.filtered_raw_fluorescence_channel_ids
-        self.fluorescence_channels_pnn = [event_channels_pnn[i] for i in fluorescence_channel_ids]
+        self.fluorescence_channels_pnn.clear()
+        self.fluorescence_channels_pnn.extend([event_channels_pnn[i] for i in fluorescence_channel_ids])
 
     def set_negative_type(self):
         if self.negatives_combo.currentText() == 'Using unstained negative':
@@ -508,14 +510,13 @@ class SpectralControlsEditor(QFrame):
         # sanitise data and regenerate profile if control is valid
         control = self.model._data[index]
         sanitise_control_in_place(control)
-        control_valid = self.profile_updater.generate(control, self.spectral_library_search_results) # pass in search results in case control is from library
         self.profile_updater.flush() # remove profiles that are not in the model
-        self.bus.showSelectedProfiles.emit([control['label']])
+        control_valid = self.profile_updater.generate(control, self.spectral_library_search_results) # pass in search results in case control is from library
         self.refresh_comboboxes()
-        print(f'SpectralModelEditor: updated {'valid' if control_valid else 'invalid'} control {control}')
-
         if control_valid:
+            self.bus.showSelectedProfiles.emit([control['label']])
             self.bus.spectralModelUpdated.emit()
+        print(f'SpectralModelEditor: updated {'valid' if control_valid else 'invalid'} control {control}')
 
 
     @Slot(list)

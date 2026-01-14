@@ -156,8 +156,6 @@ class ExperimentModel:
         json_string = json.dumps(file_data, indent=2)
         # json_string = json_string.replace('\\n', '\n') # to pretty print the gml sections... unfortunately not compatible with json standard
 
-        # with open(self.experiment_path, "w") as f:
-        #     f.write(json_string)
         safe_save(json_string, self.experiment_path)
 
     def generate_subdirs(self):
