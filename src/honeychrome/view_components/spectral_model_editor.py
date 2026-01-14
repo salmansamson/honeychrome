@@ -38,19 +38,39 @@ class ResizingTable(QTableView):
         self.setSortingEnabled(False)
         self.verticalHeader().setVisible(True)
 
+    #
+    # def sizeHint(self):
+    #     """
+    #     Always compute the exact size needed for all rows and columns.
+    #     """
+    #     self.resizeRowsToContents()
+    #     self.resizeColumnsToContents()
+    #
+    #     width = self.verticalHeader().width() + self.horizontalHeader().length()
+    #     height = self.horizontalHeader().height() + self.verticalHeader().length()
+    #
+    #     # Add a small margin
+    #     return QSize(width + 4, max([height + 4, 60]))
 
-    def sizeHint(self):
-        """
-        Always compute the exact size needed for all rows and columns.
-        """
+    def resizeToFit(self):
         self.resizeRowsToContents()
-        self.resizeColumnsToContents()
 
-        width = self.verticalHeader().width() + self.horizontalHeader().length()
-        height = self.horizontalHeader().height() + self.verticalHeader().length()
+        total_height = 0
 
-        # Add a small margin
-        return QSize(width + 4, max([height + 4, 60]))
+        # Add height of all rows
+        for row in range(self.model().rowCount()):
+            total_height += self.rowHeight(row)
+
+        # Add horizontal header height
+        total_height += self.horizontalHeader().height()
+
+        # Add frame width (borders)
+        total_height += 2 * self.frameWidth()
+
+        # Apply the new height
+        self.setMinimumHeight(total_height)
+        self.setMaximumHeight(total_height)
+
 
 class WheelBlocker(QObject):
     def eventFilter(self, obj, event):
@@ -193,27 +213,23 @@ class SpectralControlsEditor(QFrame):
 
         self.view = ResizingTable()
         self.view.setModel(self.proxy)
-        self.bus.spectralModelUpdated.connect(self.view.updateGeometry)
-        # self.bus.spectralControlAdded.connect(self.view.updateGeometry) #extends the table as autogeneration runs... looks interesting but a bit wonky
+        self.bus.spectralModelUpdated.connect(self.view.resizeToFit)
+        self.bus.spectralControlAdded.connect(self.view.resizeToFit) #extends the table as autogeneration runs... looks interesting but a bit wonky
         self.view.selectionModel().selectionChanged.connect(self._show_selected_profiles)
 
         # Different resize modes for different columns
+        # Column 0: label
+        # Column 1, 2, 3...: control_type particle_type gate_channel gate_label
+        # Column 4: sample_name
         header = self.view.horizontalHeader()
         header.setStretchLastSection(False)
-        # Column 0: label
-        self.view.setColumnWidth(0, 400)
         header.setSectionResizeMode(0, QHeaderView.Interactive)
-        # Column 1, 2, 3...: control_type particle_type gate_channel gate_label
-        self.view.setColumnWidth(1, 80)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.view.setColumnWidth(2, 80)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.view.setColumnWidth(3, 80)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self.view.setColumnWidth(5, 80)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        # Column 4: sample_name
         header.setSectionResizeMode(4, QHeaderView.Stretch)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.view.setColumnWidth(0, 400)
 
         self.label_delegate = LabelDelegate()
         self.view.setItemDelegateForColumn(COLUMNS.index("label"), self.label_delegate)
@@ -447,7 +463,7 @@ class SpectralControlsEditor(QFrame):
         self.model.insertRow(pos)
         self.refresh_comboboxes()
         self.view.scrollToBottom()
-        self.view.updateGeometry()
+        self.view.resizeToFit()
 
         # focus and start editing the new label cell
         label_index = self.proxy.mapFromSource(self.model.index(pos, COLUMNS.index("label")))
@@ -470,6 +486,14 @@ class SpectralControlsEditor(QFrame):
             self.bus.showSelectedProfiles.emit(None)
 
     def auto_generate(self):
+        if not self.controller.experiment.samples['single_stain_controls']:
+            self.bus.warningMessage.emit('Can\'t autogenerate: your list of single stain controls is empty.'
+                                         '\n\nPlease add your single stain controls or set the correct folder for '
+                                         'single stain controls in experiment configuration. '
+                                         '\n\nAlternatively, you can add controls from the spectral library (if previously added) '
+                                         'or assign channels (for conventional cytometry).')
+            return
+
         if self.model.rowCount():
             reply = QMessageBox.question(self, "Auto generate spectral model", f"This will overwrite the spectral model. Are you sure you wish to continue?", QMessageBox.Yes | QMessageBox.No)
             if reply == QMessageBox.Yes:

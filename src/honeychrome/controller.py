@@ -1034,7 +1034,12 @@ class Controller(QObject):
         spectral_model = self.experiment.process['spectral_model']
         profiles = self.experiment.process['profiles']
 
-        if spectral_model:
+        spectral_model_valid = (
+                set(profiles.keys()) == set([control['label'] for control in spectral_model])
+                and len(profiles.keys()) == len(spectral_model)
+                and all(profiles.keys())
+        )
+        if spectral_model and spectral_model_valid:
             unmixed_settings, spectral_process = calculate_spectral_process(raw_settings, spectral_model, profiles)
             self.experiment.settings['unmixed'].update(unmixed_settings)
             self.experiment.process.update(spectral_process)
