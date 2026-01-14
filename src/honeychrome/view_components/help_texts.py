@@ -2,7 +2,7 @@ process_help_text = '''
 <h3>Spectral Process Help</h3>
 <p>
 Use the Spectral Model Editor to specify the spectral model, for both spectral and conventional cytometry. 
-The spectral model should consist of a set of controls, where each may be of the following <i>control types</i>:
+The spectral model should consist of a set of "controls", where each may be of the following <i>control types</i>:
 </p>
 
 <ul>
@@ -39,6 +39,7 @@ The single stain controls subfolder (default: <tt>Raw/Single stain controls</tt>
 <ol>
 <li>
 The single stained controls names should start with "Label (Cells)..." or "Label (Beads)". 
+(If the name does not contain the particle type, "Cells" is assumed.)
 Each is processed to find the fluorescence channel with the largest variation according to that label ("major channel"). 
 A positive gate is assigned to the brightest events and a negative gate to the dimmest (percentages are set in Application Configuration; 
 default 5% brightest and 25% dimmest). Inspect the spectra in the profiles viewer below.

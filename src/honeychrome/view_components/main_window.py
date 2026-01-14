@@ -341,8 +341,8 @@ class MainWindow(QMainWindow):
 
     @Slot(bool)
     def open_import_fcs_files_widget(self, failed_to_load_sample_warning=False):
-        dialog = ImportFCSFilesWidget(self.bus, self.controller, failed_to_load_sample_warning)
-        dialog.exec()
+        dialog = ImportFCSFilesWidget(self, self.bus, self.controller, failed_to_load_sample_warning)
+        dialog.show()
 
     def save_state(self):
         # QByteArray returned by saveState() — stored directly in QSettings

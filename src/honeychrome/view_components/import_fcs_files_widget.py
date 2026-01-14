@@ -10,8 +10,8 @@ from honeychrome.view_components.icon_loader import icon
 
 
 class ImportFCSFilesWidget(QDialog):
-    def __init__(self, bus=None, controller=None, failed_to_load_sample_warning=False):
-        super().__init__(parent=None, modal=True)
+    def __init__(self, parent, bus=None, controller=None, failed_to_load_sample_warning=False):
+        super().__init__(parent=parent, modal=True)
         self.bus = bus
         self.controller = controller
         self.setWindowTitle("Import FCS Files")

@@ -10,6 +10,8 @@ import multiprocessing as mp
 from multiprocessing import shared_memory, Lock
 import numpy as np
 
+from honeychrome.settings import experiments_folder
+
 '''
 Instrument Communicator:
 -Connects to instrument
@@ -55,6 +57,55 @@ View:
 --oscilloscope
 '''
 from honeychrome.view import View
+
+import logging
+import sys
+
+
+def setup_logging(log_file):
+    """Set up logging to both console and file"""
+
+    # Create logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+
+    # Remove existing handlers to avoid duplicates
+    logger.handlers.clear()
+
+    # Create formatter
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+
+    # File handler
+    file_handler = logging.FileHandler(log_file, mode='w')
+    file_handler.setLevel(logging.DEBUG)  # Log everything to file
+    file_handler.setFormatter(formatter)
+
+    # Add handlers
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+
+    # Capture uncaught exceptions
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+    sys.excepthook = handle_exception
+
+    return logger
+
+
+# Usage
+logger = setup_logging(Path.home() / experiments_folder / 'honeychrome.log')
+
+# # Log messages at different levels
+# logger.debug("Debug message")  # Only to file
+# logger.info("Info message")  # To both console and file
+# logger.warning("Warning message")
+# logger.error("Error message")
 
 
 def main():
@@ -140,10 +191,11 @@ def main():
     '''
     start QT application
     '''
+    print('Started Honeychrome')
     exit_code = app.exec()
 
     # end processes, free memory
-    print('Quitting application')
+    print('Quitting Honeychrome')
     controller.quit_instrument_quit_analyser()
     trace_analyser.join()
     instrument.join()

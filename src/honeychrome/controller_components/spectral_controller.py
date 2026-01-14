@@ -17,23 +17,44 @@ from honeychrome.view_components.busy_cursor import with_busy_cursor
 spectral_library = SpectralLibrary()
 
 class ProfileUpdater:
-    def __init__(self, controller):
+    def __init__(self, controller, bus):
+        self.controller = controller
+        self.bus = bus
         self.experiment_dir = controller.experiment_dir
         self.samples = controller.experiment.samples
         self.spectral_model = controller.experiment.process['spectral_model']
         self.profiles = controller.experiment.process['profiles']
         self.event_channels_pnn = controller.experiment.settings['raw']['event_channels_pnn']
         self.fluorescence_channel_ids = controller.filtered_raw_fluorescence_channel_ids
+        self.raw_gating = controller.raw_gating
+        self.n_fluorophore_channels = None
+        self.fluorescence_channels_pnn = None
+        self.refresh()
+
+    def refresh(self):
+        self.controller.filter_raw_fluorescence_channels()
         self.n_fluorophore_channels = len(self.fluorescence_channel_ids)
         self.fluorescence_channels_pnn = [self.event_channels_pnn[i] for i in self.fluorescence_channel_ids]
-        self.raw_gating = controller.raw_gating
 
     def flush(self):
+        self.refresh()
         controls = [control['label'] for control in self.spectral_model]
         labels = list(self.profiles.keys())
         for label in labels:
             if label not in controls:
                 self.profiles.pop(label)
+
+        # n_fluorophore_channels_changed = False
+        # labels = list(self.profiles.keys())
+        # for label in labels:
+        #     if len(self.profiles[label]) != self.n_fluorophore_channels:
+        #         self.profiles.pop(label)
+        #         n_fluorophore_channels_changed = True
+        #
+        # if n_fluorophore_channels_changed:
+        #     warnings.warn('Selected number of fluorophores has changed. Previous controls have been flushed.')
+        #     if self.bus:
+        #         self.bus.warningMessage.emit('Selected number of fluorophores has changed. Previous controls have been flushed.')
 
     def generate(self, control, search_results):
         if control['control_type'] == 'Single Stained Spectral Control':
@@ -91,12 +112,7 @@ class SpectralAutoGenerator(QObject):
 
         self.event_channels_pnn = self.controller.experiment.settings['raw']['event_channels_pnn']
 
-        if self.controller.experiment.process['fluorescence_channel_filter'] == 'area_only':
-            self.controller.filtered_raw_fluorescence_channel_ids = [c for c in self.controller.experiment.settings['raw']['fluorescence_channel_ids']
-                                                          if self.controller.experiment.settings['raw']['event_channels_pnn'][c].endswith('-A')]
-        else:
-            self.controller.filtered_raw_fluorescence_channel_ids = self.controller.experiment.settings['raw']['fluorescence_channel_ids']
-
+        self.controller.filter_raw_fluorescence_channels()
         self.fluorescence_channel_ids = self.controller.filtered_raw_fluorescence_channel_ids
         self.fluorescence_channels_pnn = [self.event_channels_pnn[i] for i in self.fluorescence_channel_ids]
 
@@ -209,7 +225,8 @@ class SpectralAutoGenerator(QObject):
         except Exception as e:
             text = f'Failed to load unstained negative. {e}Setting negative type to "internal".'
             warnings.warn(text)
-            self.bus.warningMessage.emit(text)
+            if self.bus:
+                self.bus.warningMessage.emit(text)
             self.controller.experiment.process['negative_type'] = 'internal'
             return False
 
@@ -299,16 +316,18 @@ class SpectralAutoGenerator(QObject):
                                     'child_gates': [positive_gate_label, negative_gate_label]
                                 }
                                 self.raw_plots.append(target_plot)
-                                self.bus.showNewPlot.emit('raw')
+                                if self.bus:
+                                    self.bus.showNewPlot.emit('raw')
                             if positive_gate_label not in target_plot['child_gates']:
                                 target_plot['child_gates'].append(positive_gate_label)
                                 target_plot['child_gates'].append(negative_gate_label)
                         else:
                             warnings.warn(f'Control sample has less than two events in base gate {self.base_gate_label}: cannot define spectral control')
-                            self.bus.warningMessage.emit(f'Control sample has less than two events in "{self.base_gate_label}" gate: cannot define spectral control.\n\n'
+                            if self.bus:
+                                self.bus.warningMessage.emit(f'{sample_path} has less than two events in "{self.base_gate_label}" gate: cannot define spectral control.\n\n'
                                                          f'The spectral auto generator is using "{self.base_gate_label}" as a base gate '
                                                          f'within your raw data. Adjust this gate to make sure the relevant events for '
-                                                         f'all your control samples are within it.')
+                                                         f'all your single stain control samples are within it.')
                             return False
 
                     if self.bus is not None:
@@ -335,6 +354,15 @@ class SpectralAutoGenerator(QObject):
                     if negative_profile.sum() > 0:
                         profile = profile / profile.max()  # max normalisation
 
+                    if profile.sum() == 0:
+                        text = (f'Failed to create label: {control['label']}. '
+                                f'{sample_path} has no events within the positive gate. '
+                                f'Go back to the raw data and adjust your gates.')
+                        warnings.warn(text)
+                        if self.bus:
+                            self.bus.warningMessage.emit(text)
+                            return False
+
                     profile = profile.tolist()
                     self.profiles[control['label']] = profile
 
@@ -347,7 +375,8 @@ class SpectralAutoGenerator(QObject):
                     #                              'Were your controls and samples acquired by the same instrument and settings? \n'
                     #                              'If so, run Import FCS Files (from the File menu). \n'
                     #                              'Otherwise, these controls cannot be used.')
-                    self.bus.openImportFCSWidget.emit(True)
+                    if self.bus:
+                        self.bus.openImportFCSWidget.emit(True)
                     return False
 
         else:

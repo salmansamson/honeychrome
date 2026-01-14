@@ -328,17 +328,18 @@ class Controller(QObject):
         if self.bus is None:
             warnings.warn('No events bus connected')
 
-    def initialise_ephemeral_data(self, scope=None):
-        # called when an experiment is created or loaded (or spectral process is refreshed)
-        self.experiment_compatible_with_acquisition = channel_dict['event_channels_pnn'] == self.experiment.settings['raw']['event_channels_pnn'] #todo should refer to instrument/analyst/acq config rather than defaults
-        self.filtered_raw_fluorescence_channel_ids = None
 
+    def filter_raw_fluorescence_channels(self):
         if self.experiment.process['fluorescence_channel_filter'] == 'area_only':
             self.filtered_raw_fluorescence_channel_ids = [c for c in self.experiment.settings['raw']['fluorescence_channel_ids']
                                                           if self.experiment.settings['raw']['event_channels_pnn'][c].endswith('-A')]
         else:
             self.filtered_raw_fluorescence_channel_ids = self.experiment.settings['raw']['fluorescence_channel_ids']
 
+    def initialise_ephemeral_data(self, scope=None):
+        # called when an experiment is created or loaded (or spectral process is refreshed)
+        self.experiment_compatible_with_acquisition = channel_dict['event_channels_pnn'] == self.experiment.settings['raw']['event_channels_pnn'] #todo should refer to instrument/analyst/acq config rather than defaults
+        self.filter_raw_fluorescence_channels()
 
         if scope is None:
             scope = ['raw', 'unmixed']
@@ -1093,12 +1094,16 @@ class Controller(QObject):
                 # self.bus.updateRois.emit('unmixed', index) # emit signal to update rois
         else:
             unmixed_settings = settings_default['unmixed'].copy()
-            spectral_process = process_default.copy()
             self.experiment.settings['unmixed'].update(unmixed_settings)
-            spectral_process.update({'fluorescence_channel_filter': self.experiment.process['fluorescence_channel_filter']})
-            spectral_process.update({'negative_type': self.experiment.process['negative_type']})
-            spectral_process.update({'spectral_model': spectral_model}) # make sure spectral control editor's data is the same as spectral model in process settings
-            self.experiment.process.update(spectral_process)
+
+            # spectral_process = process_default.copy()
+            # spectral_process.update({'fluorescence_channel_filter': self.experiment.process['fluorescence_channel_filter']})
+            # spectral_process.update({'negative_type': self.experiment.process['negative_type']})
+            # spectral_process.update({'spectral_model': spectral_model}) # make sure spectral control editor's data is the same as spectral model in process settings
+            # spectral_process.update({'spectral_model': profiles}) # make sure spectral control editor's data is the same as spectral model in process settings
+            # self.experiment.process.update(spectral_process)
+
+            self.experiment.process.update({'similarity_matrix': None, 'unmixing_matrix': None, 'spillover': None})
             self.experiment.cytometry['plots'] = None
             self.experiment.cytometry['transforms'] = None
             self.experiment.cytometry['gating'] = None

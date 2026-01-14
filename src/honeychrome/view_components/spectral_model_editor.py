@@ -176,10 +176,8 @@ class SpectralControlsEditor(QFrame):
         self.controller = controller
 
         # initialise data
-        event_channels_pnn = self.controller.experiment.settings['raw']['event_channels_pnn']
-        fluorescence_channel_ids = self.controller.filtered_raw_fluorescence_channel_ids
-        self.fluorescence_channels_pnn = [event_channels_pnn[i] for i in fluorescence_channel_ids]
-
+        self.fluorescence_channels_pnn = None
+        self.update_fluorescence_channels_pnn()
         self.model = ListTableModel(self.controller.experiment.process['spectral_model'], self.fluorescence_channels_pnn)
         self.samples = self.controller.experiment.samples
         self.raw_gating = self.controller.raw_gating
@@ -281,8 +279,13 @@ class SpectralControlsEditor(QFrame):
         self.refresh_comboboxes()
         self.thread = None
         self.spectral_auto_generator = None
-        self.profile_updater = ProfileUpdater(self.controller)
+        self.profile_updater = ProfileUpdater(self.controller, self.bus)
         self.spectral_library_search_results = None
+
+    def update_fluorescence_channels_pnn(self):
+        event_channels_pnn = self.controller.experiment.settings['raw']['event_channels_pnn']
+        fluorescence_channel_ids = self.controller.filtered_raw_fluorescence_channel_ids
+        self.fluorescence_channels_pnn = [event_channels_pnn[i] for i in fluorescence_channel_ids]
 
     def set_negative_type(self):
         if self.negatives_combo.currentText() == 'Using unstained negative':
@@ -295,12 +298,27 @@ class SpectralControlsEditor(QFrame):
         print(f'SpectralModelEditor: set negative type to {self.controller.experiment.process['negative_type']}')
 
     def set_fluorescence_channel_filter(self):
-        if self.fluorescence_channel_filter_combo.currentText == 'Using all fluorescence channels':
+        if self.model.rowCount():
+            reply = QMessageBox.question(self,
+                                         f"Change to {self.fluorescence_channel_filter_combo.currentText()}",
+                                         f"This will clear the spectral model. Are you sure you wish to continue?",
+                                         QMessageBox.Yes | QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                self.model.delete_rows_by_indices(list(range(len(self.model._data))))
+                if self.bus:
+                    self.bus.spectralModelUpdated.emit()
+                    self.bus.showSelectedProfiles.emit(None)
+            else:
+                self.fluorescence_channel_filter_combo.blockSignals(True)
+                self.update_combos()
+                self.fluorescence_channel_filter_combo.blockSignals(False)
+                return
+
+        if self.fluorescence_channel_filter_combo.currentText() == 'Using all fluorescence channels':
             self.controller.experiment.process['fluorescence_channel_filter'] = 'all_fluorescence'
             self.fluorescence_channel_filter_combo.setToolTip('Including both area and height channels in spectral model')
         else:
             self.controller.experiment.process['fluorescence_channel_filter'] = 'area_only'
-            self.fluorescence_channel_filter_combo.setCurrentText('Using area channels only')
             self.fluorescence_channel_filter_combo.setToolTip('Ignoring height channels in spectral model')
         print(f'SpectralModelEditor: set fluorescence channel filter to {self.controller.experiment.process['fluorescence_channel_filter']}')
 
@@ -411,6 +429,7 @@ class SpectralControlsEditor(QFrame):
             elif col_name == "particle_type":
                 self._add_or_replace_combobox_if_enabled(idx, enable_particle_types_cb, [""] + PARTICLE_TYPES)
             elif col_name == "gate_channel":
+                self.update_fluorescence_channels_pnn()
                 self._add_or_replace_combobox_if_enabled(idx, enable_gate_channel_cb, [""] + self.fluorescence_channels_pnn)
             elif col_name == "sample_name":
                 self._add_or_replace_combobox_if_enabled(idx, enable_sample_name_cb, [""] + current_control_list)
@@ -486,7 +505,7 @@ class SpectralControlsEditor(QFrame):
         control = self.model._data[index]
         sanitise_control_in_place(control)
         control_valid = self.profile_updater.generate(control, self.spectral_library_search_results) # pass in search results in case control is from library
-        self.profile_updater.flush()
+        self.profile_updater.flush() # remove profiles that are not in the model
         self.bus.showSelectedProfiles.emit([control['label']])
         self.refresh_comboboxes()
         print(f'SpectralModelEditor: updated {'valid' if control_valid else 'invalid'} control {control}')

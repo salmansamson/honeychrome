@@ -134,7 +134,6 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles):
 
     # populate process variables
     spectral_process = {
-        'profiles': profiles,
         'similarity_matrix': similarity_matrix.tolist(),
         'unmixing_matrix': unmixing_matrix.tolist(),
         'spillover': spillover.tolist()
