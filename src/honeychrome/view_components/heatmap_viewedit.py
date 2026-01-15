@@ -63,7 +63,7 @@ class HeatmapModel(QAbstractTableModel):
         value = self._data[index.row(), index.column()]
 
         if role == Qt.DisplayRole:
-            return f"{value:.2f}"
+            return f"{value:.3f}"
 
         if role == Qt.EditRole:
             return value
@@ -170,7 +170,7 @@ class WheelEditor(QObject):
             if old is None:
                 return True
 
-            step = 0.01 if event.angleDelta().y() > 0 else -0.01
+            step = 0.002 if event.angleDelta().y() > 0 else -0.002
             new_value = float(old) + step
 
             self.model.setData(index, new_value, Qt.EditRole)

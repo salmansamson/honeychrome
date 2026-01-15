@@ -195,7 +195,7 @@ class WheelEditor(QObject):
                 return True
 
             old = self.controller.experiment.process['spillover'][r][c]
-            step = 0.01 if event.angleDelta().y() > 0 else -0.01
+            step = 0.002 if event.angleDelta().y() > 0 else -0.002
             new_value = float(old) + step
             self.controller.experiment.process['spillover'][r][c] = new_value
             self.controller.reapply_fine_tuning()

@@ -351,10 +351,10 @@ class SpectralAutoGenerator(QObject):
                     profile = positive_profile - negative_profile
                     if profile.sum() == 0:
                         profile = positive_profile
-                    if negative_profile.sum() > 0:
-                        profile = profile / profile.max()  # max normalisation
 
-                    if profile.sum() == 0:
+                    if profile.sum() > 0:
+                        profile = profile / profile.max()  # max normalisation
+                    else:
                         text = (f'Failed to create label: {control['label']}. '
                                 f'{sample_path} has no events within the positive gate. '
                                 f'Go back to the raw data and adjust your gates.')
