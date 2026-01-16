@@ -117,20 +117,20 @@ class MainWindow(QMainWindow):
         action_save.triggered.connect(self.bus.saveAsTemplateRequested)
         action_new_sample = QAction(icon('square-plus'), "New Sample", self)
         action_new_sample.triggered.connect(self.bus.showNewSampleWidget)
-        action_batch_add_samples = QAction(icon('files'), "Batch add samples from CSV", self)
+        action_batch_add_samples = QAction(icon('files'), "Batch Add Samples from CSV", self)
         action_batch_add_samples.triggered.connect(self.bus.batchAddSamples)
-        action_import_fcs_files = QAction(icon('files'), "Import FCS files", self)
+        action_import_fcs_files = QAction(icon('files'), "Import FCS Files", self)
         action_import_fcs_files.triggered.connect(self.open_import_fcs_files_widget)
-        action_export_all = QAction(icon('files'), "Batch export FCS files", self)
+        action_export_all = QAction(icon('files'), "Batch Export FCS Files", self)
         action_export_all.triggered.connect(self.bus.showExportModal)
-        action_generate_report = QAction(icon('file-type-docx'), "Generate sample report", self)
+        action_generate_report = QAction(icon('file-type-docx'), "Generate Sample Report", self)
         action_generate_report.triggered.connect(self.bus.generateSampleReport)
         action_quit = QAction(icon('logout'), "Quit", self)
         action_quit.triggered.connect(self.close)
 
 
         # Create Recent Files submenu
-        recent_menu = QMenu("Recent Files", self)
+        recent_menu = QMenu("Open Recent Experiment", self)
         self.populate_recent_menu(recent_menu)
 
         file_menu.addAction(action_new)

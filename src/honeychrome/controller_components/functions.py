@@ -270,6 +270,8 @@ def apply_gates_in_place(data_for_cytometry_plots, gates_to_calculate=None):
                     transform_x = transforms[xchan]
                     scale_x = transform_x.scale
                     indices_x_data_searchsorted = np.searchsorted(scale_x, x) - 2
+                    if len(scale_x) > len(lookup_tables[gate_id[0]]):
+                        indices_x_data_searchsorted[indices_x_data_searchsorted >= len(lookup_tables[gate_id[0]])] = len(lookup_tables[gate_id[0]]) - 1 #todo temporary solution until we implement custom sample gates for time
                     indices_data_digitized_flattened = indices_x_data_searchsorted
 
                 else:#len(channels) == 2:

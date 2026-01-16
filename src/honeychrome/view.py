@@ -54,6 +54,7 @@ from honeychrome.view_components.main_window import MainWindow
 from honeychrome.controller_components.functions import add_recent_file
 from honeychrome.settings import experiments_folder, file_extension
 from honeychrome.view_components.new_file_dialog import NewFileDialog
+from honeychrome import __version__
 
 import pyqtgraph as pg
 
@@ -156,13 +157,14 @@ class View(QObject):
 
     @Slot()
     def about_honeychrome(self):
-        self.popup_message('''
+        self.popup_message(f'''
         <html>
         <body>
         <h3>Honeychrome<sup>TM</sup> is part of the Cytkit<sup>TM</sup> project</h3>
-        <p>Version 0.7 (beta)</p>
+        <p>Version {__version__} (beta)</p>
         <p>This software is licensed as open source under the GNU Public License V2.0</p>
         <p>Visit <a href="https://cytkit.com/honeychrome">https://cytkit.com/honeychrome</a> for more info.</p>
+        <p>Send your feedback to <a href="mailto:hello@cytkit.com">hello@cytkit.com</a>.</p>
         </body>
         </html>
         ''')

@@ -52,7 +52,7 @@ class ImportFCSController(QObject):
                     pnr_same = [all_same(list(all_sample_pnr_scatter_and_fluorescence[:, n])) for n in range(len(sample_metadata.scatter_indices + sample_metadata.fluoro_indices))]
                     if not np.array(pnr_same).prod():
                         pnr_values = set(list(all_sample_pnr_scatter_and_fluorescence.flatten()))
-                        text = f'Channel range values (PNR) not consistent in FCS files. The following values were found: {pnr_values}'
+                        text = f'Channel range values (PNR) are not consistent in FCS files. The following values were found: {pnr_values}. This could cause errors when applying gates.'
                         warnings.warn(text)
                         # if self.bus:
                         #     self.bus.warningMessage.emit(text)

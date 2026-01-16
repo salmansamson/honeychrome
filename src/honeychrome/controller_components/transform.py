@@ -35,6 +35,7 @@ class Transform:
         elif self.id == 2: #'log'
             self.set_log()
         else: #self.id == 'default':
+            self.limits[1] = max([self.limits[1], settings.default_ceiling]) # todo this is a temporary fix to the time gates issue. Should be replaced with sample gate instances for all time gates
             self.set_default()
 
     def set_linear(self):

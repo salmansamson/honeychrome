@@ -777,8 +777,10 @@ class CytometryPlotWidget(QFrame):
         gate_name = f'Range{name_increment}'
 
         # create ROI
-        x1 = 0.35
-        x2 = 0.65
+        if self.data_for_cytometry_plots['transformations'][self.plot['channel_x']].id == 'default':
+            x1, x2 = 0.35 * settings.default_ceiling, 0.65 * settings.default_ceiling
+        else:
+            x1, x2 = 0.35, 0.65
 
         roi = RangeROI(x1, x2, gate_name, self.gating, self.mode, self.vb)
         roi.sigRemoveRequested.connect(self.remove_gate_and_roi)
