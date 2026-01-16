@@ -220,15 +220,15 @@ class ResizingTable(QTableView):
         self.verticalHeader().setDefaultSectionSize(settings.tile_size_nxn_grid_retrieved)
         self.setWordWrap(True)
 
-    def setModel(self, model):
-        super().setModel(model)
-        # Connect to model's dataChanged signal
-        if model:
-            model.layoutChanged.connect(self._on_model_changed)
-            model.modelReset.connect(self._on_model_changed)
-
-    def _on_model_changed(self):
-        self.updateGeometry()
+    # def setModel(self, model):
+    #     super().setModel(model)
+    #     # Connect to model's dataChanged signal
+    #     if model:
+    #         model.layoutChanged.connect(self._on_model_changed)
+    #         model.modelReset.connect(self._on_model_changed)
+    #
+    # def _on_model_changed(self):
+    #     self.updateGeometry()
 
     def sizeHint(self):
         if not self.model() or self.model().rowCount() == 0 or self.model().columnCount() == 0:
@@ -302,6 +302,14 @@ class NxNGrid(QFrame):
 
         self.layout.addWidget(self.view)
 
+        # initialise headers - they will be filtered later
+        pnn = self.controller.experiment.settings['unmixed']['event_channels_pnn']
+        if pnn is not None:
+            fl_ids = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
+            fl_pnn = [pnn[n] for n in fl_ids]
+            self.horizontal_headers = fl_pnn
+            self.vertical_headers = fl_pnn
+
         self.refresh_heatmaps()
         self.refresh_source_combo('unmixed') # populate the source combo with all unmixed gates
 
@@ -315,14 +323,14 @@ class NxNGrid(QFrame):
     def show_selected_rows(self, selected_label_list):
         if self.model.vertical_headers:
             if selected_label_list:
-                pass
+                self.vertical_headers = selected_label_list
             else:
-                selected_label_list = self.vertical_headers
-
-            for row, label in enumerate(self.vertical_headers):
-                visible = label in selected_label_list
-                self.view.setRowHidden(row, not visible)
-            self.view.updateGeometry()
+                self.vertical_headers = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
+            self.refresh_heatmaps()
+            # for row, label in enumerate(self.vertical_headers):
+            #     visible = label in selected_label_list
+            #     self.view.setRowHidden(row, not visible)
+            # self.view.updateGeometry()
 
     def show_context_menu(self, event):
         # Empty method to completely disable context menu
@@ -353,26 +361,24 @@ class NxNGrid(QFrame):
     @Slot(str)
     def refresh_heatmaps(self, mode='process'):
         if mode == 'process':
-            pnn = self.controller.experiment.settings['unmixed']['event_channels_pnn']
-            if pnn is not None:
+            if self.horizontal_headers:
                 self.setVisible(True)
-                fl_ids = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
-                fl_pnn = [pnn[n] for n in fl_ids]
-                self.horizontal_headers = fl_pnn
-                self.vertical_headers = fl_pnn
-
                 plots = self.controller.data_for_cytometry_plots_process['plots']
                 if plots:
                     histograms = self.controller.data_for_cytometry_plots_process['histograms']
                     if not histograms:
-                        histograms += [np.zeros((settings.tile_size_nxn_grid_retrieved,settings.tile_size_nxn_grid_retrieved)) for plot in plots]
+                        dummy_hist = np.zeros((settings.tile_size_nxn_grid_retrieved, settings.tile_size_nxn_grid_retrieved))
+                        histograms += [dummy_hist for plot in plots]
 
+                    # build data arrays
+                    # vertical headers are the unmixed filtered set
+                    # horizontal headers are the raw fluorescence set
                     self.heatmaps = []
-                    for x in fl_pnn:
+                    for r in self.vertical_headers:
                         row = []
-                        for y in fl_pnn:
-                            if x != y:
-                                index = [plots.index(plot) for plot in plots if plot['type'] == 'hist2d' and plot['channel_x'] == x and plot['channel_y'] == y][0]
+                        for c in self.horizontal_headers:
+                            if c != r:
+                                index = [plots.index(plot) for plot in plots if plot['type'] == 'hist2d' and plot['channel_x'] == r and plot['channel_y'] == c][0]
                                 row.append(histograms[index])
                             else:
                                 row.append(None)
