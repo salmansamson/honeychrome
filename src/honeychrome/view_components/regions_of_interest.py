@@ -7,7 +7,7 @@ import pyqtgraph as pg
 
 import warnings
 
-from honeychrome.settings import label_offset, roi_handle_size
+from honeychrome.settings import label_offset_default, roi_handle_size
 
 warnings.filterwarnings("ignore", message="t.core.qobject.connect: QObject::connect(QStyleHints, QStyleHints): unique connections require a pointer to member function of a QObject subclass")
 
@@ -45,13 +45,17 @@ class LabelEditDialog(QDialog):
 
     def validate_and_accept(self):
         text = self.line_edit.text().strip()
+        text = text.replace('/', '∕') # slash not allowed by flowkit
         if not text:
             QMessageBox.warning(self, "Error", "Input cannot be empty.")
         elif text == self.old_name:
             self.reject()
         elif text in self.existing_names:
             QMessageBox.warning(self, "Error", f'"{text}" already exists.')
+        elif '/' in text:
+            QMessageBox.warning(self, "Error", f'Character "/" not allowed in gate name.')
         else:
+            self.line_edit.setText(text)
             self.accept()
 
     def getText(self):
@@ -94,10 +98,14 @@ class DraggableRoiLabel(pg.TextItem):
     def mouseReleaseEvent(self, event):
         super().mouseReleaseEvent(event)
         roi_pos = self.parent_roi.pos()
-        self.parent_roi.label_offset = (
+        offset = (
             self.pos().x() - roi_pos.x(),
             self.pos().y() - roi_pos.y()
         )
+        self.parent_roi.label_offset = offset
+
+        if self.bus:
+            self.bus.updateChildGateLabelOffset.emit(self.gate_name, offset)
 
     def mouseDoubleClickEvent(self, event):
         """Open small dialog for editing text."""
@@ -235,7 +243,7 @@ class ContextMenuRangeRegion(pg.LinearRegionItem):
 class RangeROI(pg.ROI):
     sigRangeChanged = Signal(float, float)  # min_x, max_x
 
-    def __init__(self, x1, x2, gate_name, gating, mode, vb):
+    def __init__(self, x1, x2, gate_name, gating, mode, vb, label_offset=None):
         pen = pg.mkPen('g', width=3)
         handle_size = roi_handle_size
         super().__init__((0,0), pen=pen, removable=True)
@@ -251,8 +259,11 @@ class RangeROI(pg.ROI):
         self.vb.addItem(self.v1)
         self.vb.addItem(self.v2)
         self.region.sigRegionChangeFinished.connect(self._region_moved)
-
-        self.label_offset = (x1+label_offset[0], 1 + label_offset[1])
+        # create label
+        if label_offset:
+            self.label_offset = label_offset
+        else:
+            self.label_offset = label_offset_default #'(x1 + label_offset_default[0], 1 + label_offset_default[1])
         self.label_pos = clip_position(x1+self.label_offset[0], self.label_offset[1])
         self.label = DraggableRoiLabel(self, gate_name, gating, mode, pos=self.label_pos, anchor=(0, 1))
         self.vb.addItem(self.label)
@@ -296,7 +307,7 @@ class RangeROI(pg.ROI):
 
 
 class PolygonROI(pg.PolyLineROI):
-    def __init__(self, positions, gate_name, gating, mode, vb):
+    def __init__(self, positions, gate_name, gating, mode, vb, label_offset=None):
         self.handleSize = roi_handle_size  # Set before super().__init__()
         super().__init__(
                 positions = positions,
@@ -305,13 +316,17 @@ class PolygonROI(pg.PolyLineROI):
                 movable = True,
                 removable = True)
         self.vb = vb
-
-        # create label
         vertices = np.array(positions)
-        xmin = vertices[:,0].min()
-        ymin = vertices[:,1].min()
-        self.label_offset = (xmin + label_offset[0], ymin + label_offset[1])
-        self.label_pos = clip_position(xmin + self.label_offset[0], ymin + self.label_offset[1])
+        xmin = vertices[:, 0].min()
+        xmax = vertices[:, 0].max()
+        ymin = vertices[:, 1].min()
+        ymax = vertices[:, 1].max()
+        # create label
+        if label_offset:
+            self.label_offset = label_offset
+        else:
+            self.label_offset = ((xmax-xmin + label_offset_default[0]) / 2, (ymax-ymin + label_offset_default[1]) / 2)
+        self.label_pos = clip_position(self.pos().x() + self.label_offset[0], self.pos().y() + self.label_offset[1])
         self.label = DraggableRoiLabel(self, gate_name, gating, mode, pos=self.label_pos)
         self.sigRegionChanged.connect(self.label.move_label_with_roi)
         self.vb.addItem(self.label)
@@ -320,7 +335,6 @@ class PolygonROI(pg.PolyLineROI):
         self.menu = QMenu()
         self.action_new_plot_on_gate = self.menu.addAction("New Plot From This Gate", lambda : self.vb.parent().new_plot_on_gate(self.label.gate_name))
         self.action_delete = self.menu.addAction("Delete Gate", self.request_remove)
-
         self.vb.addItem(self)
 
     def addHandle(self, *args, **kwargs):
@@ -346,13 +360,15 @@ class PolygonROI(pg.PolyLineROI):
 
 class RectangleROI(pg.RectROI):
 
-    def __init__(self, pos, size, gate_name, gating, mode, vb):
+    def __init__(self, pos, size, gate_name, gating, mode, vb, label_offset=None):
         self.handleSize = roi_handle_size  # Set before super().__init__()
         super().__init__(pos, size, pen = pg.mkPen('g', width=3), movable = True, removable = True)
         self.vb = vb
-
         # create label
-        self.label_offset = (label_offset[0], label_offset[1])
+        if label_offset:
+            self.label_offset = label_offset
+        else:
+            self.label_offset = (label_offset_default[0] + size[0] / 2, label_offset_default[1] + size[1] / 2)
         self.label_pos = clip_position(pos[0] + self.label_offset[0], pos[1] + self.label_offset[1])
         self.label = DraggableRoiLabel(self, gate_name, gating, mode, pos=self.label_pos)
         self.sigRegionChanged.connect(self.label.move_label_with_roi)
@@ -364,7 +380,6 @@ class RectangleROI(pg.RectROI):
         self.action_delete = self.menu.addAction("Delete Gate", self.request_remove)
 
         self.vb.addItem(self)
-
 
     def addHandle(self, *args, **kwargs):
         self.handleSize = roi_handle_size
@@ -388,13 +403,16 @@ class RectangleROI(pg.RectROI):
 
 
 class EllipseROI(pg.EllipseROI):
-    def __init__(self, pos, size, angle, gate_name, gating, mode, vb):
+    def __init__(self, pos, size, angle, gate_name, gating, mode, vb, label_offset=None):
         self.handleSize = roi_handle_size  # Set before super().__init__()
         super().__init__(pos, size, angle=angle, pen=pg.mkPen('g', width=3), movable=True, removable=True)
         self.vb = vb
 
         # create label
-        self.label_offset = (label_offset[0], label_offset[1])
+        if label_offset:
+            self.label_offset = label_offset
+        else:
+            self.label_offset = label_offset_default
         self.label_pos = clip_position(pos[0] + self.label_offset[0], pos[0] + self.label_offset[1])
         self.label = DraggableRoiLabel(self, gate_name, gating, mode, pos=self.label_pos)
         self.sigRegionChanged.connect(self.label.move_label_with_roi)

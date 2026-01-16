@@ -65,6 +65,9 @@ class CytometryGridWidget(QScrollArea):
             self.toolbar.update_button_state(None)
 
     def open_plot_in_modal(self, plot_widget): # Note: called by child CytometryPlotWidget
+        self.debounce_timer.stop()
+        self.debounce_timer.blockSignals(True)
+
         # Create modal dialog
         dialog = QDialog(self)
         dialog.setWindowTitle("Pop-out plot")
@@ -96,6 +99,7 @@ class CytometryGridWidget(QScrollArea):
         self.place_tile(plot_widget, 1, 1)
         # self.debounce_timer.start(300)
         self.init_grid()
+        self.debounce_timer.blockSignals(False)
 
     @Slot()
     def permute_plot_widgets(self, destination): #todo fix bug: permuted plot seems to lose connection ***

@@ -48,7 +48,7 @@ QLabel {
 """
 live_data_process_repeat_time = 0.5 #s
 hist_bins = 200 # for displaying histograms
-label_offset = (0, -0.03) # for gate labels
+label_offset_default = (0, -0.03) # for gate labels
 subsample = 10_000 # for exporting FCS files
 
 line_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',

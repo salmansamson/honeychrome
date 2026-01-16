@@ -116,6 +116,7 @@ class ReportGenerator(QObject):
 
     def export(self):
         current_sample = self.controller.current_sample
+        print(f'ReportGenerator: started {current_sample}')
 
         # Do some checks
         if not current_sample:
@@ -126,10 +127,12 @@ class ReportGenerator(QObject):
             return
 
         current_sample_path = Path(self.controller.current_sample_path)
-        full_sample_path = self.controller.experiment_dir / current_sample_path
+        report_rel_path = Path('Reports') / current_sample_path.relative_to(self.controller.experiment.settings['raw']['raw_samples_subdirectory'])
+        full_sample_path = self.controller.experiment_dir / report_rel_path
+        full_sample_path.parent.mkdir(parents=True, exist_ok=True)
         docx_path = str(full_sample_path.with_suffix('.docx'))
         current_mode = self.controller.current_mode
-        resolution = 300
+        resolution = 450
         scale_factor = cytometry_plot_width_export / 25.4 * 300 / resolution # for 300 DPI, width in mm
 
         # --- Save old PyQtGraph colors ---
@@ -288,3 +291,4 @@ class ReportGenerator(QObject):
         pg.setConfigOptions(background=old_bg, foreground=old_fg)
 
         self.bus.popupMessage.emit(f"Exported report: {docx_path}")
+        print(f'ReportGenerator: finished {docx_path}')

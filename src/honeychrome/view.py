@@ -126,6 +126,7 @@ class View(QObject):
         self.bus.changedGatingHierarchy.connect(self.controller.on_gate_change)
         self.bus.axisTransformed.connect(self.controller.recalc_after_axis_transform)
         self.bus.axesReset.connect(self.controller.reset_axes_transforms)
+        self.bus.updateChildGateLabelOffset.connect(self.controller.update_child_gate_label_offset)
 
         # change spectral model, unmix!, change fine tuning matrix
         self.bus.spectralModelUpdated.connect(self.controller.refresh_spectral_process)
@@ -142,6 +143,7 @@ class View(QObject):
         self.bus.newPlotRequested.connect(lambda: self.bus.autoSaveRequested.emit())
         self.bus.plotChangeRequested.connect(lambda: self.bus.autoSaveRequested.emit())
         self.bus.updateSourceChildGates.connect(lambda: self.bus.autoSaveRequested.emit())
+        self.bus.updateChildGateLabelOffset.connect(lambda: self.bus.autoSaveRequested.emit())
         self.bus.changedGatingHierarchy.connect(lambda: self.bus.autoSaveRequested.emit())
         self.bus.axisTransformed.connect(lambda: self.bus.autoSaveRequested.emit())
         self.bus.axesReset.connect(lambda: self.bus.autoSaveRequested.emit())

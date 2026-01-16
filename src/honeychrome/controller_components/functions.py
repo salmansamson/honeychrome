@@ -465,3 +465,21 @@ def raw_gates_list(gating):
     gate_ids = gating.get_gate_ids()
     gate_list = [g[0] for g in gate_ids]
     return gate_list
+
+def get_set_or_initialise_label_offset(plot, gate_name, label_offset=None):
+    if 'label_offsets' not in plot:
+        plot['label_offsets'] = {gate_name: label_offset} #initialise
+    else:
+        if label_offset is None:
+            if gate_name in plot['label_offsets']:
+                label_offset = plot['label_offsets'][gate_name] #get
+        else:
+            plot['label_offsets'][gate_name] = label_offset #set
+
+    return label_offset
+
+def rename_label_offset(plot, old_gate_name, gate_name):
+    if 'label_offsets' in plot:
+        if old_gate_name in plot['label_offsets']:
+            plot['label_offsets'][gate_name] = plot['label_offsets'][old_gate_name]
+            plot['label_offsets'].pop(old_gate_name)

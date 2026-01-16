@@ -60,6 +60,7 @@ class EventBus(QObject):
     # emitters: gate inserted, deleted, renamed
     # connections: refresh gating widget, refresh title menus, update lookup tables, make list of relevant plots and recalculate
     updateSourceChildGates = Signal(str, str)
+    updateChildGateLabelOffset = Signal(str, tuple)
     changedGatingHierarchy = Signal(str, str)
     axisTransformed = Signal(str)
     axesReset = Signal(list)

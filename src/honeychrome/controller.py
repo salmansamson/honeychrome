@@ -41,7 +41,7 @@ import time
 
 from honeychrome.controller_components.spectral_controller import SpectralAutoGenerator
 from honeychrome.experiment_model import ExperimentModel, check_fcs_matches_experiment
-from honeychrome.controller_components.functions import apply_gates_in_place, apply_transfer_matrix, generate_transformations, update_transforms, initialise_hists, calc_hists, calc_stats, initialise_stats, assign_default_transforms, define_quad_gates, define_range_gate, define_polygon_gate, define_rectangle_gate, define_ellipse_gate, add_recent_file, empty_queue_nowait, define_process_plots
+from honeychrome.controller_components.functions import apply_gates_in_place, apply_transfer_matrix, generate_transformations, update_transforms, initialise_hists, calc_hists, calc_stats, initialise_stats, assign_default_transforms, define_quad_gates, define_range_gate, define_polygon_gate, define_rectangle_gate, define_ellipse_gate, add_recent_file, empty_queue_nowait, define_process_plots, get_set_or_initialise_label_offset
 from honeychrome.controller_components.gml_functions_mod_from_flowkit import from_gml, to_gml
 from honeychrome.instrument_configuration import traces_cache_size, dtype, adc_rate
 import honeychrome.settings as settings
@@ -89,7 +89,8 @@ class Controller(QObject):
             'statistics': {},
             'gating': fk.GatingStrategy(),
             'plots': [],
-            'histograms': []
+            'histograms': [],
+            'gate_membership': {}
         }
         self.data_for_cytometry_plots_raw = deepcopy(self.data_for_cytometry_plots)
         self.data_for_cytometry_plots_process = deepcopy(self.data_for_cytometry_plots)
@@ -359,7 +360,7 @@ class Controller(QObject):
             self.unmixed_transformations = None
             self.raw_gating = None
             self.unmixed_gating = None
-            self.data_for_cytometry_plots = {'pnn': None, 'fluoro_indices': None, 'lookup_tables': None, 'event_data': None, 'transformations': None, 'statistics': {}, 'gating': fk.GatingStrategy(), 'plots': [], 'histograms': []}
+            self.data_for_cytometry_plots = {'pnn': None, 'fluoro_indices': None, 'lookup_tables': None, 'event_data': None, 'transformations': None, 'statistics': {}, 'gating': fk.GatingStrategy(), 'plots': [], 'histograms': [], 'gate_membership': {}}
             self.data_for_cytometry_plots_raw = deepcopy(self.data_for_cytometry_plots)
             self.data_for_cytometry_plots_process = deepcopy(self.data_for_cytometry_plots)
             self.data_for_cytometry_plots_unmixed = deepcopy(self.data_for_cytometry_plots)
@@ -909,11 +910,13 @@ class Controller(QObject):
             # apply gates to event data
             # if gates_to_calculate is none, then initialise gates_to_calculate dict, otherwise reference it from data_for_cytometry_plots
             if gates_to_calculate is None:
-                gate_membership = {'root': np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)}
-                self.data_for_cytometry_plots.update({'gate_membership': gate_membership})
+                #todo something causes crashes here. is it because calc_hists_and_stats is called too often in quick succession?
+                # instead of reinitialising gate_membership, try just updating it in place
+                #gate_membership = {'root': np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)}
+                #self.data_for_cytometry_plots.update({'gate_membership': gate_membership})
+                self.data_for_cytometry_plots['gate_membership']['root'] = np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)
                 gates_to_calculate = [g[0] for g in self.data_for_cytometry_plots['gating'].get_gate_ids()]
             apply_gates_in_place(self.data_for_cytometry_plots, gates_to_calculate=gates_to_calculate)
-
             statistics = calc_stats(self.data_for_cytometry_plots)
             self.data_for_cytometry_plots['statistics'] = statistics
 
@@ -1022,6 +1025,12 @@ class Controller(QObject):
             print([gate, gate.coordinates, gate.covariance_matrix, gate.distance_square])
 
         print(gating.get_gate_ids())
+
+    @Slot(str, tuple)
+    def update_child_gate_label_offset(self, gate_name, label_offset):
+        for plot in self.data_for_cytometry_plots['plots']:
+            if gate_name in plot['child_gates']:
+                get_set_or_initialise_label_offset(plot, gate_name, label_offset)
 
     def regenerate_spectral_model(self):
         spectral_auto_generator = SpectralAutoGenerator(self.bus, self)

@@ -38,19 +38,19 @@ class ResizingTable(QTableView):
         self.setSortingEnabled(False)
         self.verticalHeader().setVisible(True)
 
-    #
-    # def sizeHint(self):
-    #     """
-    #     Always compute the exact size needed for all rows and columns.
-    #     """
-    #     self.resizeRowsToContents()
-    #     self.resizeColumnsToContents()
-    #
-    #     width = self.verticalHeader().width() + self.horizontalHeader().length()
-    #     height = self.horizontalHeader().height() + self.verticalHeader().length()
-    #
-    #     # Add a small margin
-    #     return QSize(width + 4, max([height + 4, 60]))
+
+    def sizeHint(self):
+        """
+        Always compute the exact size needed for all rows and columns.
+        """
+        self.resizeRowsToContents()
+        self.resizeColumnsToContents()
+
+        width = self.verticalHeader().width() + self.horizontalHeader().length()
+        height = self.horizontalHeader().height() + self.verticalHeader().length()
+
+        # Add a small margin
+        return QSize(width + 4, max([height + 4, 60]))
 
     def resizeToFit(self):
         self.resizeRowsToContents()
@@ -69,7 +69,7 @@ class ResizingTable(QTableView):
 
         # Apply the new height
         self.setMinimumHeight(total_height)
-        self.setMaximumHeight(total_height)
+        # self.setMaximumHeight(total_height)
 
 
 class WheelBlocker(QObject):

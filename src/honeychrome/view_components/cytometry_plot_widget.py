@@ -10,7 +10,7 @@ import colorcet as cc
 import flowkit as fk
 from flowkit.exceptions import GateReferenceError
 
-from honeychrome.controller_components.functions import define_quad_gates, define_range_gate, define_ellipse_gate, define_rectangle_gate, define_polygon_gate
+from honeychrome.controller_components.functions import define_quad_gates, define_range_gate, define_ellipse_gate, define_rectangle_gate, define_polygon_gate, get_set_or_initialise_label_offset, rename_label_offset
 from honeychrome.controller_components.transform import transforms_menu_items
 import honeychrome.settings as settings
 
@@ -422,6 +422,8 @@ class CytometryPlotWidget(QFrame):
                     self.plot['child_gates'].remove(old_child_gate)
                     self.plot['child_gates'].append(new_gate_name)
 
+                    rename_label_offset(self.plot, old_child_gate, new_gate_name)
+
             self.configure_title()
 
     def configure_title(self):
@@ -572,22 +574,23 @@ class CytometryPlotWidget(QFrame):
 
             for gate_name in self.plot['child_gates']:
                 gate = self.gating.get_gate(gate_name)
+                label_offset = get_set_or_initialise_label_offset(self.plot, gate_name)
 
                 if gate.gate_type == 'PolygonGate':
                     vertices = gate.vertices
-                    roi = PolygonROI(vertices, gate_name, self.gating, self.mode, self.vb)
+                    roi = PolygonROI(vertices, gate_name, self.gating, self.mode, self.vb, label_offset=label_offset)
                     roi.sigRegionChangeFinished.connect(lambda *args, r=roi: self.update_polygon(r))
 
                 elif gate.gate_type == 'RectangleGate' and len(gate.dimensions)==2: # i.e. true rectangle
                     dim_x, dim_y = gate.dimensions
                     pos = [dim_x.min, dim_y.min]
                     size = [dim_x.max - dim_x.min, dim_y.max - dim_y.min]
-                    roi = RectangleROI(pos, size, gate_name, self.gating, self.mode, self.vb)
+                    roi = RectangleROI(pos, size, gate_name, self.gating, self.mode, self.vb, label_offset=label_offset)
                     roi.sigRegionChangeFinished.connect(lambda *args, r=roi: self.update_rectangle(r))
 
                 elif gate.gate_type == 'RectangleGate' and len(gate.dimensions)==1: #i.e. range gate
                     dim_x = gate.dimensions[0]
-                    roi = RangeROI(dim_x.min, dim_x.max, gate_name, self.gating, self.mode, self.vb)
+                    roi = RangeROI(dim_x.min, dim_x.max, gate_name, self.gating, self.mode, self.vb, label_offset=label_offset)
                     roi.sigRangeChanged.connect(lambda *args, r=roi: self.update_range(r))
 
                 elif gate.gate_type == 'EllipsoidGate':
@@ -619,7 +622,7 @@ class CytometryPlotWidget(QFrame):
                     if not np.isclose(distance_square, w * h):
                         print("Warning: distance_square inconsistent with covariance")
 
-                    roi = EllipseROI(pos, size, angle, gate_name, self.gating, self.mode, self.vb)
+                    roi = EllipseROI(pos, size, angle, gate_name, self.gating, self.mode, self.vb, label_offset=label_offset)
                     roi.sigRegionChangeFinished.connect(lambda *args, r=roi: self.update_ellipse(r))
 
                 elif gate.gate_type == 'QuadrantGate':

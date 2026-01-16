@@ -304,7 +304,7 @@ class GatingHierarchyWidget(QWidget):
         header.setStretchLastSection(False)
         # Column 0: name
         self.tree_view.setColumnWidth(0, 250)
-        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(0, QHeaderView.Interactive)
         # Column 1: event count
         self.tree_view.setColumnWidth(1, 60)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -316,7 +316,7 @@ class GatingHierarchyWidget(QWidget):
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         # Column 4: event concentration
         self.tree_view.setColumnWidth(4, 60)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.Stretch)
 
         if self.bus is not None:
             self.bus.changedGatingHierarchy.connect(self.update_hierarchy)
