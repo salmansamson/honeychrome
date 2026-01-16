@@ -532,7 +532,11 @@ class Controller(QObject):
         print(f'Controller: loading sample {sample_path}')
         if check_fcs_matches_experiment(self.experiment_dir / sample_path, self.experiment.settings['raw']['event_channels_pnn'], self.experiment.settings['raw']['magnitude_ceiling']):
             self.current_sample_path = sample_path
-            self.current_sample = fk.Sample(self.experiment_dir / self.current_sample_path, use_header_offsets=True, ignore_offset_error=True)
+            try:
+                self.current_sample = fk.Sample(self.experiment_dir / self.current_sample_path)
+            except KeyError as e:
+                print(f'Controller: FlowIO reports FCS file does not conform to standards. Missing {e}. Attempting to load with use_header_offsets and ignore_offset_error set')
+                self.current_sample = fk.Sample(self.experiment_dir / self.current_sample_path, use_header_offsets=True, ignore_offset_error=True)
 
             if self.current_sample_path == self.live_sample_path:
                 self.raw_event_data, n_events = self.copy_live_data(extent='all')

@@ -127,7 +127,7 @@ class SpectralAutoGenerator(QObject):
         self.profiles.clear()
         self.unstained_negative = None
         self.progress_target = len(self.samples['single_stain_controls'])
-        self.progress_target = len(self.samples['single_stain_controls'][:5]) # quick test
+        # self.progress_target = len(self.samples['single_stain_controls'][:5]) # quick test
 
         # (sample name, label, sample path, particle_type (cells/beads), control_type (positive only, positive and negative, autofluorescence), gate channel
         self.base_gate_label = 'root'
