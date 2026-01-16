@@ -915,10 +915,10 @@ class Controller(QObject):
             # if gates_to_calculate is none, then initialise gates_to_calculate dict, otherwise reference it from data_for_cytometry_plots
             if gates_to_calculate is None:
                 #todo something causes crashes here. is it because calc_hists_and_stats is called too often in quick succession?
-                # instead of reinitialising gate_membership, try just updating it in place
-                #gate_membership = {'root': np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)}
-                #self.data_for_cytometry_plots.update({'gate_membership': gate_membership})
-                self.data_for_cytometry_plots['gate_membership']['root'] = np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)
+                # instead of reinitialising gate_membership, try just updating it in place?
+                gate_membership = {'root': np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)}
+                self.data_for_cytometry_plots.update({'gate_membership': gate_membership})
+                # self.data_for_cytometry_plots['gate_membership']['root'] = np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)
                 gates_to_calculate = [g[0] for g in self.data_for_cytometry_plots['gating'].get_gate_ids()]
             apply_gates_in_place(self.data_for_cytometry_plots, gates_to_calculate=gates_to_calculate)
             statistics = calc_stats(self.data_for_cytometry_plots)

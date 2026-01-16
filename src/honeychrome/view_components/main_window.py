@@ -1,6 +1,8 @@
+import functools
 import os
 from pathlib import Path
 
+from honeychrome.controller_components.functions import q_settings
 from honeychrome.settings import file_extension, experiments_folder
 from honeychrome.view_components.configuration_dialogs import AppConfigDialog, ExperimentSettings, InstrumentConfigDialog
 from honeychrome.view_components.help_toggle_widget import HelpToggleWidget
@@ -11,7 +13,7 @@ from honeychrome.view_components.statistical_plotter import StatisticalCompariso
 os.environ["QT_LOGGING_RULES"] = "qt.core.qobject.connect=false" #suppress pyqtgraph graphicslayoutwidget warning
 
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QMainWindow, QFileDialog, QWidget, QHBoxLayout, QSplitter, QTabWidget, QStatusBar, QVBoxLayout, QLabel, QProgressBar, QScrollArea, QPushButton
+from PySide6.QtWidgets import QMainWindow, QFileDialog, QWidget, QHBoxLayout, QSplitter, QTabWidget, QStatusBar, QVBoxLayout, QLabel, QProgressBar, QScrollArea, QPushButton, QMenu
 from PySide6.QtCore import Qt, QSettings, QByteArray, Slot, QTimer
 
 from honeychrome.view_components.gating_hierarchy_widget import GatingHierarchyWidget
@@ -126,10 +128,16 @@ class MainWindow(QMainWindow):
         action_quit = QAction(icon('logout'), "Quit", self)
         action_quit.triggered.connect(self.close)
 
+
+        # Create Recent Files submenu
+        recent_menu = QMenu("Recent Files", self)
+        self.populate_recent_menu(recent_menu)
+
         file_menu.addAction(action_new)
         file_menu.addAction(action_new_from_this_template)
         file_menu.addAction(action_new_from_choose_template)
         file_menu.addAction(action_open)
+        file_menu.addMenu(recent_menu)
         file_menu.addAction(action_save)
         file_menu.addAction(action_new_sample)
         file_menu.addAction(action_batch_add_samples)
@@ -294,6 +302,23 @@ class MainWindow(QMainWindow):
 
         self.bus.openImportFCSWidget.connect(self.open_import_fcs_files_widget)
 
+
+    def populate_recent_menu(self, recent_menu: QMenu):
+        recent_menu.clear()  # Clear old actions before repopulating
+        recent_files = q_settings.value("recent_files", [])
+
+        if not recent_files:
+            # Add disabled placeholder
+            empty_action = QAction("(No recent experiments)", self)
+            empty_action.setEnabled(False)
+            recent_menu.addAction(empty_action)
+            return
+
+        for path in recent_files:
+            action = QAction(path, self)
+            # Use functools.partial to bind filename to slot
+            action.triggered.connect(functools.partial(self.bus.loadExpRequested.emit, path))
+            recent_menu.addAction(action)
 
     @Slot(int, int)
     def update_progress(self, n, m):

@@ -14,7 +14,7 @@ class EventBus(QObject):
     # load experiment from template --> (file_path, new=False, template=None)
     # another signal to handle autosaving of current experiment and save as template
     reloadExpRequested = Signal()
-    loadExpRequested = Signal(str, bool, str)
+    loadExpRequested = Signal(str)
     saveExpRequested = Signal(str)
     autoSaveRequested = Signal()
 

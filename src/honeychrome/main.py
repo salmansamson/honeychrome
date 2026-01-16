@@ -59,20 +59,33 @@ View:
 from honeychrome.view import View
 
 import logging
-import sys
+import warnings
+
+
+class StreamToLogger(object):
+    """Redirect a stream (stdout/stderr) to a logger."""
+    def __init__(self, logger, level):
+        self.logger = logger
+        self.level = level
+        self.buffer = ""
+
+    def write(self, message):
+        if message.rstrip():
+            self.logger.log(self.level, message.rstrip())
+
+    def flush(self):
+        pass
 
 
 def setup_logging(log_file):
-    """Set up logging to both console and file"""
+    """Set up logging to both console and file, and capture all output."""
 
     # Create logger
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
-
-    # Remove existing handlers to avoid duplicates
     logger.handlers.clear()
 
-    # Create formatter
+    # Formatter
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
     # Console handler
@@ -82,17 +95,25 @@ def setup_logging(log_file):
 
     # File handler
     file_handler = logging.FileHandler(log_file, mode='w')
-    file_handler.setLevel(logging.DEBUG)  # Log everything to file
+    file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
 
     # Add handlers
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
 
+    # Redirect stdout and stderr
+    sys.stdout = StreamToLogger(logger, logging.INFO)
+    sys.stderr = StreamToLogger(logger, logging.ERROR)
+
+    # Redirect warnings module to logging
+    logging.captureWarnings(True)
+    warnings.simplefilter("default")  # ensure warnings fire
+
     # Capture uncaught exceptions
     def handle_exception(exc_type, exc_value, exc_traceback):
-        logger.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
-
+        logger.error("Uncaught exception",
+                     exc_info=(exc_type, exc_value, exc_traceback))
     sys.excepthook = handle_exception
 
     return logger

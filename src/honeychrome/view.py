@@ -171,7 +171,7 @@ class View(QObject):
     def reload_main_window(self):
         self.load_main_window_with_experiment_and_template(self.controller.experiment.experiment_path)
 
-    @Slot(str, bool, str)
+    @Slot(str)
     def load_main_window_with_experiment_and_template(self, experiment_file, new=False, template_path=None):
         try:
             if new:
