@@ -195,7 +195,7 @@ class WheelEditor(QObject):
                 return True
 
             old = self.controller.experiment.process['spillover'][r][c]
-            step = -0.0025 if event.angleDelta().y() > 0 else 0.0025
+            step = -settings.wheel_speed if event.angleDelta().y() > 0 else settings.wheel_speed
             new_value = float(old) + step
             self.controller.experiment.process['spillover'][r][c] = new_value
             self.controller.reapply_fine_tuning()
@@ -390,7 +390,7 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
 
-    from controller import Controller
+    from honeychrome.controller import Controller
     from pathlib import Path
     from event_bus import EventBus
 

@@ -9,7 +9,7 @@ from PySide6.QtGui import QColor
 import pyqtgraph as pg
 import colorcet as cc
 
-from honeychrome.settings import heading_style
+from honeychrome.settings import heading_style, wheel_speed
 
 # ---------------------------
 # Model
@@ -170,7 +170,7 @@ class WheelEditor(QObject):
             if old is None:
                 return True
 
-            step = -0.0025 if event.angleDelta().y() > 0 else 0.0025
+            step = wheel_speed if event.angleDelta().y() > 0 else -wheel_speed
             new_value = float(old) + step
 
             self.model.setData(index, new_value, Qt.EditRole)

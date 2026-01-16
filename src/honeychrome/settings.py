@@ -39,7 +39,7 @@ colourmap_choice = ['bjy', 'kbc', 'bgy', 'bmy', 'CET_CBD2', 'rainbow', 'rainbow4
 report_include_raw = False
 report_include_unmixed = True
 report_include_process = True
-
+wheel_speed = 0.002
 heading_style = """
 QLabel {
     font-size: 18px;
