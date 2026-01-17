@@ -233,7 +233,6 @@ class NxNGrid(QFrame):
         self.bus = bus
         self.controller = controller
         self.heatmaps = None
-        self.bus.showSelectedProfiles.connect(self.show_selected_rows)
 
         # initialise headers - they will be filtered later
         pnn = self.controller.experiment.settings['unmixed']['event_channels_pnn']
@@ -254,7 +253,7 @@ class NxNGrid(QFrame):
         self.title.setStyleSheet(settings.heading_style)
         source_gate_combo_layout = QHBoxLayout()
         self.source_gate_combo = QComboBox(self)
-        self.source_gate_combo.currentTextChanged.connect(self.on_selection_changed)
+        self.source_gate_combo.currentTextChanged.connect(self.request_update_process_plots)
         self.source_gate_combo.addItem("Select Gate:")  # placeholder for "no selection"
         source_gate_combo_layout.addWidget(self.source_gate_combo)
         source_gate_combo_layout.addStretch()
@@ -270,22 +269,105 @@ class NxNGrid(QFrame):
         self._timer = QTimer(self)
         self._timer.setInterval(500)
         self._timer.setSingleShot(True)
-        self._timer.timeout.connect(self._emit_now)
+        self._timer.timeout.connect(self._process_spillover_change)
         self.view.viewport().installEventFilter(self)
 
         self.refresh_heatmaps()
         self.refresh_source_combo('unmixed') # populate the source combo with all unmixed gates
 
         if self.bus is not None:
+            self.bus.showSelectedProfiles.connect(self.show_selected_rows)
             self.bus.histsStatsRecalculated.connect(self.refresh_heatmaps)
             self.bus.changedGatingHierarchy.connect(self.refresh_source_combo)
             self.bus.spectralProcessRefreshed.connect(self.refresh_source_combo)
 
-    def _emit_now(self):
+
+    def show_context_menu(self, event):
+        # Empty method to completely disable context menu
+        pass
+
+    @Slot(str, str)
+    def refresh_source_combo(self, mode='unmixed', gate=None): #gate not used, just for connecting signal
+        # called on initialisation or update of spectral process or unmixed gating hierarchy
+        if mode == 'unmixed' or mode == 'process':
+            if self.controller.data_for_cytometry_plots_process['gating'] and self.controller.data_for_cytometry_plots_process['plots']:
+                gate_names = ['root'] + [g[0] for g in self.controller.data_for_cytometry_plots_process['gating'].get_gate_ids()]
+                current_source_combo_items = [self.source_gate_combo.itemText(i) for i in range(self.source_gate_combo.count())]
+                if set(current_source_combo_items) != set(gate_names):
+                    self.source_gate_combo.clear()
+                    self.source_gate_combo.addItems(gate_names)
+                    index = self.source_gate_combo.findText(self.controller.data_for_cytometry_plots_process['plots'][0]['source_gate'])
+                    if index >= 0:
+                        self.source_gate_combo.setCurrentIndex(index)
+
+    def _process_spillover_change(self):
         # recalculate histograms only for source gate and plots in selected rows
         source_gate = self.source_gate_combo.currentText()
         self.controller.reapply_fine_tuning()
-        self.on_selection_changed(source_gate)
+        self.request_update_process_plots(source_gate)
+
+    @Slot(list)
+    def show_selected_rows(self, selected_label_list):
+        # whenever profiles selection is changed, set up new vertical and horizontal headers
+        # request update of process plots since plots and hists may not be available
+        if self.model.vertical_headers:
+            if selected_label_list:
+                self.vertical_headers = selected_label_list
+            else:
+                pnn = self.controller.experiment.settings['unmixed']['event_channels_pnn']
+                if pnn is not None:
+                    fl_ids = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
+                    fl_pnn = [pnn[n] for n in fl_ids]
+                    self.vertical_headers = fl_pnn
+
+            source_gate = self.source_gate_combo.currentText()
+            self.request_update_process_plots(source_gate)
+
+    @Slot(str)
+    def request_update_process_plots(self, source_gate):
+        # runs if source combo selection is changed, label selection changed or spillover changed,
+        # redefines process plots and forces reinitialisation of data,
+        # ultimately signalling histstatsrecalculated
+        if self.controller.experiment.settings['unmixed']['fluorescence_channels']:
+            process_plots = define_process_plots(self.horizontal_headers, self.vertical_headers, source_gate=source_gate)
+            self.controller.data_for_cytometry_plots_process.update({'plots': process_plots})
+            if self.controller.current_mode == 'process':
+                if source_gate:
+                    self.bus.requestUpdateProcessHists.emit()
+
+    @Slot(str)
+    def refresh_heatmaps(self, mode='process'):
+        # called when nxn grid initialised, when experiment loaded, and on histstatsrecalculated
+        # triggers update of model and view
+        if mode == 'process':
+            if self.horizontal_headers:
+                self.setVisible(True)
+                plots = self.controller.data_for_cytometry_plots['plots']
+                if plots:
+                    histograms = self.controller.data_for_cytometry_plots['histograms']
+                    if not histograms:
+                        dummy_hist = np.zeros((settings.tile_size_nxn_grid_retrieved, settings.tile_size_nxn_grid_retrieved))
+                        histograms += [dummy_hist for plot in plots]
+
+                    # build data arrays
+                    # vertical headers are the unmixed filtered set
+                    # horizontal headers are the raw fluorescence set
+                    self.heatmaps = []
+                    for r in self.vertical_headers:
+                        row = []
+                        for c in self.horizontal_headers:
+                            if c != r:
+                                index = [plots.index(plot) for plot in plots if plot['type'] == 'hist2d' and plot['channel_x'] == c and plot['channel_y'] == r][0]
+                                row.append(histograms[index])
+                            else:
+                                row.append(None)
+                        self.heatmaps.append(row)
+
+                    # self.view.setModel(self.model)
+                    self.model.update_data(self.heatmaps, self.horizontal_headers, self.vertical_headers)
+            else:
+                self.setVisible(False)
+
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Wheel:
@@ -314,81 +396,6 @@ class NxNGrid(QFrame):
 
         return super().eventFilter(self.view.viewport(), event)
 
-
-    @Slot(list)
-    def show_selected_rows(self, selected_label_list):
-        if self.model.vertical_headers:
-            if selected_label_list:
-                self.vertical_headers = selected_label_list
-            else:
-                pnn = self.controller.experiment.settings['unmixed']['event_channels_pnn']
-                if pnn is not None:
-                    fl_ids = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
-                    fl_pnn = [pnn[n] for n in fl_ids]
-                    self.vertical_headers = fl_pnn
-
-            self.refresh_heatmaps()
-            # for row, label in enumerate(self.vertical_headers):
-            #     visible = label in selected_label_list
-            #     self.view.setRowHidden(row, not visible)
-            # self.view.updateGeometry()
-
-    def show_context_menu(self, event):
-        # Empty method to completely disable context menu
-        pass
-
-    @Slot(str, str)
-    def refresh_source_combo(self, mode='unmixed', gate=None): #gate not used, just for connecting signal
-        if mode == 'unmixed':
-            if self.controller.data_for_cytometry_plots_process['gating'] and self.controller.data_for_cytometry_plots_process['plots']:
-                gate_names = ['root'] + [g[0] for g in self.controller.data_for_cytometry_plots_process['gating'].get_gate_ids()]
-                current_source_combo_items = [self.source_gate_combo.itemText(i) for i in range(self.source_gate_combo.count())]
-                if set(current_source_combo_items) != set(gate_names):
-                    self.source_gate_combo.clear()
-                    self.source_gate_combo.addItems(gate_names)
-                    index = self.source_gate_combo.findText(self.controller.data_for_cytometry_plots_process['plots'][0]['source_gate'])
-                    if index >= 0:
-                        self.source_gate_combo.setCurrentIndex(index)
-
-    @Slot(str)
-    def on_selection_changed(self, source_gate):
-        if self.controller.experiment.settings['unmixed']['fluorescence_channels']:
-            process_plots = define_process_plots(self.horizontal_headers, self.vertical_headers, source_gate=source_gate)
-            self.controller.data_for_cytometry_plots_process.update({'plots': process_plots})
-            if self.controller.current_mode == 'process':
-                if source_gate:
-                    self.bus.sourceSpilloverChanged.emit()
-
-    @Slot(str)
-    def refresh_heatmaps(self, mode='process'):
-        if mode == 'process':
-            if self.horizontal_headers:
-                self.setVisible(True)
-                plots = self.controller.data_for_cytometry_plots_process['plots']
-                if plots:
-                    histograms = self.controller.data_for_cytometry_plots_process['histograms']
-                    if not histograms:
-                        dummy_hist = np.zeros((settings.tile_size_nxn_grid_retrieved, settings.tile_size_nxn_grid_retrieved))
-                        histograms += [dummy_hist for plot in plots]
-
-                    # build data arrays
-                    # vertical headers are the unmixed filtered set
-                    # horizontal headers are the raw fluorescence set
-                    self.heatmaps = []
-                    for r in self.vertical_headers:
-                        row = []
-                        for c in self.horizontal_headers:
-                            if c != r:
-                                index = [plots.index(plot) for plot in plots if plot['type'] == 'hist2d' and plot['channel_x'] == c and plot['channel_y'] == r][0]
-                                row.append(histograms[index])
-                            else:
-                                row.append(None)
-                        self.heatmaps.append(row)
-
-                    # self.view.setModel(self.model)
-                    self.model.update_data(self.heatmaps, self.horizontal_headers, self.vertical_headers)
-            else:
-                self.setVisible(False)
 
 
 

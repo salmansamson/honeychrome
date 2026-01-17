@@ -132,7 +132,7 @@ class View(QObject):
         # change spectral model, unmix!, change fine tuning matrix
         self.bus.spectralModelUpdated.connect(self.controller.refresh_spectral_process)
         self.bus.spectralProcessRefreshed.connect(lambda : self.init_plot_grids_and_gating_trees('unmixed'))
-        self.bus.sourceSpilloverChanged.connect(self.controller.reinitialise_data_for_process_plots)
+        self.bus.requestUpdateProcessHists.connect(self.controller.reinitialise_data_for_process_plots)
 
         self.bus.setMainWindowTitle.connect(self.set_main_window_title)
         self.bus.popupMessage.connect(self.popup_message)
@@ -152,7 +152,7 @@ class View(QObject):
         self.bus.spectralControlAdded.connect(lambda: self.bus.autoSaveRequested.emit())
         self.bus.spectralModelUpdated.connect(lambda: self.bus.autoSaveRequested.emit())
         self.bus.spectralProcessRefreshed.connect(lambda: self.bus.autoSaveRequested.emit())
-        self.bus.sourceSpilloverChanged.connect(lambda: self.bus.autoSaveRequested.emit())
+        self.bus.requestUpdateProcessHists.connect(lambda: self.bus.autoSaveRequested.emit())
         self.bus.showStatisticalComparisonUpdated.connect(lambda: self.bus.autoSaveRequested.emit())
 
     @Slot()

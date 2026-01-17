@@ -72,7 +72,7 @@ class EventBus(QObject):
     spectralControlAdded = Signal()
     spectralModelUpdated = Signal()
     spectralProcessRefreshed = Signal()
-    sourceSpilloverChanged = Signal()
+    requestUpdateProcessHists = Signal()
 
     ### statistics plotting
     showStatisticalComparisonUpdated = Signal()
