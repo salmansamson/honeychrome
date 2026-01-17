@@ -93,3 +93,12 @@ For background on spectral unmixing processes and algorithms, see <a href="https
 Also highly recommended is Oliver Burton's Colibri Cytometry blog, e.g. <a href="https://www.colibri-cytometry.com/post/what-s-an-unmixing-matrix">What's an Unmixing Matrix?</a>.
 </p>
 '''
+
+nxn_help_text = '''
+<ul>
+<li>If your panel is large, select one or more rows in the editor above, so that the corresponding rows of the NxN array are plotted below. This makes the plots easier to find, quicker to plot, and quicker to fine-tune.</li>
+<li>If no labels are selected above, the full array of NxN plots will be calculated. <b>Warning: this is slow if N is large!</b> If you are using a 60-colour panel, that means calculating 1800 2D histograms at once.</li>
+<li>Roll scroll wheel to adjust spillover (fine tuning) (row label spills into column labels)</li>
+<li>Hover to inspect spillover of each cell in the array</li>
+</ul>
+'''

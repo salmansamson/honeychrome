@@ -8,6 +8,9 @@ import colorcet as cc
 
 import honeychrome.settings as settings
 from honeychrome.controller_components.functions import define_process_plots
+from honeychrome.view_components.help_texts import nxn_help_text
+from honeychrome.view_components.help_toggle_widget import HelpToggleWidget
+
 
 # ---------------------------
 # Model
@@ -246,11 +249,14 @@ class NxNGrid(QFrame):
         self.layout.setContentsMargins(0, 0, 0, 0)
 
         self.view = ResizingTable()
-        self.title = QLabel('NxN Plots: roll scroll wheel for fine tuning (row to column), hover to inspect (row to column, column to row)')
+        self.title = QLabel('NxN Plots')
+        self.help_nxn = HelpToggleWidget(text=nxn_help_text)
+
         delegate = HeatmapDelegate()
 
         self.layout.addWidget(self.title)
         self.title.setStyleSheet(settings.heading_style)
+        self.layout.addWidget(self.help_nxn)
         source_gate_combo_layout = QHBoxLayout()
         self.source_gate_combo = QComboBox(self)
         self.source_gate_combo.currentTextChanged.connect(self.request_update_process_plots)
@@ -272,8 +278,7 @@ class NxNGrid(QFrame):
         self._timer.timeout.connect(self._process_spillover_change)
         self.view.viewport().installEventFilter(self)
 
-        self.refresh_heatmaps()
-        self.refresh_source_combo('unmixed') # populate the source combo with all unmixed gates
+        self.initialise()
 
         if self.bus is not None:
             self.bus.showSelectedProfiles.connect(self.show_selected_rows)
@@ -281,6 +286,17 @@ class NxNGrid(QFrame):
             self.bus.changedGatingHierarchy.connect(self.refresh_source_combo)
             self.bus.spectralProcessRefreshed.connect(self.refresh_source_combo)
 
+    def initialise(self):
+        # initialise headers - they will be filtered later
+        pnn = self.controller.experiment.settings['unmixed']['event_channels_pnn']
+        if pnn is not None:
+            fl_ids = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
+            fl_pnn = [pnn[n] for n in fl_ids]
+            self.horizontal_headers = fl_pnn
+            self.vertical_headers = fl_pnn
+
+        self.refresh_source_combo('unmixed') # populate the source combo with all unmixed gates
+        self.refresh_heatmaps() #produces dummy hists
 
     def show_context_menu(self, event):
         # Empty method to completely disable context menu
@@ -339,12 +355,13 @@ class NxNGrid(QFrame):
     def refresh_heatmaps(self, mode='process'):
         # called when nxn grid initialised, when experiment loaded, and on histstatsrecalculated
         # triggers update of model and view
+        # access data_for_cytometry_plots_process instead of data_for_cytometry_plots since mode may be different (probably on raw) when initialised
         if mode == 'process':
             if self.horizontal_headers:
                 self.setVisible(True)
-                plots = self.controller.data_for_cytometry_plots['plots']
+                plots = self.controller.data_for_cytometry_plots_process['plots']
                 if plots:
-                    histograms = self.controller.data_for_cytometry_plots['histograms']
+                    histograms = self.controller.data_for_cytometry_plots_process['histograms']
                     if not histograms:
                         dummy_hist = np.zeros((settings.tile_size_nxn_grid_retrieved, settings.tile_size_nxn_grid_retrieved))
                         histograms += [dummy_hist for plot in plots]
@@ -357,8 +374,11 @@ class NxNGrid(QFrame):
                         row = []
                         for c in self.horizontal_headers:
                             if c != r:
-                                index = [plots.index(plot) for plot in plots if plot['type'] == 'hist2d' and plot['channel_x'] == c and plot['channel_y'] == r][0]
-                                row.append(histograms[index])
+                                try:
+                                    index = [plots.index(plot) for plot in plots if plot['type'] == 'hist2d' and plot['channel_x'] == c and plot['channel_y'] == r][0]
+                                    row.append(histograms[index])
+                                except Exception as e:
+                                    print(e)
                             else:
                                 row.append(None)
                         self.heatmaps.append(row)

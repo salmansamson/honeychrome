@@ -205,6 +205,7 @@ class View(QObject):
     @Slot(str)
     def init_plot_grids_and_gating_trees(self, scope=''):
         # reinitialises widgets
+        # called for new/load experiment, or on spectral process updated (just for scope = 'unmixed')
         # run this for first initialisation, then for updates
         if scope == '' or scope == 'raw':
             self.main_window.cytometry_grid_raw.init_plots(self.controller.data_for_cytometry_plots_raw)
@@ -229,7 +230,7 @@ class View(QObject):
             self.main_window.similarity_viewer.refresh_heatmap()
             self.main_window.unmixing_viewer.refresh_heatmap()
             self.main_window.compensation_editor.refresh_heatmap()
-            self.main_window.nxn_viewer.refresh_heatmaps()
+            self.main_window.nxn_viewer.initialise() # reinitialse vertical and horizontal headers, blank nxn
 
         if self.controller.experiment.process['unmixing_matrix']:
             self.main_window.tip_statistics.setVisible(False)
