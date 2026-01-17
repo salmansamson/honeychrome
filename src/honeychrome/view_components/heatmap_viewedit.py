@@ -281,7 +281,7 @@ class HeatmapViewEditor(QFrame):
             self.wheel_handler = WheelEditor(self.view, self.model)
             self.view.viewport().installEventFilter(self.wheel_handler)
             self.model.dataChanged.connect(self._on_edit)
-            self.bus.spilloverChanged.connect(self.refresh_heatmap)
+            self.bus.sourceSpilloverChanged.connect(self.refresh_heatmap)
 
 
         self.layout.addWidget(self.view)
@@ -303,7 +303,7 @@ class HeatmapViewEditor(QFrame):
 
     def _emit_now(self):
         self.controller.reapply_fine_tuning()
-        self.bus.spilloverChanged.emit()
+        self.bus.sourceSpilloverChanged.emit()
 
     def _on_edit(self, index1, index2, role):
         if index1 == index2:

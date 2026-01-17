@@ -31,6 +31,10 @@ class HeatmapGridModel(QAbstractTableModel):
             background_colour = QColor(255,255,255,255)
         self.colormap[0] = background_colour
 
+        # Create color lookup table
+        self.color_table = np.array([[c.red(), c.green(), c.blue(), c.alpha()] for c in self.colormap], dtype=np.uint8).astype(np.uint32)
+
+
     def get_colorcet_colormap(self, name):
         """Get a colormap from colorcet and convert to Qt-friendly format"""
         cmap_colors = getattr(cc, name)
@@ -63,12 +67,19 @@ class HeatmapGridModel(QAbstractTableModel):
             return None
 
         if role == Qt.DecorationRole:
-            return self.get_cached_pixmap(index)
+            r = index.row()
+            c = index.column()
+
+            if self.vertical_headers[r] != self.horizontal_headers[c]:
+                # return self.get_cached_pixmap(index)
+                pixmap = self.create_heatmap_pixmap(self._data[r][c])
+                return pixmap
+            else:
+                return None
 
         elif role == Qt.ToolTipRole:
             r = index.row()
             c = index.column()
-
 
             return ("Spillover:\n"
                     f"{self.vertical_headers[r]} --- {self.horizontal_headers[c]}: {self.controller.experiment.process['spillover'][r][c]:0.3f}\n"
@@ -93,22 +104,18 @@ class HeatmapGridModel(QAbstractTableModel):
         data_max = np.max(data)
 
         if data_max > 0:
-            normalized = np.flipud(data / data_max)
+            normalized = np.flipud((data / data_max).T)
         else:
             normalized = np.full_like(data, 0.5)
 
         indices = (normalized * (len(self.colormap) - 1)).astype(np.int32)
-        indices = np.clip(indices, 0, len(self.colormap) - 1)
-
-        # Create color lookup table
-        color_table = np.array([[c.red(), c.green(), c.blue(), c.alpha()] for c in self.colormap], dtype=np.uint8)
+        # indices = np.clip(indices, 0, len(self.colormap) - 1) # not necessary to clip as already scaled
 
         # Vectorized lookup
-        rgb_array = color_table[indices]
+        rgb_array = self.color_table[indices]
 
         # Convert to ARGB32 format expected by QImage
-        argb_array = (rgb_array[:, :, 3].astype(np.uint32) << 24) | (rgb_array[:, :, 0].astype(np.uint32) << 16) | (
-                    rgb_array[:, :, 1].astype(np.uint32) << 8) | (rgb_array[:, :, 2].astype(np.uint32))
+        argb_array = (rgb_array[:, :, 3] << 24) | (rgb_array[:, :, 0] << 16) | (rgb_array[:, :, 1] << 8) | (rgb_array[:, :, 2])
 
         scaled_image = QImage(argb_array.data, width, height, QImage.Format_ARGB32).scaled(self._pixmap_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         # Create QImage from memory
@@ -122,8 +129,7 @@ class HeatmapGridModel(QAbstractTableModel):
                 return False
 
             self._data[index.row(), index.column()] = v
-            self.dataChanged.emit(index, index,
-                                  [Qt.DisplayRole, Qt.BackgroundRole])
+            self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.BackgroundRole])
             return True
         return False
 
@@ -152,59 +158,13 @@ class HeatmapDelegate(QStyledItemDelegate):
         super().__init__(parent)
 
     def paint(self, painter, option, index):
-        r, c = index.row(), index.column()
-
         # Hide diagonal: paint background color of table with no text
-        if r == c:
+        if not index.data(Qt.DecorationRole):
             painter.fillRect(option.rect, option.palette.window())  # blank area
             return  # skip default painting
 
         # Normal painting for all other cells
         super().paint(painter, option, index)
-
-# ---------------------------
-# Wheel handler (event filter)
-# ---------------------------
-class WheelEditor(QObject):
-    def __init__(self, view, controller, bus):
-        super().__init__()
-        self.view = view
-        self.controller = controller
-        self.bus = bus
-
-        self._timer = QTimer(self)
-        self._timer.setInterval(500)
-        self._timer.setSingleShot(True)
-        self._timer.timeout.connect(self._emit_now)
-
-    def _emit_now(self):
-        self.bus.spilloverChanged.emit()
-
-    def eventFilter(self, obj, event):
-        if event.type() == QEvent.Wheel:
-            pos = event.position().toPoint()
-            index = self.view.indexAt(pos)
-
-            if not index.isValid():
-                return False
-
-            r = index.row()
-            c = index.column()
-            # ignore diagonal cells
-            if r == c:
-                return True
-
-            old = self.controller.experiment.process['spillover'][r][c]
-            step = -settings.wheel_speed if event.angleDelta().y() > 0 else settings.wheel_speed
-            new_value = float(old) + step
-            self.controller.experiment.process['spillover'][r][c] = new_value
-            self.controller.reapply_fine_tuning()
-            self._timer.start()
-
-            return True  # consume wheel event
-
-        return False
-
 
 
 class ResizingTable(QTableView):
@@ -220,15 +180,15 @@ class ResizingTable(QTableView):
         self.verticalHeader().setDefaultSectionSize(settings.tile_size_nxn_grid_retrieved)
         self.setWordWrap(True)
 
-    # def setModel(self, model):
-    #     super().setModel(model)
-    #     # Connect to model's dataChanged signal
-    #     if model:
-    #         model.layoutChanged.connect(self._on_model_changed)
-    #         model.modelReset.connect(self._on_model_changed)
-    #
-    # def _on_model_changed(self):
-    #     self.updateGeometry()
+    def setModel(self, model):
+        super().setModel(model)
+        # Connect to model's dataChanged signal
+        if model:
+            model.layoutChanged.connect(self._on_model_changed)
+            model.modelReset.connect(self._on_model_changed)
+
+    def _on_model_changed(self):
+        self.updateGeometry()
 
     def sizeHint(self):
         if not self.model() or self.model().rowCount() == 0 or self.model().columnCount() == 0:
@@ -275,6 +235,14 @@ class NxNGrid(QFrame):
         self.heatmaps = None
         self.bus.showSelectedProfiles.connect(self.show_selected_rows)
 
+        # initialise headers - they will be filtered later
+        pnn = self.controller.experiment.settings['unmixed']['event_channels_pnn']
+        if pnn is not None:
+            fl_ids = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
+            fl_pnn = [pnn[n] for n in fl_ids]
+            self.horizontal_headers = fl_pnn
+            self.vertical_headers = fl_pnn
+
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
 
@@ -286,7 +254,7 @@ class NxNGrid(QFrame):
         self.title.setStyleSheet(settings.heading_style)
         source_gate_combo_layout = QHBoxLayout()
         self.source_gate_combo = QComboBox(self)
-        self.source_gate_combo.currentTextChanged.connect(self.change_process_source_gate)
+        self.source_gate_combo.currentTextChanged.connect(self.on_selection_changed)
         self.source_gate_combo.addItem("Select Gate:")  # placeholder for "no selection"
         source_gate_combo_layout.addWidget(self.source_gate_combo)
         source_gate_combo_layout.addStretch()
@@ -296,28 +264,56 @@ class NxNGrid(QFrame):
         self.view.setModel(self.model)
         self.view.setItemDelegate(delegate)
 
-        # Wheel editor
-        self.wheel_handler = WheelEditor(self.view, self.controller, self.bus)
-        self.view.viewport().installEventFilter(self.wheel_handler)
-
         self.layout.addWidget(self.view)
 
-        # initialise headers - they will be filtered later
-        pnn = self.controller.experiment.settings['unmixed']['event_channels_pnn']
-        if pnn is not None:
-            fl_ids = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
-            fl_pnn = [pnn[n] for n in fl_ids]
-            self.horizontal_headers = fl_pnn
-            self.vertical_headers = fl_pnn
+        # Spillover and wheel editor
+        self._timer = QTimer(self)
+        self._timer.setInterval(500)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._emit_now)
+        self.view.viewport().installEventFilter(self)
 
         self.refresh_heatmaps()
         self.refresh_source_combo('unmixed') # populate the source combo with all unmixed gates
 
         if self.bus is not None:
             self.bus.histsStatsRecalculated.connect(self.refresh_heatmaps)
-            self.bus.spilloverChanged.connect(self.refresh_heatmaps)
             self.bus.changedGatingHierarchy.connect(self.refresh_source_combo)
             self.bus.spectralProcessRefreshed.connect(self.refresh_source_combo)
+
+    def _emit_now(self):
+        # recalculate histograms only for source gate and plots in selected rows
+        source_gate = self.source_gate_combo.currentText()
+        self.controller.reapply_fine_tuning()
+        self.on_selection_changed(source_gate)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Wheel:
+            pos = event.position().toPoint()
+            index = self.view.indexAt(pos)
+
+            if not index.isValid():
+                return False
+
+            # note that row number is not the same as the index of the fluorescence pnn if profiles have been selected. convert to the right row rr
+            r = index.row()
+            rr = self.horizontal_headers.index(self.vertical_headers[r])
+            c = index.column()
+            # ignore diagonal cells
+            if rr == c:
+                return True
+
+            old = self.controller.experiment.process['spillover'][rr][c]
+            step = -settings.wheel_speed if event.angleDelta().y() > 0 else settings.wheel_speed
+            new_value = float(old) + step
+            self.controller.experiment.process['spillover'][rr][c] = new_value
+            self.controller.reapply_fine_tuning()
+            self._timer.start()
+
+            return True  # consume wheel event
+
+        return super().eventFilter(self.view.viewport(), event)
+
 
     @Slot(list)
     def show_selected_rows(self, selected_label_list):
@@ -325,7 +321,12 @@ class NxNGrid(QFrame):
             if selected_label_list:
                 self.vertical_headers = selected_label_list
             else:
-                self.vertical_headers = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
+                pnn = self.controller.experiment.settings['unmixed']['event_channels_pnn']
+                if pnn is not None:
+                    fl_ids = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
+                    fl_pnn = [pnn[n] for n in fl_ids]
+                    self.vertical_headers = fl_pnn
+
             self.refresh_heatmaps()
             # for row, label in enumerate(self.vertical_headers):
             #     visible = label in selected_label_list
@@ -350,13 +351,13 @@ class NxNGrid(QFrame):
                         self.source_gate_combo.setCurrentIndex(index)
 
     @Slot(str)
-    def change_process_source_gate(self, source_gate):
+    def on_selection_changed(self, source_gate):
         if self.controller.experiment.settings['unmixed']['fluorescence_channels']:
-            process_plots = define_process_plots(self.controller.experiment.settings['unmixed']['fluorescence_channels'], source_gate=source_gate)
+            process_plots = define_process_plots(self.horizontal_headers, self.vertical_headers, source_gate=source_gate)
             self.controller.data_for_cytometry_plots_process.update({'plots': process_plots})
             if self.controller.current_mode == 'process':
                 if source_gate:
-                    self.controller.initialise_data_for_cytometry_plots()
+                    self.bus.sourceSpilloverChanged.emit()
 
     @Slot(str)
     def refresh_heatmaps(self, mode='process'):
@@ -378,7 +379,7 @@ class NxNGrid(QFrame):
                         row = []
                         for c in self.horizontal_headers:
                             if c != r:
-                                index = [plots.index(plot) for plot in plots if plot['type'] == 'hist2d' and plot['channel_x'] == r and plot['channel_y'] == c][0]
+                                index = [plots.index(plot) for plot in plots if plot['type'] == 'hist2d' and plot['channel_x'] == c and plot['channel_y'] == r][0]
                                 row.append(histograms[index])
                             else:
                                 row.append(None)

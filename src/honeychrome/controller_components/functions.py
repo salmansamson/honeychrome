@@ -12,17 +12,10 @@ from honeychrome.settings import linear_a, logicle_w, logicle_m, logicle_a, log_
 q_settings = QSettings("honeychrome", "ExperimentSelector")
 
 
-def define_process_plots(fluorescence_channels, source_gate):
-    # if self.unmixed_gating.find_matching_gate_paths('Singlets'):
-    #     source_gate = 'Singlets'
-    # elif self.unmixed_gating.find_matching_gate_paths('Cells'):
-    #     source_gate = 'Cells'
-    # else:
-    #     source_gate = 'root'
-
+def define_process_plots(fluorescence_channels_x, fluorescence_channels_y, source_gate):
     process_plots = [{'type': 'hist2d', 'channel_x': x, 'channel_y': y, 'source_gate': source_gate, 'child_gates': []} if x != y
                      else {'type': 'hist1d', 'channel_x': x, 'source_gate': source_gate, 'child_gates': []}
-                     for x in fluorescence_channels for y in fluorescence_channels]
+                     for x in fluorescence_channels_x for y in fluorescence_channels_y]
     return process_plots
 
 def all_same(lst):

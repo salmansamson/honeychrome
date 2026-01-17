@@ -413,7 +413,7 @@ class Controller(QObject):
                         source_gate = gate
                         break
                 print(f'Controller: using {source_gate} as base gate for process NxN plots')
-                process_plots = define_process_plots(self.experiment.settings['unmixed']['fluorescence_channels'], source_gate=source_gate)
+                process_plots = define_process_plots(self.experiment.settings['unmixed']['fluorescence_channels'], self.experiment.settings['unmixed']['fluorescence_channels'], source_gate=source_gate)
             else:
                 process_plots = []
 
@@ -554,8 +554,6 @@ class Controller(QObject):
 
             self.initialise_data_for_cytometry_plots()
         else:
-            # self.initialise_ephemeral_data()
-
             if self.bus:
                 self.bus.openImportFCSWidget.emit(True)
                 QTimer.singleShot(500, lambda: self.bus.statusMessage.emit(f'Failed to load sample.'))
@@ -768,6 +766,14 @@ class Controller(QObject):
             # start live update thread
             self.thread = threading.Thread(target=self.update_hists_and_stats, args=(), daemon=True)
             self.thread.start()
+
+    @with_busy_cursor
+    def reinitialise_data_for_process_plots(self):
+        if self.current_mode == 'process':
+            self.data_for_cytometry_plots.update({'event_data': self.unmixed_event_data})
+            self.data_for_cytometry_plots['histograms'] = initialise_hists(self.data_for_cytometry_plots['plots'], self.data_for_cytometry_plots)
+            self.calc_hists_and_stats(gates_to_calculate='do not')
+            print(f'Controller: prepared hists for process plots')
 
     @Slot(str, str)
     def create_new_plot(self, channel_x, channel_y):
