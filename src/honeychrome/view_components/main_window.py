@@ -71,13 +71,13 @@ class MainWindow(QMainWindow):
         self.gating_tree_raw.set_toolbar(self.cytometry_toolbar_raw)
 
         # process
-        self.help_spectral_process = HelpToggleWidget(text=process_help_text)
-        self.spectral_controls_editor = SpectralControlsEditor(bus, self.controller)
-        self.profiles_viewer = ProfilesViewer(bus, self.controller)
-        self.similarity_viewer = HeatmapViewEditor(bus, self.controller, 'similarity_matrix', is_dark)
-        self.unmixing_viewer = HeatmapViewEditor(bus, self.controller, 'unmixing_matrix', is_dark)
-        self.compensation_editor = HeatmapViewEditor(bus, self.controller, 'spillover', is_dark)
-        self.nxn_viewer = NxNGrid(bus, self.controller, is_dark=is_dark)
+        self.help_spectral_process = HelpToggleWidget(text=process_help_text, parent=self)
+        self.spectral_controls_editor = SpectralControlsEditor(bus, self.controller, parent=self)
+        self.profiles_viewer = ProfilesViewer(bus, self.controller, parent=self)
+        self.similarity_viewer = HeatmapViewEditor(bus, self.controller, 'similarity_matrix', is_dark, parent=self)
+        self.unmixing_viewer = HeatmapViewEditor(bus, self.controller, 'unmixing_matrix', is_dark, parent=self)
+        self.compensation_editor = HeatmapViewEditor(bus, self.controller, 'spillover', is_dark, parent=self)
+        self.nxn_viewer = NxNGrid(bus, self.controller, is_dark=is_dark, parent=self)
 
         # unmixed
         self.gating_tree_unmixed = GatingHierarchyWidget(bus, mode='unmixed')
@@ -342,7 +342,22 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.save_state()
+
+        # Clean up child widgets
+        for child in self.findChildren(QWidget):
+            child.deleteLater()
+
+        # Disconnect all signals
+        try:
+            self.blockSignals(True)
+        except:
+            pass
+
         super().closeEvent(event)
+
+        # Schedule widget for deletion
+        self.deleteLater()
+        event.accept()
 
     def app_config(self):
         dialog = AppConfigDialog(self, self.bus)

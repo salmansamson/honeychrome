@@ -6,8 +6,8 @@ from honeychrome.view_components.help_texts import process_help_text
 from honeychrome.view_components.icon_loader import icon
 
 class HelpToggleWidget(QWidget):
-    def __init__(self, title="Show Help", text=''):
-        super().__init__()
+    def __init__(self, title="Show Help", text='', parent=None):
+        super().__init__(parent)
         self.title = title
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

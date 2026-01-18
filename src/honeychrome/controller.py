@@ -772,7 +772,7 @@ class Controller(QObject):
         if self.current_mode == 'process':
             self.data_for_cytometry_plots.update({'event_data': self.unmixed_event_data})
             self.data_for_cytometry_plots['histograms'] = initialise_hists(self.data_for_cytometry_plots['plots'], self.data_for_cytometry_plots)
-            self.calc_hists_and_stats(gates_to_calculate='do not')
+            self.calc_hists_and_stats(gates_to_calculate='for speed, calc hists but do not reapply gates')
             print(f'Controller: prepared hists for process plots')
 
     @Slot(str, str)

@@ -236,14 +236,8 @@ class NxNGrid(QFrame):
         self.bus = bus
         self.controller = controller
         self.heatmaps = None
-
-        # initialise headers - they will be filtered later
-        pnn = self.controller.experiment.settings['unmixed']['event_channels_pnn']
-        if pnn is not None:
-            fl_ids = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
-            fl_pnn = [pnn[n] for n in fl_ids]
-            self.horizontal_headers = fl_pnn
-            self.vertical_headers = fl_pnn
+        self.horizontal_headers = []
+        self.vertical_headers = []
 
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -252,14 +246,11 @@ class NxNGrid(QFrame):
         self.title = QLabel('NxN Plots')
         self.help_nxn = HelpToggleWidget(text=nxn_help_text)
 
-        delegate = HeatmapDelegate()
-
         self.layout.addWidget(self.title)
         self.title.setStyleSheet(settings.heading_style)
         self.layout.addWidget(self.help_nxn)
         source_gate_combo_layout = QHBoxLayout()
         self.source_gate_combo = QComboBox(self)
-        self.source_gate_combo.currentTextChanged.connect(self.request_update_process_plots)
         self.source_gate_combo.addItem("Select Gate:")  # placeholder for "no selection"
         source_gate_combo_layout.addWidget(self.source_gate_combo)
         source_gate_combo_layout.addStretch()
@@ -267,6 +258,7 @@ class NxNGrid(QFrame):
 
         self.model = HeatmapGridModel(self.controller, is_dark)
         self.view.setModel(self.model)
+        delegate = HeatmapDelegate()
         self.view.setItemDelegate(delegate)
 
         self.layout.addWidget(self.view)
@@ -281,22 +273,25 @@ class NxNGrid(QFrame):
         self.initialise()
 
         if self.bus is not None:
+            self.source_gate_combo.currentTextChanged.connect(self.request_update_process_plots)
             self.bus.showSelectedProfiles.connect(self.show_selected_rows)
             self.bus.histsStatsRecalculated.connect(self.refresh_heatmaps)
             self.bus.changedGatingHierarchy.connect(self.refresh_source_combo)
             self.bus.spectralProcessRefreshed.connect(self.refresh_source_combo)
 
     def initialise(self):
+        self.set_headers_to_all_labels()
+        self.refresh_source_combo('unmixed') # populate the source combo with all unmixed gates
+        self.refresh_heatmaps() #produces dummy hists
+
+    def set_headers_to_all_labels(self):
         # initialise headers - they will be filtered later
-        pnn = self.controller.experiment.settings['unmixed']['event_channels_pnn']
+        pnn = self.controller.data_for_cytometry_plots_process['pnn']
         if pnn is not None:
-            fl_ids = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
+            fl_ids = self.controller.data_for_cytometry_plots_process['fluoro_indices']
             fl_pnn = [pnn[n] for n in fl_ids]
             self.horizontal_headers = fl_pnn
             self.vertical_headers = fl_pnn
-
-        self.refresh_source_combo('unmixed') # populate the source combo with all unmixed gates
-        self.refresh_heatmaps() #produces dummy hists
 
     def show_context_menu(self, event):
         # Empty method to completely disable context menu
@@ -326,18 +321,13 @@ class NxNGrid(QFrame):
     def show_selected_rows(self, selected_label_list):
         # whenever profiles selection is changed, set up new vertical and horizontal headers
         # request update of process plots since plots and hists may not be available
-        if self.model.vertical_headers:
-            if selected_label_list:
-                self.vertical_headers = selected_label_list
-            else:
-                pnn = self.controller.experiment.settings['unmixed']['event_channels_pnn']
-                if pnn is not None:
-                    fl_ids = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
-                    fl_pnn = [pnn[n] for n in fl_ids]
-                    self.vertical_headers = fl_pnn
+        if selected_label_list:
+            self.vertical_headers = selected_label_list
+        else:
+            self.set_headers_to_all_labels()
 
-            source_gate = self.source_gate_combo.currentText()
-            self.request_update_process_plots(source_gate)
+        source_gate = self.source_gate_combo.currentText()
+        self.request_update_process_plots(source_gate)
 
     @Slot(str)
     def request_update_process_plots(self, source_gate):
@@ -374,11 +364,8 @@ class NxNGrid(QFrame):
                         row = []
                         for c in self.horizontal_headers:
                             if c != r:
-                                try:
-                                    index = [plots.index(plot) for plot in plots if plot['type'] == 'hist2d' and plot['channel_x'] == c and plot['channel_y'] == r][0]
-                                    row.append(histograms[index])
-                                except Exception as e:
-                                    print(e)
+                                index = [plots.index(plot) for plot in plots if plot['type'] == 'hist2d' and plot['channel_x'] == c and plot['channel_y'] == r][0]
+                                row.append(histograms[index])
                             else:
                                 row.append(None)
                         self.heatmaps.append(row)
