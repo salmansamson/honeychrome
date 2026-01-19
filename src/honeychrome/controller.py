@@ -701,6 +701,7 @@ class Controller(QObject):
 
         return data, n_new_events
 
+    @with_busy_cursor
     @Slot(str)
     def set_mode(self, tab_name):
         print(f"Controller: set mode to {tab_name}")
@@ -719,7 +720,6 @@ class Controller(QObject):
 
         self.initialise_data_for_cytometry_plots()
 
-    @with_busy_cursor
     def initialise_data_for_cytometry_plots(self):
         # called on tab change, load sample
         # select set of plots: raw, process or unmixed
@@ -768,6 +768,7 @@ class Controller(QObject):
             self.thread.start()
 
     @with_busy_cursor
+    @Slot()
     def reinitialise_data_for_process_plots(self):
         if self.current_mode == 'process':
             self.data_for_cytometry_plots.update({'event_data': self.unmixed_event_data})

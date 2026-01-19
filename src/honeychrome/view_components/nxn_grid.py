@@ -270,14 +270,32 @@ class NxNGrid(QFrame):
         self._timer.timeout.connect(self._process_spillover_change)
         self.view.viewport().installEventFilter(self)
 
-        self.initialise()
-
-        if self.bus is not None:
+        if self.bus is not None: # nxn grid is in the gui - connect signals and initialise in the normal way
             self.source_gate_combo.currentTextChanged.connect(self.request_update_process_plots)
             self.bus.showSelectedProfiles.connect(self.show_selected_rows)
             self.bus.histsStatsRecalculated.connect(self.refresh_heatmaps)
             self.bus.changedGatingHierarchy.connect(self.refresh_source_combo)
             self.bus.spectralProcessRefreshed.connect(self.refresh_source_combo)
+            self.initialise()
+        else: # nxn grid is in the exporter - just update the plots, histograms and generate the model and view
+
+            # refresh list of plots with preferred source gate
+            source_gate = 'root'
+            unmixed_gate_names = [g[0].lower() for g in self.controller.unmixed_gating.get_gate_ids()]
+            for gate in self.controller.experiment.process['base_gate_priority_order']:
+                if gate.lower() in unmixed_gate_names:
+                    source_gate = gate
+                    break
+            print(f'Controller: using {source_gate} as base gate for process NxN plots')
+            process_plots = define_process_plots(self.controller.experiment.settings['unmixed']['fluorescence_channels'], self.controller.experiment.settings['unmixed']['fluorescence_channels'], source_gate=source_gate)
+            self.controller.data_for_cytometry_plots_process.update({'plots': process_plots})
+
+            # calculate histograms
+            self.controller.initialise_data_for_cytometry_plots()
+            self.set_headers_to_all_labels()
+            self.refresh_heatmaps() #produces dummy hists
+
+
 
     def initialise(self):
         self.set_headers_to_all_labels()

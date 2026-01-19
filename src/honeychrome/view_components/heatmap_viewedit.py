@@ -247,7 +247,8 @@ class HeatmapViewEditor(QFrame):
         self.controller = controller
         self.process_key = process_key
         self.matrix = None
-        self.bus.showSelectedProfiles.connect(self.show_selected_rows)
+        if self.bus:
+            self.bus.showSelectedProfiles.connect(self.show_selected_rows)
 
         self._timer = QTimer(self)
         self._timer.setInterval(500)
@@ -281,8 +282,8 @@ class HeatmapViewEditor(QFrame):
             self.wheel_handler = WheelEditor(self.view, self.model)
             self.view.viewport().installEventFilter(self.wheel_handler)
             self.model.dataChanged.connect(self._on_edit)
-            self.bus.requestUpdateProcessHists.connect(self.refresh_heatmap)
-
+            if self.bus:
+                self.bus.requestUpdateProcessHists.connect(self.refresh_heatmap)
 
         self.layout.addWidget(self.view)
 

@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, QEventLoop
 from PySide6.QtGui import QPalette, QColor
 from PySide6.QtWidgets import QApplication, QWidget, QHeaderView
 import pyqtgraph as pg
@@ -203,6 +203,8 @@ class ReportGenerator(QObject):
                 ### export also all individual plots
                 # export_widget_png(plot_widget, full_sample_path.with_name(f"{current_sample_path.stem}_{plot_widget.n_in_plot_sequence}").with_suffix('.docx'), scale_factor=scale_factor)
 
+                plot_widget.deleteLater()
+
             statistics = self.controller.data_for_cytometry_plots['statistics']
             table = doc.add_table(rows=1, cols=5)
             row = table.rows[0]
@@ -252,39 +254,48 @@ class ReportGenerator(QObject):
             doc.add_picture(png_buffer, width=Mm(170))
 
             doc.add_heading('Similarity Matrix', 3)
-            similarity_viewer = HeatmapViewEditor(self.bus, self.controller, 'similarity_matrix', False, parent=container)
+            similarity_viewer = HeatmapViewEditor(None, self.controller, 'similarity_matrix', False, parent=container)
             similarity_viewer.title.setVisible(False)
             set_widget_light_palette(similarity_viewer)
             resize_tableview(similarity_viewer)
             png_buffer = pm_to_png_buffer(get_widget_pixmap(similarity_viewer, scale_factor=scale_factor))
-            doc.add_picture(png_buffer, width=Mm(14*len(self.controller.experiment.process['spectral_model'])))
+            doc.add_picture(png_buffer, width=Mm(min([170, 14*len(self.controller.experiment.process['spectral_model'])])))
 
             doc.add_heading('Unmixing Matrix', 3)
-            unmixing_viewer = HeatmapViewEditor(self.bus, self.controller, 'unmixing_matrix', False, parent=container)
+            unmixing_viewer = HeatmapViewEditor(None, self.controller, 'unmixing_matrix', False, parent=container)
             unmixing_viewer.title.setVisible(False)
             set_widget_light_palette(unmixing_viewer)
             resize_tableview(unmixing_viewer)
             png_buffer = pm_to_png_buffer(get_widget_pixmap(unmixing_viewer, scale_factor=scale_factor))
-            doc.add_picture(png_buffer, width=Mm(170))
+            doc.add_picture(png_buffer, width=Mm(min([170, 14*len(self.controller.filtered_raw_fluorescence_channel_ids)])))
 
             doc.add_heading('Spillover / Fine-Tuning Matrix', 3)
-            compensation_editor = HeatmapViewEditor(self.bus, self.controller, 'spillover', False, parent=container)
+            compensation_editor = HeatmapViewEditor(None, self.controller, 'spillover', False, parent=container)
             compensation_editor.title.setVisible(False)
             set_widget_light_palette(compensation_editor)
             resize_tableview(compensation_editor)
             png_buffer = pm_to_png_buffer(get_widget_pixmap(compensation_editor, scale_factor=scale_factor))
-            doc.add_picture(png_buffer, width=Mm(14*len(self.controller.experiment.process['spectral_model'])))
+            doc.add_picture(png_buffer, width=Mm(min([170, 14*len(self.controller.experiment.process['spectral_model'])])))
 
             doc.add_heading('NxN Plots', 3)
-            nxn_viewer = NxNGrid(self.bus, self.controller, is_dark=False, parent=container)
+            nxn_viewer = NxNGrid(None, self.controller, is_dark=False, parent=container)
             nxn_viewer.title.setVisible(False)
+            nxn_viewer.help_nxn.setVisible(False)
+            nxn_viewer.source_gate_combo.setVisible(False)
             set_widget_light_palette(nxn_viewer)
             resize_tableview(nxn_viewer)
             png_buffer = pm_to_png_buffer(get_widget_pixmap(nxn_viewer, scale_factor=scale_factor))
-            doc.add_picture(png_buffer, width=Mm(170))
+            doc.add_picture(png_buffer, width=Mm(min([170, 30*len(self.controller.experiment.process['spectral_model'])])))
+
+            profiles_viewer.deleteLater()
+            similarity_viewer.deleteLater()
+            unmixing_viewer.deleteLater()
+            compensation_editor.deleteLater()
+            nxn_viewer.deleteLater()
 
         # Save - one line!
         doc.save(docx_path)
+
 
         # restore cytometry
         self.controller.set_mode(current_mode)
