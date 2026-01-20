@@ -536,8 +536,8 @@ class SpectralControlsEditor(QFrame):
             control = {'label': channel, 'control_type': 'Channel Assignment', 'particle_type': '', 'gate_channel': channel, 'sample_name': '', 'sample_path': '', 'gate_label': ''}
             spectral_model.append(control)
             self.profile_updater.generate(control, self.spectral_library_search_results)  # pass in search results in case control is from library
-        self.model.layoutChanged.emit()
         self.refresh_all_and_enable()
+        self.model.layoutChanged.emit()
         self.bus.spectralModelUpdated.emit()
 
     def _on_spectral_control_added(self):
