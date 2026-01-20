@@ -127,7 +127,7 @@ class SpectralAutoGenerator(QObject):
         self.profiles.clear()
         self.unstained_negative = None
         self.progress_target = len(self.samples['single_stain_controls'])
-        # self.progress_target = len(self.samples['single_stain_controls'][:5]) # quick test
+        self.progress_target = len(self.samples['single_stain_controls'][:5]) # quick test
 
         # (sample name, label, sample path, particle_type (cells/beads), control_type (positive only, positive and negative, autofluorescence), gate channel
         self.base_gate_label = 'root'
@@ -147,8 +147,8 @@ class SpectralAutoGenerator(QObject):
             success = self.generate_spectral_control(n)   # do your expensive work here
             if not success:
                 if self.bus:
-                    QTimer.singleShot(500, lambda: self.bus.statusMessage.emit(f'Failed to generate spectral control.'))
-                break
+                    QTimer.singleShot(100, lambda: self.bus.statusMessage.emit(f'Failed to generate spectral control.'))
+                break # is this necessary?
             if self.bus:
                 self.bus.spectralControlAdded.emit()
 
@@ -240,14 +240,14 @@ class SpectralAutoGenerator(QObject):
             particle_type = 'Cells'
             match = re.findall('([Cc]ells|[Bb]eads)', tubename)
             if match:
-                if 'Cells' in match or 'cells' in match:
+                if 'cells' in match[0].lower():
                     particle_type = 'Cells'
                 else:
                     particle_type = 'Beads'
             else:
                 warnings.warn(f'Unknown particle type from name, assigning as {particle_type}')
 
-            match = re.findall(r'^([^(]+)(?:\(|[Cc]ells|[Bb]eads)?', tubename)
+            match = re.findall(r'^(.*?)(?=\(|cell|bead)', tubename, re.IGNORECASE)
             if match:
                 label = match[0].strip()
 
@@ -298,7 +298,7 @@ class SpectralAutoGenerator(QObject):
                                 self.raw_gating.remove_gate(positive_gate_label)
                             if self.raw_gating.find_matching_gate_paths(negative_gate_label):
                                 self.raw_gating.remove_gate(negative_gate_label)
-                            # Note: adding a gate below takes an increasing amount of time, even though we are not actually applying it. Why? todo ask Scott
+                            # Note: adding a gate below takes an increasing amount of time, even though we are not actually applying it. Why?
                             self.raw_gating.add_gate(positive_gate, gate_path=tuple(list(self.raw_gating.find_matching_gate_paths(self.base_gate_label)[0]) + [self.base_gate_label]))
                             self.raw_gating.add_gate(negative_gate, gate_path=tuple(list(self.raw_gating.find_matching_gate_paths(self.base_gate_label)[0]) + [self.base_gate_label]))
                             # gating_strategy.add_gate(positive_gate, gate_path=('root', base_gate_label), sample_id=sample_path) # needs to be done twice to be a custom sample gate

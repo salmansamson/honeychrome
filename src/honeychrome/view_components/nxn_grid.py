@@ -251,7 +251,7 @@ class NxNGrid(QFrame):
         self.layout.addWidget(self.help_nxn)
         source_gate_combo_layout = QHBoxLayout()
         self.source_gate_combo = QComboBox(self)
-        self.source_gate_combo.addItem("Select Gate:")  # placeholder for "no selection"
+        self.source_gate_combo.addItem("root")  # placeholder for "no selection"
         source_gate_combo_layout.addWidget(self.source_gate_combo)
         source_gate_combo_layout.addStretch()
         self.layout.addLayout(source_gate_combo_layout)

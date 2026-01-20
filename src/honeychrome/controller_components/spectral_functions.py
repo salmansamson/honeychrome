@@ -22,7 +22,8 @@ def get_best_channel(sample, gating_strategy, base_gate_label, fluorescence_chan
         return None
     else:
         pca = PCA(n_components=1)
-        event_data_fluorescence = sample.get_events('raw')[base_event_mask][:, fluorescence_channel_ids]
+        event_data_base_gate = sample.get_events('raw')[base_event_mask]
+        event_data_fluorescence = event_data_base_gate[:, fluorescence_channel_ids]
         pca.fit(event_data_fluorescence)
         explained_variance = pca.explained_variance_ratio_[0]
 
@@ -34,10 +35,10 @@ def get_best_channel(sample, gating_strategy, base_gate_label, fluorescence_chan
         # # Sort the top 100 indices by value (descending)
         # indices_top_n_events = base_event_mask_indices[indices_top_n_events[np.argsort(events_transformed_to_pca[indices_top_n_events])][::-1]]
 
-        # define gate
+        # define gates
         # n_matches_per_fluorescence_channel = {}
         # matches_per_fluorescence_channel = {}
-        fl_raw = sample.get_events('raw')
+        # fl_raw = sample.get_events('raw')
         # for channel_id in fluorescence_channel_ids:
         #     fl = fl_raw[base_event_mask, channel_id]
         #     indices_top_n_events_fluorescence_channels = base_event_mask_indices[np.argpartition(fl, -n_to_gate)[-n_to_gate:]]
@@ -49,11 +50,22 @@ def get_best_channel(sample, gating_strategy, base_gate_label, fluorescence_chan
         channel_id_best_match = fluorescence_channel_ids[np.argmax(pca.components_[0])]
         # best_match = n_matches_per_fluorescence_channel[channel_id_best_match]
         # fl_top = fl_raw[matches_per_fluorescence_channel[channel_id_best_match], channel_id_best_match]
-        fl_top = np.percentile(fl_raw[:, channel_id_best_match], [100 - settings.spectral_positive_gate_percent_retrieved, 100])
+
+        fluorescence_on_best_channel = event_data_base_gate[:, channel_id_best_match]
+        if len(fluorescence_on_best_channel) > 100:
+            pos_percentile = settings.spectral_positive_gate_percent_retrieved
+            neg_percentile = settings.spectral_negative_gate_percent_retrieved
+        else:
+            pos_percentile = 50
+            neg_percentile = 50
+
+        # define top gate
+        fl_top = np.percentile(fluorescence_on_best_channel, [100 - pos_percentile, 100])
 
         # define bottom gate
-        fl_bottom = np.percentile(fl_raw[:, channel_id_best_match], [0, settings.spectral_negative_gate_percent_retrieved])
+        fl_bottom = np.percentile(fluorescence_on_best_channel, [0, neg_percentile])
 
+        # print([len(fluorescence_on_best_channel), pos_percentile, neg_percentile, fl_top, fl_bottom])
         return channel_id_best_match, fl_top, fl_bottom, explained_variance
 
 def get_profile(sample, gate_label, raw_gating, fluorescence_channel_ids):

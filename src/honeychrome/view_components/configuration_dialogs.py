@@ -352,9 +352,10 @@ class ExperimentSettings(QDialog):
         self.single_stain_controls_subdirectory_lineedit.setText(self.settings['raw']['single_stain_controls_subdirectory'])
         self.unmixed_samples_subdirectory_lineedit.setText(self.settings['unmixed']['unmixed_samples_subdirectory'])
 
-        index = magnitude_ceilings_int.index(self.settings['raw']['magnitude_ceiling'])
-        if index >= 0:
-            self.magnitude_ceiling_combo.setCurrentIndex(index)
+        if self.settings['raw']['magnitude_ceiling'] in magnitude_ceilings_int:
+            index = magnitude_ceilings_int.index(self.settings['raw']['magnitude_ceiling'])
+            if index >= 0:
+                self.magnitude_ceiling_combo.setCurrentIndex(index)
 
     def save_settings(self):
         self.settings['raw']['raw_samples_subdirectory'] = self.raw_samples_subdirectory_lineedit.text()
