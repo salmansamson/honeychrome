@@ -488,14 +488,7 @@ class SpectralControlsEditor(QFrame):
             self.bus.showSelectedProfiles.emit(None)
 
     def auto_generate(self):
-        if not self.controller.experiment.samples['single_stain_controls']:
-            self.bus.warningMessage.emit('Can\'t autogenerate: your list of single stain controls is empty.'
-                                         '\n\nPlease add your single stain controls or set the correct folder for '
-                                         'single stain controls in experiment configuration. '
-                                         '\n\nAlternatively, you can add controls from the spectral library (if previously added) '
-                                         'or assign channels (for conventional cytometry).')
-            return
-
+        # if spectral model already exists, ask if user wants it cleared
         if self.model.rowCount():
             reply = QMessageBox.question(self, "Auto generate spectral model", f"This will overwrite the spectral model. Are you sure you wish to continue?", QMessageBox.Yes | QMessageBox.No)
             if reply == QMessageBox.Yes:
@@ -503,6 +496,38 @@ class SpectralControlsEditor(QFrame):
             else:
                 return
 
+        # then if the user has samples but no single stain controls, ask if channel assignment is desired
+        if not self.controller.experiment.samples['single_stain_controls']:
+            if self.controller.experiment.samples['all_samples']:
+                reply = QMessageBox.question(self, "Do conventional cytometry?",
+                                             "You have no spectral controls defined."
+                                             "\nDo you wish to assign fluorophore names "
+                                             "\nto all your raw FCS channels?"
+                                             "\nYou can then edit the names.",
+                                             QMessageBox.Yes | QMessageBox.No)
+                if reply == QMessageBox.Yes:
+                    spectral_model = self.controller.experiment.process['spectral_model']
+                    for n, channel in enumerate(self.fluorescence_channels_pnn):
+                        control = {'label': channel, 'control_type': 'Channel Assignment', 'particle_type': '',
+                                   'gate_channel': channel, 'sample_name': '', 'sample_path': '', 'gate_label': ''}
+                        spectral_model.append(control)
+                        self.profile_updater.generate(control, self.spectral_library_search_results)  # pass in search results in case control is from library
+                    self.model.layoutChanged.emit()
+                    self.refresh_all_and_enable()
+                    self.bus.spectralModelUpdated.emit()
+
+                return
+
+            # then if the user has no samples at all, just warn
+            elif not self.controller.experiment.samples['all_samples'] and not self.controller.experiment.samples['single_stain_controls']:
+                self.bus.warningMessage.emit('Can\'t autogenerate: your list of single stain controls is empty.'
+                                             '\n\nPlease add your single stain controls or set the correct folder for '
+                                             'single stain controls in experiment configuration. '
+                                             '\n\nAlternatively, you can add controls from the spectral library (if previously added) '
+                                             'or assign channels (for conventional cytometry).')
+                return
+
+        # if user gets through all above, run spectral auto generator
         self.setEnabled(False)
         self.thread = QThread()
         self.spectral_auto_generator = SpectralAutoGenerator(self.bus, self.controller)
@@ -511,14 +536,14 @@ class SpectralControlsEditor(QFrame):
         self.bus.spectralControlAdded.connect(self._on_spectral_control_added)
         self.thread.started.connect(self.spectral_auto_generator.run)
         self.bus.spectralModelUpdated.connect(self.thread.quit)
-        self.thread.finished.connect(self._on_thread_finished)
+        self.thread.finished.connect(self.refresh_all_and_enable)
         self.thread.start()
 
     def _on_spectral_control_added(self):
         self.model.layoutChanged.emit()
         self.bus.showSelectedProfiles.emit([self.model._data[-1]['label']])
 
-    def _on_thread_finished(self):
+    def refresh_all_and_enable(self):
         self.refresh_comboboxes()
         self.setEnabled(True)
         QTimer.singleShot(300, lambda: self.bus.showSelectedProfiles.emit([]))
@@ -589,8 +614,11 @@ if __name__ == "__main__":
     bus = EventBus()
     kc = Controller()
     kc.bus = bus
-    base_directory = Path.home() / 'spectral_cytometry'
-    experiment_name = base_directory / '20240620 Spectral Symposium-poor cell unmixed'
+    # base_directory = Path.home() / 'spectral_cytometry'
+    # experiment_name = base_directory / '20240620 Spectral Symposium-poor cell unmixed'
+    # experiment_path = experiment_name.with_suffix('.kit')
+    base_directory = Path.home() / 'Experiments'
+    experiment_name = base_directory / 'Oleg K BD FACSAria III'
     experiment_path = experiment_name.with_suffix('.kit')
     kc.load_experiment(experiment_path) # note this loads first sample too and runs calculate all histograms and statistics
 

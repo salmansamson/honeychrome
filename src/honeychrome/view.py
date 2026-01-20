@@ -230,6 +230,7 @@ class View(QObject):
             self.main_window.similarity_viewer.refresh_heatmap()
             self.main_window.unmixing_viewer.refresh_heatmap()
             self.main_window.compensation_editor.refresh_heatmap()
+            self.main_window.nxn_viewer.initialise()
 
         if self.controller.experiment.process['unmixing_matrix']:
             self.main_window.tip_statistics.setVisible(False)

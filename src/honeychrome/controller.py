@@ -394,18 +394,11 @@ class Controller(QObject):
 
         # recreate transfer matrix and compensated_unmixing_matrix if unmixing matrix is not None
         if 'unmixed' in scope:
-            if self.experiment.process['unmixing_matrix'] is not None:
+            if self.experiment.process['unmixing_matrix']:
                 self.unmixed_gating = from_gml(self.experiment.cytometry['gating'])
                 self.unmixed_transformations = generate_transformations(self.experiment.cytometry['transforms'])
                 self.reapply_fine_tuning()
-            else:
-                self.unmixed_gating = None
-                self.unmixed_transformations = None
-                self.unmixed_event_data = None
-                self.unmixed_lookup_tables = {}
 
-        if 'unmixed' in scope:
-            if self.experiment.process['unmixing_matrix']:
                 source_gate = 'root'
                 unmixed_gate_names = [g[0].lower() for g in self.unmixed_gating.get_gate_ids()]
                 for gate in self.experiment.process['base_gate_priority_order']:
@@ -415,6 +408,9 @@ class Controller(QObject):
                 print(f'Controller: using {source_gate} as base gate for process NxN plots')
                 process_plots = define_process_plots(self.experiment.settings['unmixed']['fluorescence_channels'], self.experiment.settings['unmixed']['fluorescence_channels'], source_gate=source_gate)
             else:
+                self.unmixed_gating = None
+                self.unmixed_transformations = None
+                self.unmixed_lookup_tables = {}
                 process_plots = []
 
             self.data_for_cytometry_plots_process.update(
@@ -432,8 +428,10 @@ class Controller(QObject):
                 {
                     'pnn': self.experiment.settings['unmixed']['event_channels_pnn'],
                     'fluoro_indices': self.experiment.settings['unmixed']['fluorescence_channel_ids'],
-                    'transformations': self.unmixed_transformations, 'gating': self.unmixed_gating,
-                    'lookup_tables': self.unmixed_lookup_tables, 'plots': self.experiment.cytometry['plots']
+                    'transformations': self.unmixed_transformations,
+                    'gating': self.unmixed_gating,
+                    'lookup_tables': self.unmixed_lookup_tables,
+                    'plots': self.experiment.cytometry['plots']
                 }
             )
 
@@ -533,6 +531,9 @@ class Controller(QObject):
         if check_fcs_matches_experiment(self.experiment_dir / sample_path, self.experiment.settings['raw']['event_channels_pnn'], self.experiment.settings['raw']['magnitude_ceiling']):
             self.current_sample_path = sample_path
             try:
+                if self.bus:
+                    self.bus.statusMessage.emit(f'Loading sample {self.current_sample_path}...')
+
                 self.current_sample = fk.Sample(self.experiment_dir / self.current_sample_path)
             except KeyError as e:
                 print(f'Controller: FlowIO reports FCS file does not conform to standards. Missing {e}. Attempting to load with use_header_offsets and ignore_offset_error set')
@@ -549,7 +550,7 @@ class Controller(QObject):
                 self.unmixed_event_data = apply_transfer_matrix(self.transfer_matrix, self.raw_event_data)
 
             if self.bus:
-                QTimer.singleShot(500, lambda: self.bus.statusMessage.emit(f'Loaded sample {self.current_sample_path}: {n_events} events.'))
+                self.bus.statusMessage.emit(f'Loaded sample {self.current_sample_path}: {n_events} events.')
                 # self.bus.statusMessage.emit(f'{str(Path(self.current_sample_path).relative_to(self.experiment_dir))}: {n_events} events.')
 
             self.initialise_data_for_cytometry_plots()
@@ -723,6 +724,8 @@ class Controller(QObject):
     def initialise_data_for_cytometry_plots(self):
         # called on tab change, load sample
         # select set of plots: raw, process or unmixed
+        if self.bus:
+            self.bus.statusMessage.emit(f'Initialising plots and gating statistics...')
         if self.current_mode == 'raw':
             self.data_for_cytometry_plots.update({
                 'event_data': self.raw_event_data,
@@ -736,6 +739,10 @@ class Controller(QObject):
             self.data_for_cytometry_plots.update({
                 'event_data': self.unmixed_event_data,
             })
+        elif self.current_mode == 'statistics':
+            if self.bus:
+                self.bus.statusMessage.emit(f'Ready.')
+            return
 
         # # initialise gate membership for event data
         # if self.data_for_cytometry_plots['event_data'] is not None:
@@ -757,9 +764,13 @@ class Controller(QObject):
         self.data_for_cytometry_plots['histograms'] = initialise_hists(self.data_for_cytometry_plots['plots'], self.data_for_cytometry_plots)
 
         # initialise plots
+        if self.bus:
+            self.bus.statusMessage.emit(f'Calculating {len(self.data_for_cytometry_plots['plots'])} histograms...')
         self.calc_hists_and_stats()
 
         print(f'Controller: prepared hists and stats, mode: {self.current_mode}')
+        if self.bus:
+            self.bus.statusMessage.emit(f'Ready.')
 
         # then if sample is live, start thread to calc hist and stats on updates... or calc once only
         if not self.stop_live_data_processing.is_set() and self.current_sample_path == self.live_sample_path:
@@ -1060,6 +1071,8 @@ class Controller(QObject):
                 and all(profiles.keys())
         )
         if spectral_model and spectral_model_valid:
+            if self.bus:
+                self.bus.statusMessage.emit(f'Refreshing spectral process...')
             unmixed_settings, spectral_process = calculate_spectral_process(raw_settings, spectral_model, profiles)
             self.experiment.settings['unmixed'].update(unmixed_settings)
             self.experiment.process.update(spectral_process)
@@ -1129,9 +1142,10 @@ class Controller(QObject):
             # self.experiment.process.update(spectral_process)
 
             self.experiment.process.update({'similarity_matrix': None, 'unmixing_matrix': None, 'spillover': None})
-            self.experiment.cytometry['plots'] = None
+            self.experiment.cytometry['plots'] = []
             self.experiment.cytometry['transforms'] = None
             self.experiment.cytometry['gating'] = None
+            self.unmixed_event_data = None
 
         # then reinitialise ephemeral data for process and unmixed tabs
         self.initialise_ephemeral_data(scope=['unmixed'])
@@ -1139,6 +1153,7 @@ class Controller(QObject):
         if self.bus is not None:
             self.bus.spectralProcessRefreshed.emit()
             # self.bus.changedGatingHierarchy.emit('unmixed', 'root')
+            self.bus.statusMessage.emit(f'Spectral process refreshed.')
         print(f'Controller: refreshed spectral process, unmixed settings, unmixed cytometry')
 
 

@@ -275,10 +275,7 @@ class NxNGrid(QFrame):
             self.bus.showSelectedProfiles.connect(self.show_selected_rows)
             self.bus.histsStatsRecalculated.connect(self.refresh_heatmaps)
             self.bus.changedGatingHierarchy.connect(self.refresh_source_combo)
-            self.bus.spectralProcessRefreshed.connect(self.refresh_source_combo)
-            self.initialise()
         else: # nxn grid is in the exporter - just update the plots, histograms and generate the model and view
-
             # refresh list of plots with preferred source gate
             source_gate = 'root'
             unmixed_gate_names = [g[0].lower() for g in self.controller.unmixed_gating.get_gate_ids()]
@@ -298,9 +295,13 @@ class NxNGrid(QFrame):
 
 
     def initialise(self):
-        self.set_headers_to_all_labels()
-        self.refresh_source_combo('unmixed') # populate the source combo with all unmixed gates
-        self.refresh_heatmaps() #produces dummy hists
+        if self.controller.data_for_cytometry_plots_process['plots']:
+            self.setVisible(True)
+            self.set_headers_to_all_labels()
+            self.refresh_source_combo('unmixed') # populate the source combo with all unmixed gates
+            self.refresh_heatmaps() #produces dummy hists
+        else:
+            self.setVisible(False)
 
     def set_headers_to_all_labels(self):
         # initialise headers - they will be filtered later
