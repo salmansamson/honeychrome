@@ -440,7 +440,7 @@ class Controller(QObject):
         self.calculate_lookup_tables() # (re)create all lookup tables
 
     def initialise_transfer_matrix(self):
-        # run in intitialisation of emphemeral data or if spillover changed
+        # run in intitialisation of ephemeral data or if spillover changed
         pnn_unmixed = self.experiment.settings['unmixed']['event_channels_pnn']
         pnn_raw = self.experiment.settings['raw']['event_channels_pnn']
 

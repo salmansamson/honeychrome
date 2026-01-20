@@ -27,7 +27,6 @@ class EventBus(QObject):
     selectSample = Signal(str)
     showExportModal = Signal()
     batchExportRequested = Signal(str, bool)
-    batchExportFinished = Signal()
     generateSampleReport = Signal()
     openImportFCSWidget = Signal(bool)
 

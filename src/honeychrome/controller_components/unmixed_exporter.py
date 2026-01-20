@@ -1,5 +1,5 @@
 # import json
-# from pathlib import Path
+from pathlib import Path
 # from unicodedata import category
 
 import numpy as np
@@ -12,6 +12,8 @@ import honeychrome.settings as settings
 from honeychrome.view_components.busy_cursor import with_busy_cursor
 
 class UnmixedExporter(QObject):
+    finished = Signal()
+
     def __init__(self, folder, subsample_bool, bus, controller):
         super().__init__()
 
@@ -78,8 +80,7 @@ class UnmixedExporter(QObject):
             if self.bus:
                 self.bus.progress.emit(len(samples_to_calculate), len(samples_to_calculate))
 
-        if self.bus:
-            self.bus.batchExportFinished.emit()
+        self.finished.emit()
 
 
 if __name__ == "__main__":
