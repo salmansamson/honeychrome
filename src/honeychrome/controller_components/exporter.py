@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QObject, QEventLoop
+from PySide6.QtCore import QObject, QEventLoop, Signal
 from PySide6.QtGui import QPalette, QColor
 from PySide6.QtWidgets import QApplication, QWidget, QHeaderView
 import pyqtgraph as pg
@@ -14,6 +14,7 @@ from docx.oxml import parse_xml
 
 from honeychrome.settings import cytometry_plot_width_export
 import honeychrome.settings as settings
+from honeychrome.view_components.busy_cursor import with_busy_cursor
 from honeychrome.view_components.cytometry_plot_widget import CytometryPlotWidget, pm_to_png_buffer, get_widget_pixmap, export_widget_png
 from honeychrome.view_components.heatmap_viewedit import HeatmapViewEditor
 from honeychrome.view_components.nxn_grid import NxNGrid
@@ -108,12 +109,14 @@ def format_table(table):
                 run.bold = True
 
 class ReportGenerator(QObject):
-    def __init__(self, bus, controller, main_window):
+    finished = Signal()
+
+    def __init__(self, bus, controller):
         super().__init__()
         self.bus = bus
         self.controller = controller
-        self.main_window = main_window
 
+    @with_busy_cursor
     def export(self):
         current_sample = self.controller.current_sample
         print(f'ReportGenerator: started {current_sample}')
@@ -125,6 +128,8 @@ class ReportGenerator(QObject):
         if self.controller.current_sample.event_count == 0:
             self.bus.warningMessage.emit('Sample has no events')
             return
+
+        self.bus.statusMessage.emit(f'ReportGenerator: started {current_sample}')
 
         current_sample_path = Path(self.controller.current_sample_path)
         report_rel_path = Path('Reports') / current_sample_path.relative_to(self.controller.experiment.settings['raw']['raw_samples_subdirectory'])
@@ -164,6 +169,7 @@ class ReportGenerator(QObject):
             print('No acquisition date in metadata')
         doc.add_paragraph(desc)
 
+        self.bus.statusMessage.emit(f'ReportGenerator: added header')
 
         # Cytometry plots and stats
         mode_tab = []
@@ -176,6 +182,8 @@ class ReportGenerator(QObject):
             mode_tab.append(('unmixed', 'Unmixed Data'))
 
         for mode, tab in mode_tab:
+            self.bus.statusMessage.emit(f'ReportGenerator: adding {tab}')
+
             self.controller.set_mode(tab)
             time.sleep(1)
             doc.add_heading(tab, 3)
@@ -183,6 +191,7 @@ class ReportGenerator(QObject):
             doc._current_paragraph = doc.add_paragraph()
             doc._current_run = doc._current_paragraph.add_run()
             for n, plot in enumerate(self.controller.data_for_cytometry_plots['plots']):
+                self.bus.statusMessage.emit(f'ReportGenerator: adding plot {n}')
                 plot_widget = CytometryPlotWidget(mode=mode, n_in_plot_sequence=n, plot=plot, data_for_cytometry_plots=self.controller.data_for_cytometry_plots, parent=container)
                 if plot['type'] == 'ribbon':
                     height = 1.5 * resolution
@@ -202,9 +211,9 @@ class ReportGenerator(QObject):
 
                 ### export also all individual plots
                 # export_widget_png(plot_widget, full_sample_path.with_name(f"{current_sample_path.stem}_{plot_widget.n_in_plot_sequence}").with_suffix('.docx'), scale_factor=scale_factor)
+            container.deleteLater()
 
-                plot_widget.deleteLater()
-
+            self.bus.statusMessage.emit(f'ReportGenerator: adding statistics')
             statistics = self.controller.data_for_cytometry_plots['statistics']
             table = doc.add_table(rows=1, cols=5)
             row = table.rows[0]
@@ -225,6 +234,7 @@ class ReportGenerator(QObject):
             format_table(table)
 
         if self.controller.experiment.process['unmixing_matrix'] and settings.report_include_process_retrieved:
+            self.bus.statusMessage.emit(f'ReportGenerator: adding spectral process')
             self.controller.set_mode('Spectral Process')
             doc.add_heading('Spectral Model', 3)
             doc.add_paragraph(f"Negative Type: {self.controller.experiment.process['negative_type']}")
@@ -245,6 +255,7 @@ class ReportGenerator(QObject):
             reliable_table_autofit(table)
             format_table(table)
 
+            self.bus.statusMessage.emit(f'ReportGenerator: adding profiles')
             doc.add_heading('Profiles', 3)
             profiles_viewer = ProfilesViewer(None, self.controller, pen_width=5)
             profiles_viewer.title.setVisible(False)
@@ -253,6 +264,7 @@ class ReportGenerator(QObject):
             png_buffer = pm_to_png_buffer(get_widget_pixmap(profiles_viewer, scale_factor=scale_factor))
             doc.add_picture(png_buffer, width=Mm(170))
 
+            self.bus.statusMessage.emit(f'ReportGenerator: adding similarity matrix')
             doc.add_heading('Similarity Matrix', 3)
             similarity_viewer = HeatmapViewEditor(None, self.controller, 'similarity_matrix', False, parent=container)
             similarity_viewer.title.setVisible(False)
@@ -261,6 +273,7 @@ class ReportGenerator(QObject):
             png_buffer = pm_to_png_buffer(get_widget_pixmap(similarity_viewer, scale_factor=scale_factor))
             doc.add_picture(png_buffer, width=Mm(min([170, 14*len(self.controller.experiment.process['spectral_model'])])))
 
+            self.bus.statusMessage.emit(f'ReportGenerator: adding unmixing matrix')
             doc.add_heading('Unmixing Matrix', 3)
             unmixing_viewer = HeatmapViewEditor(None, self.controller, 'unmixing_matrix', False, parent=container)
             unmixing_viewer.title.setVisible(False)
@@ -269,6 +282,7 @@ class ReportGenerator(QObject):
             png_buffer = pm_to_png_buffer(get_widget_pixmap(unmixing_viewer, scale_factor=scale_factor))
             doc.add_picture(png_buffer, width=Mm(min([170, 14*len(self.controller.filtered_raw_fluorescence_channel_ids)])))
 
+            self.bus.statusMessage.emit(f'ReportGenerator: adding spillover / fine-tuning matrix')
             doc.add_heading('Spillover / Fine-Tuning Matrix', 3)
             compensation_editor = HeatmapViewEditor(None, self.controller, 'spillover', False, parent=container)
             compensation_editor.title.setVisible(False)
@@ -277,6 +291,7 @@ class ReportGenerator(QObject):
             png_buffer = pm_to_png_buffer(get_widget_pixmap(compensation_editor, scale_factor=scale_factor))
             doc.add_picture(png_buffer, width=Mm(min([170, 14*len(self.controller.experiment.process['spectral_model'])])))
 
+            self.bus.statusMessage.emit(f'ReportGenerator: adding NxN plots')
             doc.add_heading('NxN Plots', 3)
             nxn_viewer = NxNGrid(None, self.controller, is_dark=False, parent=container)
             nxn_viewer.title.setVisible(False)
@@ -296,10 +311,12 @@ class ReportGenerator(QObject):
         # Save - one line!
         doc.save(docx_path)
 
-
         # restore cytometry
         self.controller.set_mode(current_mode)
         pg.setConfigOptions(background=old_bg, foreground=old_fg)
 
-        self.bus.popupMessage.emit(f"Exported report: {docx_path}")
         print(f'ReportGenerator: finished {docx_path}')
+        self.bus.statusMessage.emit(f'ReportGenerator: exported {docx_path}')
+        self.bus.popupMessage.emit(f"Exported report: {docx_path}")
+        self.finished.emit()
+

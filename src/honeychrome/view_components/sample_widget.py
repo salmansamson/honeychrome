@@ -358,6 +358,7 @@ class SampleWidget(QWidget):
 
         self.thread = None
         self.unmixed_exporter = None
+        self.report_generator = None
 
         if not self.controller.experiment_compatible_with_acquisition:
             action_new_sample.setVisible(False)
@@ -378,12 +379,10 @@ class SampleWidget(QWidget):
         self.unmixed_exporter = UnmixedExporter(folder, subsample, self.bus, self.controller)
         self.unmixed_exporter.moveToThread(self.thread)
         self.thread.started.connect(self.unmixed_exporter.run)
-        self.bus.batchExportFinished.connect(self.thread.quit)
-        self.thread.finished.connect(self._on_thread_finished)
+        self.unmixed_exporter.finished.connect(self.thread.quit)
+        self.unmixed_exporter.finished.connect(self.unmixed_exporter.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
         self.thread.start()
-
-    def _on_thread_finished(self):
-        pass
 
     def show_context_menu(self, position):
         # Get the index at the click position
@@ -438,11 +437,15 @@ class SampleWidget(QWidget):
         shutil.move(str(sample_path), str(folder))
         self.refresh_sample_tree()
 
-    @with_busy_cursor
     def generate_report(self):
-        main_window = self.parent().parent().parent().parent() # ouch..... consider passing view or main_window in here
-        report = ReportGenerator(self.bus, self.controller, main_window)
-        report.export()
+        self.thread = QThread()
+        self.report_generator = ReportGenerator(self.bus, self.controller)
+        self.report_generator.moveToThread(self.thread)
+        self.thread.started.connect(self.report_generator.export)
+        self.report_generator.finished.connect(self.thread.quit)
+        self.report_generator.finished.connect(self.report_generator.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.thread.start()
 
     def rename_item(self, path):
         sample_path = self.controller.experiment_dir / path

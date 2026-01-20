@@ -148,6 +148,15 @@ def generate_transformations(transforms):
 
 
 def apply_transfer_matrix(transfer_matrix, raw_event_data):
+    '''
+    called when:
+        sample loaded
+        fine-tuning matrix changes
+        live data updated
+        calculate stats
+        export unmixed FCS
+    todo update this for WLS unmixing
+    '''
     return raw_event_data @ transfer_matrix
 
 
