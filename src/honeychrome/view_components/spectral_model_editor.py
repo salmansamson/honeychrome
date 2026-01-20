@@ -506,16 +506,7 @@ class SpectralControlsEditor(QFrame):
                                              "\nYou can then edit the names.",
                                              QMessageBox.Yes | QMessageBox.No)
                 if reply == QMessageBox.Yes:
-                    spectral_model = self.controller.experiment.process['spectral_model']
-                    for n, channel in enumerate(self.fluorescence_channels_pnn):
-                        control = {'label': channel, 'control_type': 'Channel Assignment', 'particle_type': '',
-                                   'gate_channel': channel, 'sample_name': '', 'sample_path': '', 'gate_label': ''}
-                        spectral_model.append(control)
-                        self.profile_updater.generate(control, self.spectral_library_search_results)  # pass in search results in case control is from library
-                    self.model.layoutChanged.emit()
-                    self.refresh_all_and_enable()
-                    self.bus.spectralModelUpdated.emit()
-
+                    self.auto_conventional()
                 return
 
             # then if the user has no samples at all, just warn
@@ -538,6 +529,16 @@ class SpectralControlsEditor(QFrame):
         self.bus.spectralModelUpdated.connect(self.thread.quit)
         self.thread.finished.connect(self.refresh_all_and_enable)
         self.thread.start()
+
+    def auto_conventional(self):
+        spectral_model = self.controller.experiment.process['spectral_model']
+        for n, channel in enumerate(self.fluorescence_channels_pnn):
+            control = {'label': channel, 'control_type': 'Channel Assignment', 'particle_type': '', 'gate_channel': channel, 'sample_name': '', 'sample_path': '', 'gate_label': ''}
+            spectral_model.append(control)
+            self.profile_updater.generate(control, self.spectral_library_search_results)  # pass in search results in case control is from library
+        self.model.layoutChanged.emit()
+        self.refresh_all_and_enable()
+        self.bus.spectralModelUpdated.emit()
 
     def _on_spectral_control_added(self):
         self.model.layoutChanged.emit()

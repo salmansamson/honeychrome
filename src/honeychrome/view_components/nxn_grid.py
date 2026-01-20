@@ -274,6 +274,7 @@ class NxNGrid(QFrame):
             self.source_gate_combo.currentTextChanged.connect(self.request_update_process_plots)
             self.bus.showSelectedProfiles.connect(self.show_selected_rows)
             self.bus.histsStatsRecalculated.connect(self.refresh_heatmaps)
+            self.bus.spectralProcessRefreshed.connect(self.refresh_source_combo)
             self.bus.changedGatingHierarchy.connect(self.refresh_source_combo)
         else: # nxn grid is in the exporter - just update the plots, histograms and generate the model and view
             # refresh list of plots with preferred source gate
@@ -283,7 +284,7 @@ class NxNGrid(QFrame):
                 if gate.lower() in unmixed_gate_names:
                     source_gate = gate
                     break
-            print(f'Controller: using {source_gate} as base gate for process NxN plots')
+            print(f'NxN Grid: using {source_gate} as base gate for process NxN plots')
             process_plots = define_process_plots(self.controller.experiment.settings['unmixed']['fluorescence_channels'], self.controller.experiment.settings['unmixed']['fluorescence_channels'], source_gate=source_gate)
             self.controller.data_for_cytometry_plots_process.update({'plots': process_plots})
 
@@ -298,7 +299,7 @@ class NxNGrid(QFrame):
         if self.controller.data_for_cytometry_plots_process['plots']:
             self.setVisible(True)
             self.set_headers_to_all_labels()
-            self.refresh_source_combo('unmixed') # populate the source combo with all unmixed gates
+            self.refresh_source_combo(mode='unmixed') # populate the source combo with all unmixed gates
             self.refresh_heatmaps() #produces dummy hists
         else:
             self.setVisible(False)
@@ -326,9 +327,12 @@ class NxNGrid(QFrame):
                 if set(current_source_combo_items) != set(gate_names):
                     self.source_gate_combo.clear()
                     self.source_gate_combo.addItems(gate_names)
-                    index = self.source_gate_combo.findText(self.controller.data_for_cytometry_plots_process['plots'][0]['source_gate'])
-                    if index >= 0:
-                        self.source_gate_combo.setCurrentIndex(index)
+                source_gate = self.controller.data_for_cytometry_plots_process['plots'][0]['source_gate']
+                index = self.source_gate_combo.findText(source_gate)
+                if index >= 0:
+                    self.source_gate_combo.blockSignals(True)
+                    self.source_gate_combo.setCurrentIndex(index)
+                    self.source_gate_combo.blockSignals(False)
 
     def _process_spillover_change(self):
         # recalculate histograms only for source gate and plots in selected rows
@@ -340,13 +344,16 @@ class NxNGrid(QFrame):
     def show_selected_rows(self, selected_label_list):
         # whenever profiles selection is changed, set up new vertical and horizontal headers
         # request update of process plots since plots and hists may not be available
+        old_vertical_headers = self.vertical_headers.copy()
         if selected_label_list:
             self.vertical_headers = selected_label_list
         else:
             self.set_headers_to_all_labels()
 
-        source_gate = self.source_gate_combo.currentText()
-        self.request_update_process_plots(source_gate)
+        #only emit if selection changed
+        if self.vertical_headers != old_vertical_headers:
+            source_gate = self.source_gate_combo.currentText()
+            self.request_update_process_plots(source_gate)
 
     @Slot(str)
     def request_update_process_plots(self, source_gate):

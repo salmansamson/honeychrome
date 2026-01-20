@@ -1058,6 +1058,7 @@ class Controller(QObject):
         spectral_auto_generator = SpectralAutoGenerator(self.bus, self)
         spectral_auto_generator.run()
 
+    @with_busy_cursor
     @Slot()
     def refresh_spectral_process(self):
         # first build unmixed part of experiment: settings, process and cytometry
