@@ -18,7 +18,8 @@ See the blog https://cytkit.com/blog/
 
 ## Installation
 1. Clone or download the repository, navigate to the project folder. 
-2. Install Python (or make sure you already have it installed), version 3.12
-3. Install a venv if you wish
+2. Install Python (or make sure you already have it installed), version >= 3.12
+4. python3 -m pip install --upgrade pip
+4. Recommended: install a venv
 3. Run on the command line: pip install -e
 4. Run honeychrome

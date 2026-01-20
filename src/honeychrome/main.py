@@ -119,8 +119,9 @@ def setup_logging(log_file):
     return logger
 
 
-# Usage
-logger = setup_logging(Path.home() / experiments_folder / 'honeychrome.log')
+# # Usage
+# (Path.home() / experiments_folder).mkdir(parents=True, exist_ok=True)
+# logger = setup_logging(Path.home() / experiments_folder / 'honeychrome.log')
 
 # # Log messages at different levels
 # logger.debug("Debug message")  # Only to file

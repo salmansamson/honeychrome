@@ -23,7 +23,7 @@ cycler==0.12.1
     # via matplotlib
 deepdiff==8.6.1
     # via -r requirements.in
-docx==0.2.4
+python-docx==1.2.0
     # via -r requirements.in
 flowio==1.4.0
     # via
