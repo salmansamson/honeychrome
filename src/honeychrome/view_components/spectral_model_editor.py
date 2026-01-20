@@ -531,6 +531,13 @@ class SpectralControlsEditor(QFrame):
         self.thread.start()
 
     def auto_conventional(self):
+        self.fluorescence_channel_filter_combo.blockSignals(True)
+        self.controller.experiment.process['fluorescence_channel_filter'] = 'all_fluorescence'
+        self.update_combos()
+        self.controller.filter_raw_fluorescence_channels()
+        self.profile_updater.refresh()
+        self.update_fluorescence_channels_pnn()
+        self.fluorescence_channel_filter_combo.blockSignals(False)
         spectral_model = self.controller.experiment.process['spectral_model']
         for n, channel in enumerate(self.fluorescence_channels_pnn):
             control = {'label': channel, 'control_type': 'Channel Assignment', 'particle_type': '', 'gate_channel': channel, 'sample_name': '', 'sample_path': '', 'gate_label': ''}
