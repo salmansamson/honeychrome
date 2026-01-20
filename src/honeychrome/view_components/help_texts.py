@@ -50,7 +50,7 @@ Select one or more controls in the spectral model to inspect their spectra in th
 <li>
 The spectral profiles use <i>Internal Negatives</i> by default, i.e. the profile is defined as the mean fluorescence of the positively gated sample, 
 minus the fluorescence of the negatively gated sample, normalised to peak intensity = 1.
-An alternative negative is the <i>Unstained Negative</i>. I.e. the profile is defined as the mean fluorescence of the positively gated sample, 
+An alternative (better) negative is the <i>Unstained Negative</i>. I.e. the profile is defined as the mean fluorescence of the positively gated sample, 
 minus the fluorescence of the negatively gated <i>unstained</i> sample. "Pos Unstained" and "Neg Unstained" gates are added to the raw gating if you didn't already create them.
 </li>
 
@@ -84,13 +84,20 @@ and can be used to inspect the unmixing process and look for issues.
 
 
 
-<h4>Further Reading</h4>
+<h4>Further Reading and Background</h4>
 
 <p>
-For background on spectral unmixing processes and algorithms, see <a href="https://onlinelibrary.wiley.com/doi/full/10.1002/cyto.a.22272">Novo, Gregori and Rajwa 2013</a>.
+Honeychrome currently generates an unmixing matrix using only the ordinary least squares (OLS) method, which is the mathematically simplest and least sophisticated spectral 
+unmixing algorithm [1]. Nevertheless, good results can be obtained with careful selection of clean single stained controls, one or more representative unstained
+negatives, and sanity checking of the profiles, similarity matrix, unmixing matrix and NxN plots [2]. 
+Spectral unmixing is an area of active development, with much more sophisticated algorithms now available that take proper account of errors in the controls and 
+sources of autofluorescence [2]. 
+Highly recommended is the Colibri Cytometry blog <a href="https://www.colibri-cytometry.com/post/what-s-an-unmixing-matrix">What's an Unmixing Matrix?</a>.
 </p>
 <p>
-Also highly recommended is Oliver Burton's Colibri Cytometry blog, e.g. <a href="https://www.colibri-cytometry.com/post/what-s-an-unmixing-matrix">What's an Unmixing Matrix?</a>.
+References:<br/>
+[1]<a href="https://onlinelibrary.wiley.com/doi/full/10.1002/cyto.a.22272">Novo et al. 2013</a><br/>
+[2]<a href="https://www.biorxiv.org/content/10.1101/2025.10.27.684855v1.full">Burton et al. 2025</a><br/>
 </p>
 '''
 

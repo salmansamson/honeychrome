@@ -127,7 +127,7 @@ class SpectralAutoGenerator(QObject):
         self.profiles.clear()
         self.unstained_negative = None
         self.progress_target = len(self.samples['single_stain_controls'])
-        self.progress_target = len(self.samples['single_stain_controls'][:5]) # quick test
+        # self.progress_target = len(self.samples['single_stain_controls'][:5]) # quick test
 
         # (sample name, label, sample path, particle_type (cells/beads), control_type (positive only, positive and negative, autofluorescence), gate channel
         self.base_gate_label = 'root'
@@ -141,13 +141,16 @@ class SpectralAutoGenerator(QObject):
     def run(self):
         if self.controller.experiment.process['negative_type'] == 'unstained':
             success = self.get_unstained_negative()
+            if not success:
+                if self.bus:
+                    QTimer.singleShot(100, lambda: self.bus.statusMessage.emit(f'Failed to generate profile of unstained negative.'))
         for n in range(self.progress_target):
             if self.bus:
                 self.bus.progress.emit(n, self.progress_target)
             success = self.generate_spectral_control(n)   # do your expensive work here
             if not success:
                 if self.bus:
-                    QTimer.singleShot(100, lambda: self.bus.statusMessage.emit(f'Failed to generate spectral control.'))
+                    QTimer.singleShot(100, lambda: self.bus.statusMessage.emit(f'Failed to generate profile of spectral control {n}.'))
                 break # is this necessary?
             if self.bus:
                 self.bus.spectralControlAdded.emit()
@@ -223,7 +226,7 @@ class SpectralAutoGenerator(QObject):
             else:
                 raise Exception(f'No sample in Single Stain Controls is named "Unstained". ')
         except Exception as e:
-            text = f'Failed to load unstained negative. {e}Setting negative type to "internal".'
+            text = f'Failed to generate profile of unstained negative. {e} Setting negative type to "internal".'
             warnings.warn(text)
             if self.bus:
                 self.bus.warningMessage.emit(text)
