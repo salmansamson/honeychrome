@@ -204,6 +204,9 @@ def main():
     start application and view
     '''
     app = QApplication(sys.argv)
+    # Use Fusion style (works consistently across platforms)
+    app.setStyle("Fusion")
+
     app.setWindowIcon(QIcon(str(Path(__file__) / 'view_components' / 'assets' / 'cytkit_web_logo.png')))
     view = View(
         controller=controller

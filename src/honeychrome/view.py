@@ -78,9 +78,11 @@ class View(QObject):
 
         # set theme
         app = QApplication.instance()
+
         palette = app.palette()
         base_color = palette.color(QPalette.ColorRole.Base)
         self.is_dark = base_color.value() < 128
+
 
         if self.is_dark:  # dark theme
             pg.setConfigOptions(background='black', foreground='white')
