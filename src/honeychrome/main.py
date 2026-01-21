@@ -1,6 +1,7 @@
 '''
 Honeychrome - open source software interface for cytometry hardware, such as Cytkit
 '''
+import os
 import sys
 from pathlib import Path
 
@@ -131,10 +132,18 @@ def setup_logging(log_file):
 
 
 def main():
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller executable
+        import multiprocessing
+        multiprocessing.freeze_support()  # Required for Windows
+        # On Unix systems, also need:
+        if os.name == 'posix':
+            import multiprocessing
+            multiprocessing.set_start_method('spawn', force=True)
+
     '''
     define objects for communication between processes
     '''
-    mp.set_start_method("spawn")
     from honeychrome.instrument_configuration import traces_cache_size, dtype, max_events_in_traces_cache, trace_n_points, n_channels_trace, adc_rate
     from honeychrome.settings import max_events_in_cache, n_channels_per_event, channel_dict, event_channels_pnn
     import honeychrome.settings as settings
