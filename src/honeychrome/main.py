@@ -217,6 +217,28 @@ def main():
     app.setStyle("Fusion")
 
     app.setWindowIcon(QIcon(str(Path(__file__) / 'view_components' / 'assets' / 'cytkit_web_logo.png')))
+
+    # # debug space usage by highlighting
+    # app.setStyleSheet("""
+    #     QMainWindow {
+    #         background-color: Maroon;
+    #     }
+    #     QWidget {
+    #             /* This background covers the Padding and Content area */
+    #             background-color: Indigo;
+    #     }
+    #     QWidget {
+    #         border: 1px solid green;
+    #     }
+    #     QFrame, QGroupBox {
+    #         background-color: Goldenrod;
+    #         border: 1px solid blue;
+    #     }
+    #     QScrollBar {
+    #         background: DarkOliveGreen; border: 1px solid red;
+    #     }
+    # """)
+
     view = View(
         controller=controller
     )
