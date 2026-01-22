@@ -689,10 +689,12 @@ class CytometryPlotWidget(QFrame):
         gate_name = f'R{name_increment}'
 
         # create ROI
-        x0 = 0.35 + 0.05 * name_increment
-        y0 = 0.45 - 0.05 * name_increment
-        Dx = 0.2
-        Dy = 0.2
+        scale_x = self.transformations[self.plot['channel_x']].limits[1]
+        scale_y = self.transformations[self.plot['channel_y']].limits[1]
+        x0 = scale_x * (0.35 + 0.05 * name_increment)
+        y0 = scale_y * (0.45 - 0.05 * name_increment)
+        Dx = scale_x * 0.2
+        Dy = scale_y * 0.2
         pos = [x0, y0]
         size = [Dx, Dy]
 
@@ -730,10 +732,12 @@ class CytometryPlotWidget(QFrame):
         gate_name = f'E{name_increment}'
 
         # create ROI
-        x0 = 0.3 + 0.05 * name_increment
-        y0 = 0.4 - 0.05 * name_increment
-        Dx = 0.3
-        Dy = 0.2
+        scale_x = self.transformations[self.plot['channel_x']].limits[1]
+        scale_y = self.transformations[self.plot['channel_y']].limits[1]
+        x0 = scale_x * (0.3 + 0.05 * name_increment)
+        y0 = scale_y * (0.4 - 0.05 * name_increment)
+        Dx = scale_x * 0.3
+        Dy = scale_y * 0.2
         pos = [x0, y0]
         size = [Dx, Dy]
         angle = 0

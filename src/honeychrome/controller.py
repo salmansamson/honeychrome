@@ -553,6 +553,7 @@ class Controller(QObject):
                 self.bus.statusMessage.emit(f'Loaded sample {self.current_sample_path}: {n_events} events.')
                 # self.bus.statusMessage.emit(f'{str(Path(self.current_sample_path).relative_to(self.experiment_dir))}: {n_events} events.')
 
+            self.clear_data_for_cytometry_plots()
             self.initialise_data_for_cytometry_plots()
         else:
             if self.bus:
@@ -705,12 +706,15 @@ class Controller(QObject):
     @with_busy_cursor
     @Slot(str)
     def set_mode(self, tab_name):
+        # select set of plots: raw, process or unmixed
         print(f"Controller: set mode to {tab_name}")
         if tab_name == 'Raw Data':
             self.current_mode = 'raw'
             self.data_for_cytometry_plots = self.data_for_cytometry_plots_raw
         elif tab_name == 'Spectral Process':
             self.current_mode = 'process'
+            self.data_for_cytometry_plots_process['histograms'] = self.data_for_cytometry_plots_unmixed['histograms']
+            self.data_for_cytometry_plots_process['statistics'] = self.data_for_cytometry_plots_unmixed['statistics']
             self.data_for_cytometry_plots = self.data_for_cytometry_plots_process
         elif tab_name == 'Unmixed Data':
             self.current_mode = 'unmixed'
@@ -718,65 +722,57 @@ class Controller(QObject):
         elif tab_name == 'Statistics':
             self.current_mode = 'statistics'
             self.data_for_cytometry_plots = self.data_for_cytometry_plots_unmixed
+            return # don't initialise data for cytometry plots
 
         self.initialise_data_for_cytometry_plots()
 
-    def initialise_data_for_cytometry_plots(self):
-        # called on tab change, load sample
-        # select set of plots: raw, process or unmixed
-        if self.bus:
-            self.bus.statusMessage.emit(f'Initialising plots and gating statistics...')
-        if self.current_mode == 'raw':
-            self.data_for_cytometry_plots.update({
-                'event_data': self.raw_event_data,
-            })
-        elif self.current_mode == 'process':
-            self.data_for_cytometry_plots.update({
-                'event_data': self.unmixed_event_data,
-            })
+    def clear_data_for_cytometry_plots(self):
+        for data in [self.data_for_cytometry_plots_raw, self.data_for_cytometry_plots_process, self.data_for_cytometry_plots_unmixed]:
+            data['histograms'] = []
+            data['statistics'] = {}
 
-        elif self.current_mode == 'unmixed':
-            self.data_for_cytometry_plots.update({
-                'event_data': self.unmixed_event_data,
-            })
-        elif self.current_mode == 'statistics':
+    def initialise_data_for_cytometry_plots(self, force_recalc_histograms=False):
+        # called on tab change (set mode), load sample, reset axes transforms all, refresh spectral process, initalise nxn grid
+        # calc all hists and stats if they do not already exist or force not set
+        # force only necessary for reset axes transforms all and refresh spectral process
+
+        # make sure data for cytometry plots is pointing at correct data
+        self.data_for_cytometry_plots_raw.update({'event_data': self.raw_event_data})
+        self.data_for_cytometry_plots_process.update({'event_data': self.unmixed_event_data})
+        self.data_for_cytometry_plots_unmixed.update({'event_data': self.unmixed_event_data})
+
+        # recalculate everything if it isn't already present
+        if force_recalc_histograms or not self.data_for_cytometry_plots['statistics'] or not self.data_for_cytometry_plots['histograms']:
+            if self.bus:
+                self.bus.statusMessage.emit(f'Initialising plots and gating statistics...')
+
+            # for default transformations, set limits to observed data
+            if self.data_for_cytometry_plots['event_data'] is not None and len(self.data_for_cytometry_plots['event_data']):
+                if self.current_sample_path != self.live_sample_path:
+                    for label in self.data_for_cytometry_plots['transformations']:
+                        transformation = self.data_for_cytometry_plots['transformations'][label]
+                        if transformation.id == 'default':
+                            index = self.data_for_cytometry_plots['pnn'].index(label)
+                            upper_limit = max(self.data_for_cytometry_plots['event_data'][:, index]) * 1.05
+                            transformation.set_transform(limits=[0, upper_limit])
+
+            self.data_for_cytometry_plots['statistics'] = initialise_stats(self.data_for_cytometry_plots['gating'])
+            self.data_for_cytometry_plots['histograms'] = initialise_hists(self.data_for_cytometry_plots['plots'], self.data_for_cytometry_plots)
+
+            # initialise plots
+            if self.bus:
+                self.bus.statusMessage.emit(f'Calculating {len(self.data_for_cytometry_plots['plots'])} histograms...')
+            self.calc_hists_and_stats(status_message_signal=(self.bus.statusMessage if self.bus else None))
+
+            print(f'Controller: prepared hists and stats, mode: {self.current_mode}')
             if self.bus:
                 self.bus.statusMessage.emit(f'Ready.')
-            return
 
-        # # initialise gate membership for event data
-        # if self.data_for_cytometry_plots['event_data'] is not None:
-        #     self.data_for_cytometry_plots.update({
-        #         'gate_membership ': apply_gates(self.data_for_cytometry_plots)
-        #     })
-
-        # for default transformations, set limits to observed data
-        if self.data_for_cytometry_plots['event_data'] is not None and len(self.data_for_cytometry_plots['event_data']):
-            if self.current_sample_path != self.live_sample_path:
-                for label in self.data_for_cytometry_plots['transformations']:
-                    transformation = self.data_for_cytometry_plots['transformations'][label]
-                    if transformation.id == 'default':
-                        index = self.data_for_cytometry_plots['pnn'].index(label)
-                        upper_limit = max(self.data_for_cytometry_plots['event_data'][:, index]) * 1.05
-                        transformation.set_transform(limits=[0, upper_limit])
-
-        self.data_for_cytometry_plots['statistics'] = initialise_stats(self.data_for_cytometry_plots['gating'])
-        self.data_for_cytometry_plots['histograms'] = initialise_hists(self.data_for_cytometry_plots['plots'], self.data_for_cytometry_plots)
-
-        # initialise plots
-        if self.bus:
-            self.bus.statusMessage.emit(f'Calculating {len(self.data_for_cytometry_plots['plots'])} histograms...')
-        self.calc_hists_and_stats()
-
-        print(f'Controller: prepared hists and stats, mode: {self.current_mode}')
-        if self.bus:
-            self.bus.statusMessage.emit(f'Ready.')
-
-        # then if sample is live, start thread to calc hist and stats on updates... or calc once only
-        if not self.stop_live_data_processing.is_set() and self.current_sample_path == self.live_sample_path:
-            # start live update thread
-            self.thread = threading.Thread(target=self.update_hists_and_stats, args=(), daemon=True)
-            self.thread.start()
+            # then if sample is live, start thread to calc hist and stats on updates... or calc once only
+            if not self.stop_live_data_processing.is_set() and self.current_sample_path == self.live_sample_path:
+                # start live update thread
+                self.thread = threading.Thread(target=self.update_hists_and_stats, args=(), daemon=True)
+                self.thread.start()
 
     @with_busy_cursor
     @Slot()
@@ -884,6 +880,7 @@ class Controller(QObject):
         print(f'Controller: channels reset {channels}')
 
     def reset_axes_transforms_all(self):
+        # currently not used
         settings = self.experiment.settings['raw']
         transforms = assign_default_transforms(settings)
         transformations = generate_transformations(transforms)
@@ -895,7 +892,7 @@ class Controller(QObject):
             transformations = generate_transformations(transforms)
             self.unmixed_transformations.update(transformations)
 
-        self.initialise_data_for_cytometry_plots() #todo why doesn't this reset all axes in all plots?
+        self.initialise_data_for_cytometry_plots(force_recalc_histograms=True) #todo why doesn't this reset all axes in all plots?
 
     def update_hists_and_stats(self):
         # update thread, calculate hists and stats
@@ -927,13 +924,14 @@ class Controller(QObject):
                 self.bus.statusMessage.emit(f'Live acquisition rate {live_events_per_second} events/s')
             time.sleep(live_data_process_repeat_time)
 
-    def calc_hists_and_stats(self, gates_to_calculate=None, indices_plots_to_calculate=None):
+    def calc_hists_and_stats(self, gates_to_calculate=None, indices_plots_to_calculate=None, status_message_signal=None):
         if self.data_for_cytometry_plots['event_data'] is not None:
             # apply gates to event data
             # if gates_to_calculate is none, then initialise gates_to_calculate dict, otherwise reference it from data_for_cytometry_plots
             if gates_to_calculate is None:
                 #todo something causes crashes here. is it because calc_hists_and_stats is called too often in quick succession?
                 # instead of reinitialising gate_membership, try just updating it in place?
+                # one crash happens because gate calculation was avoided in reinitialise_data_for_process_plots
                 gate_membership = {'root': np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)}
                 self.data_for_cytometry_plots.update({'gate_membership': gate_membership})
                 # self.data_for_cytometry_plots['gate_membership']['root'] = np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)
@@ -942,7 +940,7 @@ class Controller(QObject):
             statistics = calc_stats(self.data_for_cytometry_plots)
             self.data_for_cytometry_plots['statistics'] = statistics
 
-            hists = calc_hists(self.data_for_cytometry_plots, indices_plots_to_calculate=indices_plots_to_calculate)
+            hists = calc_hists(self.data_for_cytometry_plots, indices_plots_to_calculate=indices_plots_to_calculate, status_message_signal=status_message_signal)
             if indices_plots_to_calculate is None:
                 indices_plots_to_calculate = list(range(len(self.data_for_cytometry_plots['plots'])))
 
@@ -1150,7 +1148,7 @@ class Controller(QObject):
 
         # then reinitialise ephemeral data for process and unmixed tabs
         self.initialise_ephemeral_data(scope=['unmixed'])
-        self.initialise_data_for_cytometry_plots()
+        self.initialise_data_for_cytometry_plots(force_recalc_histograms=True)
         if self.bus is not None:
             self.bus.spectralProcessRefreshed.emit()
             # self.bus.changedGatingHierarchy.emit('unmixed', 'root')

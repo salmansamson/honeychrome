@@ -67,7 +67,7 @@ class ProfileUpdater:
                     full_sample_path = str(self.experiment_dir / sample_path)
                     sample = fk.Sample(full_sample_path)
                     control['sample_path'] = full_sample_path
-                    profile = get_profile(sample, control, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
+                    profile = get_profile(sample, control['gate_label'], self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
                     control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
                     profile = profile.tolist()
                     self.profiles[control['label']] = profile
@@ -185,41 +185,32 @@ class SpectralAutoGenerator(QObject):
                 # using unstained negative, define Pos and Neg Unstained if they don't already exist
                 positive_gate_label = 'Pos Unstained'
                 negative_gate_label = 'Neg Unstained'
-                channel_x = 'FSC-A'
-                channel_y = 'SSC-A'
-                if not self.raw_gating.find_matching_gate_paths(positive_gate_label):
-                    dim_x = fk.Dimension(channel_x, range_min=0.2, range_max=0.8, transformation_ref=channel_x)
-                    dim_y = fk.Dimension(channel_y, range_min=0.3, range_max=0.9, transformation_ref=channel_y)
-                    positive_gate = fk.gates.RectangleGate(positive_gate_label, dimensions=[dim_x, dim_y])
-                    self.raw_gating.add_gate(positive_gate, gate_path=('root',))
 
-                if not self.raw_gating.find_matching_gate_paths(negative_gate_label):
-                    dim_x = fk.Dimension(channel_x, range_min=0.2, range_max=0.8, transformation_ref=channel_x)
-                    dim_y = fk.Dimension(channel_y, range_min=0.1, range_max=0.7, transformation_ref=channel_y)
-                    negative_gate = fk.gates.RectangleGate(negative_gate_label, dimensions=[dim_x, dim_y])
-                    self.raw_gating.add_gate(negative_gate, gate_path=('root',))
+                for target_gate_label in [positive_gate_label, negative_gate_label]:
+                    if not self.raw_gating.find_matching_gate_paths(target_gate_label):
+                        channel_x = 'FSC-A'
+                        channel_y = 'SSC-A'
+                        dim_x = fk.Dimension(channel_x, range_min=0.2, range_max=0.8, transformation_ref=channel_x)
+                        dim_y = fk.Dimension(channel_y, range_min=(0.1 if target_gate_label==positive_gate_label else 0.3), range_max=(0.7 if target_gate_label==positive_gate_label else 0.9), transformation_ref=channel_y)
+                        target_gate = fk.gates.RectangleGate(target_gate_label, dimensions=[dim_x, dim_y])
+                        self.raw_gating.add_gate(target_gate, gate_path=('root',))
 
-                #### if raw_plots contains a 1D hist on channel_x, add gate to it, otherwise create it
-                target_plot = None
-                for n, plot in enumerate(self.raw_plots):
-                    if (plot['type'] == 'hist2d' and plot['channel_x'] == channel_x and plot['channel_y'] == channel_y
-                            and plot['source_gate'] == 'root' and not set(plot['child_gates']) - {positive_gate_label, negative_gate_label}):
-                        target_plot = plot
-                if not target_plot:
-                    # append plot
-                    target_plot = {
-                        'type': 'hist2d',
-                        'channel_x': channel_x,
-                        'channel_y': channel_y,
-                        'source_gate': 'root',
-                        'child_gates': [positive_gate_label, negative_gate_label]
-                    }
-                    self.raw_plots.append(target_plot)
-                    self.bus.showNewPlot.emit('raw')
-                if positive_gate_label not in target_plot['child_gates']:
-                    target_plot['child_gates'].append(positive_gate_label)
-                if negative_gate_label not in target_plot['child_gates']:
-                    target_plot['child_gates'].append(negative_gate_label)
+                        #### if raw_plots contains a 2D hist on channel_x and channel_y with no child gates except for pos and neg, add gate to it, otherwise create it
+                        target_plot = None
+                        for n, plot in enumerate(self.raw_plots):
+                            if (plot['type'] == 'hist2d'
+                                    and plot['channel_x'] == channel_x
+                                    and plot['channel_y'] == channel_y
+                                    and plot['source_gate'] == 'root'
+                                    and not set(plot['child_gates']) - {positive_gate_label, negative_gate_label}):
+                                target_plot = plot
+                        if not target_plot:
+                            # append plot
+                            target_plot = {'type': 'hist2d', 'channel_x': channel_x, 'channel_y': channel_y, 'source_gate': 'root', 'child_gates': [positive_gate_label, negative_gate_label]}
+                            self.raw_plots.append(target_plot)
+                            self.bus.showNewPlot.emit('raw')
+                        if target_gate_label not in target_plot['child_gates']:
+                            target_plot['child_gates'].append(target_gate_label)
 
                 self.unstained_negative = get_profile(sample, negative_gate_label, self.raw_gating, self.fluorescence_channel_ids)
                 return True

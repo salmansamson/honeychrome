@@ -336,7 +336,7 @@ def initialise_stats(gating):
     return statistics
 
 
-def calc_hists(data_for_cytometry_plots, indices_plots_to_calculate=None):
+def calc_hists(data_for_cytometry_plots, indices_plots_to_calculate=None, status_message_signal=None):
     plots = data_for_cytometry_plots['plots']
     gate_membership = data_for_cytometry_plots['gate_membership']
 
@@ -349,6 +349,9 @@ def calc_hists(data_for_cytometry_plots, indices_plots_to_calculate=None):
 
     hists = []
     for n, plot in enumerate(plots):
+        if status_message_signal:
+            status_message_signal.emit(f'Calculating {n}/{len(plots)} histograms...')
+
         source_gate = plot['source_gate']
         mask = gate_membership[source_gate]
         if plot['type'] == 'hist1d':

@@ -484,7 +484,7 @@ class SpectralControlsEditor(QFrame):
         if reply == QMessageBox.Yes:
             self.model.delete_rows_by_indices(indices)
             self.refresh_comboboxes()
-            self.bus.spectralModelUpdated.emit()
+            self.bus.spectralModelUpdated.emit() #spectral model already scrubbed at this point - this will clear unmixing matrix
             self.bus.showSelectedProfiles.emit(None)
 
     def auto_generate(self):
@@ -531,6 +531,7 @@ class SpectralControlsEditor(QFrame):
         self.thread.start()
 
     def auto_conventional(self):
+        # first make sure all channels selected
         self.fluorescence_channel_filter_combo.blockSignals(True)
         self.controller.experiment.process['fluorescence_channel_filter'] = 'all_fluorescence'
         self.update_combos()
@@ -538,14 +539,18 @@ class SpectralControlsEditor(QFrame):
         self.profile_updater.refresh()
         self.update_fluorescence_channels_pnn()
         self.fluorescence_channel_filter_combo.blockSignals(False)
+
+        # generate profiles
         spectral_model = self.controller.experiment.process['spectral_model']
         for n, channel in enumerate(self.fluorescence_channels_pnn):
             control = {'label': channel, 'control_type': 'Channel Assignment', 'particle_type': '', 'gate_channel': channel, 'sample_name': '', 'sample_path': '', 'gate_label': ''}
             spectral_model.append(control)
             self.profile_updater.generate(control, self.spectral_library_search_results)  # pass in search results in case control is from library
-        self.refresh_all_and_enable()
-        self.model.layoutChanged.emit()
-        self.bus.spectralModelUpdated.emit()
+
+        # refresh and update
+        self.refresh_all_and_enable() #comboboxes
+        self.model.layoutChanged.emit() #table view
+        self.bus.spectralModelUpdated.emit() #unmixing matrix etc
 
     def _on_spectral_control_added(self):
         self.model.layoutChanged.emit()
@@ -573,7 +578,7 @@ class SpectralControlsEditor(QFrame):
             control['gate_channel'] = unused_raw_channels[0]
         sanitise_control_in_place(control)
         self.profile_updater.flush() # remove profiles that are not in the model
-        control_valid = self.profile_updater.generate(control, self.spectral_library_search_results) # pass in search results in case control is from library
+        control_valid = self.profile_updater.generate(control, self.spectral_library_search_results) # generate profile, pass in search results in case control is from library
         self.refresh_comboboxes()
         if control_valid:
             self.bus.showSelectedProfiles.emit([control['label']])

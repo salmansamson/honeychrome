@@ -151,7 +151,6 @@ class View(QObject):
         self.bus.axisTransformed.connect(lambda: self.bus.autoSaveRequested.emit())
         self.bus.axesReset.connect(lambda: self.bus.autoSaveRequested.emit())
         self.bus.updateRois.connect(lambda: self.bus.autoSaveRequested.emit())
-        self.bus.spectralControlAdded.connect(lambda: self.bus.autoSaveRequested.emit())
         self.bus.spectralModelUpdated.connect(lambda: self.bus.autoSaveRequested.emit())
         self.bus.spectralProcessRefreshed.connect(lambda: self.bus.autoSaveRequested.emit())
         self.bus.requestUpdateProcessHists.connect(lambda: self.bus.autoSaveRequested.emit())
