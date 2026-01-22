@@ -787,12 +787,12 @@ class Controller(QObject):
     def create_new_plot(self, channel_x, channel_y):
         pnn = self.data_for_cytometry_plots['pnn']
         plots = self.data_for_cytometry_plots['plots']
-        if channel_x in pnn and channel_y in pnn and channel_x != channel_y:
+        if channel_x in pnn and channel_y in pnn and channel_x != channel_y: # 2d hist
             new_plot = {'type': 'hist2d', 'channel_x': channel_x, 'channel_y': channel_y, 'source_gate': 'root', 'child_gates': []}
-        elif channel_x in pnn and (channel_y == 'Count' or channel_y == channel_x or channel_y is None):
+        elif channel_x in pnn and (channel_y == 'Count' or channel_y == channel_x or channel_y is None): # 1d hist
             new_plot = {'type': 'hist1d', 'channel_x': channel_x, 'source_gate': 'root', 'child_gates': []}
-        else: #ribbon
-            new_plot = {'type': 'ribbon', 'source_gate': 'root', 'child_gates': []}
+        else: # ribbon
+            new_plot = {'type': 'ribbon', 'source_gate': 'root', 'child_gates': [], 'width': 3}
         plots.append(new_plot)
         if self.bus is not None:
             self.bus.showNewPlot.emit(self.current_mode)

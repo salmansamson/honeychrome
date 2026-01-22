@@ -236,6 +236,7 @@ class CytometryGridWidget(QScrollArea):
             self.debounce_timer.start(300)
 
     def init_grid(self):
+        # called every time width changes
         if self.data_for_cytometry_plots['plots']:
             old_n_columns = self.n_columns
             self.n_columns = max([self.width() // settings.cytometry_plot_width_target_retrieved, 1])
@@ -269,7 +270,7 @@ class CytometryGridWidget(QScrollArea):
                         plot['width'] = 3
 
                     # set tile to 1x1 if width/height not previously set
-                    w = plot.get("width", 1)
+                    w = min([plot.get("width", 1), self.n_columns])
                     h = plot.get("height", 1)
                     # Create tile widget
                     plot_widget = self.plot_widgets[n]

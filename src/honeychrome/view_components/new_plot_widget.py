@@ -85,14 +85,16 @@ class NewPlotWidget(QWidget):
     def update_button_state(self):
         """Enable button only when both X and Y are selected."""
         has_x = bool(self.x_combo.currentText().strip())
+        ribbon = self.x_combo.currentText().strip() == 'All Fluorescence'
         has_y = bool(self.y_combo.currentText().strip())
-        self.create_button.setEnabled(has_x and has_y)
+        self.create_button.setEnabled(has_x and (has_y or ribbon))
 
     def emit_new_plot(self):
         """Emit the selected X and Y channels."""
         x_channel = self.x_combo.currentText().strip()
         y_channel = self.y_combo.currentText().strip()
-        if x_channel and y_channel:
+        ribbon = x_channel == 'All Fluorescence'
+        if x_channel and (y_channel or ribbon):
             self.bus.newPlotRequested.emit(x_channel, y_channel)
             self.deleteLater()
 
