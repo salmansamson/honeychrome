@@ -1073,72 +1073,64 @@ class Controller(QObject):
             if self.bus:
                 self.bus.statusMessage.emit(f'Refreshing spectral process...')
             unmixed_settings, spectral_process = calculate_spectral_process(raw_settings, spectral_model, profiles)
-            self.experiment.settings['unmixed'].update(unmixed_settings)
             self.experiment.process.update(spectral_process)
 
+            # update cytometry only if channels have changed
+            if self.experiment.settings['unmixed']['event_channels_pnn'] != unmixed_settings['event_channels_pnn']:
+                self.experiment.settings['unmixed'].update(unmixed_settings)
 
-            # set up unmixed channels with default transforms, copy raw transformation if it does not belong to a fl channel
-            self.experiment.cytometry['transforms'] = assign_default_transforms(unmixed_settings)
-            fl_pnn = [self.experiment.settings['raw']['event_channels_pnn'][n] for n in self.experiment.settings['raw']['fluorescence_channel_ids']]
-            update_transforms(self.experiment.cytometry['raw_transforms'], self.raw_transformations)
-            for label in self.experiment.cytometry['raw_transforms']:
-                if label not in fl_pnn:
-                    self.experiment.cytometry['transforms'][label].update(self.experiment.cytometry['raw_transforms'][label])
+                # set up unmixed channels with default transforms, copy raw transformation if it does not belong to a fl channel
+                self.experiment.cytometry['transforms'] = assign_default_transforms(unmixed_settings)
+                fl_pnn = [self.experiment.settings['raw']['event_channels_pnn'][n] for n in self.experiment.settings['raw']['fluorescence_channel_ids']]
+                update_transforms(self.experiment.cytometry['raw_transforms'], self.raw_transformations)
+                for label in self.experiment.cytometry['raw_transforms']:
+                    if label not in fl_pnn:
+                        self.experiment.cytometry['transforms'][label].update(self.experiment.cytometry['raw_transforms'][label])
 
-            # copy all non-fl gates from raw
-            unmixed_gating = fk.GatingStrategy()
-            unmixed_transformations = generate_transformations(self.experiment.cytometry['transforms'])
-            for label in self.experiment.settings['unmixed']['event_channels_pnn']:
-                unmixed_gating.transformations[label] = unmixed_transformations[label].xform
+                # copy all non-fl gates from raw
+                unmixed_gating = fk.GatingStrategy()
+                unmixed_transformations = generate_transformations(self.experiment.cytometry['transforms'])
+                for label in self.experiment.settings['unmixed']['event_channels_pnn']:
+                    unmixed_gating.transformations[label] = unmixed_transformations[label].xform
 
-            gate_ids = self.raw_gating.get_gate_ids()
-            for gate_id in gate_ids:
-                if self.raw_gating._get_gate_node(gate_id[0], gate_id[1]).gate_type != 'Quadrant':  # bit of a hack. Can't find a better way of excluding Quadrant
-                    gate = self.raw_gating.get_gate(gate_id[0])
-                    dimension_ids = gate.get_dimension_ids()
-                    if all([dim in self.data_for_cytometry_plots_raw['pnn'] for dim in dimension_ids]):
-                        if not any([self.data_for_cytometry_plots_raw['pnn'].index(dim) in self.data_for_cytometry_plots_raw['fluoro_indices'] for dim in dimension_ids]) and gate.gate_name not in ['Pos Unstained', 'Neg Unstained']:
-                            unmixed_gate_names = ['root'] + [g[0] for g in unmixed_gating.get_gate_ids()]
-                            if gate_id[1][-1] in unmixed_gate_names:
-                                unmixed_gating.add_gate(gate, gate_path=gate_id[1])
-            self.experiment.cytometry['gating'] = to_gml(unmixed_gating)
-            unmixed_gate_names = [g[0] for g in unmixed_gating.get_gate_ids()]
+                gate_ids = self.raw_gating.get_gate_ids()
+                for gate_id in gate_ids:
+                    if self.raw_gating._get_gate_node(gate_id[0], gate_id[1]).gate_type != 'Quadrant':  # bit of a hack. Can't find a better way of excluding Quadrant
+                        gate = self.raw_gating.get_gate(gate_id[0])
+                        dimension_ids = gate.get_dimension_ids()
+                        if all([dim in self.data_for_cytometry_plots_raw['pnn'] for dim in dimension_ids]):
+                            if not any([self.data_for_cytometry_plots_raw['pnn'].index(dim) in self.data_for_cytometry_plots_raw['fluoro_indices'] for dim in dimension_ids]) and gate.gate_name not in ['Pos Unstained', 'Neg Unstained']:
+                                unmixed_gate_names = ['root'] + [g[0] for g in unmixed_gating.get_gate_ids()]
+                                if gate_id[1][-1] in unmixed_gate_names:
+                                    unmixed_gating.add_gate(gate, gate_path=gate_id[1])
+                self.experiment.cytometry['gating'] = to_gml(unmixed_gating)
+                unmixed_gate_names = [g[0] for g in unmixed_gating.get_gate_ids()]
 
-            # copy all non-fl plots from raw
-            self.experiment.cytometry['plots'] = []
-            for plot in self.data_for_cytometry_plots_raw['plots']:
-                if plot['type'] == 'hist1d':
-                    if self.data_for_cytometry_plots_raw['pnn'].index(plot['channel_x']) in self.data_for_cytometry_plots_raw['fluoro_indices']:
+                # copy all non-fl plots from raw
+                self.experiment.cytometry['plots'] = []
+                for plot in self.data_for_cytometry_plots_raw['plots']:
+                    if plot['type'] == 'hist1d':
+                        if self.data_for_cytometry_plots_raw['pnn'].index(plot['channel_x']) in self.data_for_cytometry_plots_raw['fluoro_indices']:
+                            continue
+                    elif plot['type'] == 'hist2d':
+                        if (self.data_for_cytometry_plots_raw['pnn'].index(plot['channel_x']) in self.data_for_cytometry_plots_raw['fluoro_indices']
+                        or self.data_for_cytometry_plots_raw['pnn'].index(plot['channel_y']) in self.data_for_cytometry_plots_raw['fluoro_indices']):
+                            continue
+                    elif plot['type'] == 'ribbon':
                         continue
-                elif plot['type'] == 'hist2d':
-                    if (self.data_for_cytometry_plots_raw['pnn'].index(plot['channel_x']) in self.data_for_cytometry_plots_raw['fluoro_indices']
-                    or self.data_for_cytometry_plots_raw['pnn'].index(plot['channel_y']) in self.data_for_cytometry_plots_raw['fluoro_indices']):
-                        continue
-                elif plot['type'] == 'ribbon':
-                    continue
 
-                new_plot = deepcopy(plot)
-                if new_plot['source_gate'] not in unmixed_gate_names:
-                    new_plot['source_gate'] = 'root'
-                new_plot_child_gates = []
-                for gate in new_plot['child_gates']:
-                    if gate in unmixed_gate_names:
-                        new_plot_child_gates.append(gate)
-                new_plot['child_gates'] = new_plot_child_gates
-                self.experiment.cytometry['plots'].append(new_plot)
-                # self.bus.showNewPlot.emit('unmixed') # emit signal to show plot
-                # index = self.data_for_cytometry_plots_unmixed['plots'].index(new_plot)
-                # self.bus.updateRois.emit('unmixed', index) # emit signal to update rois
+                    new_plot = deepcopy(plot)
+                    if new_plot['source_gate'] not in unmixed_gate_names:
+                        new_plot['source_gate'] = 'root'
+                    new_plot_child_gates = []
+                    for gate in new_plot['child_gates']:
+                        if gate in unmixed_gate_names:
+                            new_plot_child_gates.append(gate)
+                    new_plot['child_gates'] = new_plot_child_gates
+                    self.experiment.cytometry['plots'].append(new_plot)
         else:
             unmixed_settings = settings_default['unmixed'].copy()
             self.experiment.settings['unmixed'].update(unmixed_settings)
-
-            # spectral_process = process_default.copy()
-            # spectral_process.update({'fluorescence_channel_filter': self.experiment.process['fluorescence_channel_filter']})
-            # spectral_process.update({'negative_type': self.experiment.process['negative_type']})
-            # spectral_process.update({'spectral_model': spectral_model}) # make sure spectral control editor's data is the same as spectral model in process settings
-            # spectral_process.update({'spectral_model': profiles}) # make sure spectral control editor's data is the same as spectral model in process settings
-            # self.experiment.process.update(spectral_process)
 
             self.experiment.process.update({'similarity_matrix': None, 'unmixing_matrix': None, 'spillover': None})
             self.experiment.cytometry['plots'] = []
@@ -1149,6 +1141,8 @@ class Controller(QObject):
         # then reinitialise ephemeral data for process and unmixed tabs
         self.initialise_ephemeral_data(scope=['unmixed'])
         self.initialise_data_for_cytometry_plots(force_recalc_histograms=True)
+        self.data_for_cytometry_plots_unmixed['histograms'].clear()
+        self.data_for_cytometry_plots_unmixed['statistics'].clear()
         if self.bus is not None:
             self.bus.spectralProcessRefreshed.emit()
             # self.bus.changedGatingHierarchy.emit('unmixed', 'root')

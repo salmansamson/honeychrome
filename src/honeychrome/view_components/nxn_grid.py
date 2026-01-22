@@ -289,7 +289,7 @@ class NxNGrid(QFrame):
             self.controller.data_for_cytometry_plots_process.update({'plots': process_plots})
 
             # calculate histograms
-            self.controller.initialise_data_for_cytometry_plots()
+            # self.controller.initialise_data_for_cytometry_plots()
             self.set_headers_to_all_labels()
             self.refresh_heatmaps() #produces dummy hists
 

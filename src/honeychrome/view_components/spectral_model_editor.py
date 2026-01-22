@@ -252,14 +252,13 @@ class SpectralControlsEditor(QFrame):
         self.update_combos()
         self.bus.spectralModelUpdated.connect(self.update_combos)
 
-        # self.force_recalc_btn = QPushButton("Recalculate without editing controls")
-        # self.force_recalc_btn.setToolTip('Recalculate the unmixing matrix; reset spillover and unmixed plots and gates. \n(Useful if the control data has been replaced or control gates have moved under the same names.) \nDoes not change the spectral controls table.')
-        # # todo consider bringing back force recalc if it can respect gate updates
+        self.force_recalc_btn = QPushButton(icon('refresh'), "Recalculate")
+        self.force_recalc_btn.setToolTip('Recalculate the unmixing matrix; reset spillover and unmixed plots and gates. \n(Useful if the control data has been replaced or control gates have moved under the same names.) \nDoes not change the spectral controls table.')
 
         btn_top_layout.addWidget(self.auto_generate_button)
         btn_top_layout.addWidget(self.negatives_combo)
         btn_top_layout.addWidget(self.fluorescence_channel_filter_combo)
-        # btn_top_layout.addWidget(self.force_recalc_btn)
+        btn_top_layout.addWidget(self.force_recalc_btn)
         btn_top_layout.addStretch()
 
         self.add_row_btn = QPushButton(icon('plus'), "Add Control")
@@ -270,7 +269,7 @@ class SpectralControlsEditor(QFrame):
         self.auto_generate_button.clicked.connect(self.auto_generate)
         self.negatives_combo.currentTextChanged.connect(self.set_negative_type)
         self.fluorescence_channel_filter_combo.currentTextChanged.connect(self.set_fluorescence_channel_filter)
-        # self.force_recalc_btn.clicked.connect(self.bus.spectralModelUpdated)
+        self.force_recalc_btn.clicked.connect(self._on_force_recalc)
         self.add_row_btn.clicked.connect(self.add_row)
         self.select_all_btn.clicked.connect(self.view.selectAll)
         self.select_none_btn.clicked.connect(self.view.clearSelection)
@@ -527,7 +526,7 @@ class SpectralControlsEditor(QFrame):
         self.bus.spectralControlAdded.connect(self._on_spectral_control_added)
         self.thread.started.connect(self.spectral_auto_generator.run)
         self.bus.spectralModelUpdated.connect(self.thread.quit)
-        self.thread.finished.connect(self.refresh_all_and_enable)
+        self.thread.finished.connect(self.refresh_table_and_enable)
         self.thread.start()
 
     def auto_conventional(self):
@@ -548,15 +547,18 @@ class SpectralControlsEditor(QFrame):
             self.profile_updater.generate(control, self.spectral_library_search_results)  # pass in search results in case control is from library
 
         # refresh and update
-        self.refresh_all_and_enable() #comboboxes
+        self.refresh_table_and_enable() #comboboxes
         self.model.layoutChanged.emit() #table view
         self.bus.spectralModelUpdated.emit() #unmixing matrix etc
 
     def _on_spectral_control_added(self):
         self.model.layoutChanged.emit()
-        self.bus.showSelectedProfiles.emit([self.model._data[-1]['label']])
+        control = self.model._data[-1]['label']
+        if control:
+            if control in self.controller.experiment.process['profiles']:
+                self.bus.showSelectedProfiles.emit([control])
 
-    def refresh_all_and_enable(self):
+    def refresh_table_and_enable(self):
         self.refresh_comboboxes()
         self.setEnabled(True)
         QTimer.singleShot(300, lambda: self.bus.showSelectedProfiles.emit([]))
@@ -566,7 +568,7 @@ class SpectralControlsEditor(QFrame):
         for index in self.view.selectionModel().selectedRows():
             selected_rows.add(index.row())
         selected_rows = sorted(selected_rows)
-        profile_list = [self.model._data[row]['label'] for row in selected_rows]
+        profile_list = [self.model._data[row]['label'] for row in selected_rows if self.model._data[row]['label']]
         self.bus.showSelectedProfiles.emit(profile_list)
 
     @Slot(int)
@@ -585,6 +587,17 @@ class SpectralControlsEditor(QFrame):
             self.bus.spectralModelUpdated.emit()
         print(f'SpectralModelEditor: updated {'valid' if control_valid else 'invalid'} control {control}')
 
+    @Slot()
+    def _on_force_recalc(self):
+        self.profile_updater.flush()  # remove profiles that are not in the model
+        for index, control in enumerate(self.model._data):
+            control_valid = self.profile_updater.generate(control, self.spectral_library_search_results) # generate profile, pass in search results in case control is from library
+            if not control_valid:
+                break
+        self.refresh_comboboxes()
+        self.bus.showSelectedProfiles.emit([])
+        self.bus.spectralModelUpdated.emit()
+        print(f'SpectralModelEditor: forced recalculation')
 
     @Slot(list)
     def _on_delete_controls(self, labels):

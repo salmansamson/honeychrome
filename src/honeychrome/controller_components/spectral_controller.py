@@ -28,6 +28,7 @@ class ProfileUpdater:
         self.raw_gating = controller.raw_gating
         self.n_fluorophore_channels = None
         self.fluorescence_channels_pnn = []
+        self.unstained_negative = None
         self.refresh()
 
     def refresh(self):
@@ -37,6 +38,7 @@ class ProfileUpdater:
         self.fluorescence_channels_pnn.extend([self.event_channels_pnn[i] for i in self.controller.filtered_raw_fluorescence_channel_ids])
 
     def flush(self):
+        self.unstained_negative = None
         self.refresh()
         controls = [control['label'] for control in self.spectral_model]
         labels = list(self.profiles.keys())
@@ -56,26 +58,93 @@ class ProfileUpdater:
         #     if self.bus:
         #         self.bus.warningMessage.emit('Selected number of fluorophores has changed. Previous controls have been flushed.')
 
+    def get_unstained_negative(self):
+        try:
+            sample_path = None
+            for path in self.samples['all_samples']:
+                match_path = re.findall('([Uu]nstained)', path)
+                match_tubename = re.findall('([Uu]nstained)', self.samples['all_samples'][path])
+                if match_path or match_tubename:
+                    sample_path = path
+                    break
+            if sample_path:
+                full_sample_path = str(self.experiment_dir / sample_path)
+                sample = fk.Sample(full_sample_path)
+                negative_gate_label = 'Neg Unstained'
+                if self.raw_gating.find_matching_gate_paths(negative_gate_label):
+                    self.unstained_negative = get_profile(sample, negative_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
+                    return True
+                else:
+                    raise Exception(f'No gate in Raw Data is named "{negative_gate_label}". ')
+            else:
+                raise Exception(f'No sample in Single Stain Controls is named "Unstained". ')
+        except Exception as e:
+            text = f'Failed to generate profile of unstained negative. {e}.'
+            warnings.warn(text)
+            if self.bus:
+                self.bus.warningMessage.emit(text)
+            return False
+
+
     def generate(self, control, search_results):
         if control['control_type'] == 'Single Stained Spectral Control':
-            if control['sample_name'] and control['gate_label']:
-                all_samples_reverse_lookup = {v: k for k, v in self.samples['all_samples'].items()}
-                tubename = control['sample_name']
-                sample_path = all_samples_reverse_lookup[tubename]
-                nevents = self.samples['all_sample_nevents'][sample_path]
-                if nevents > 0:
-                    full_sample_path = str(self.experiment_dir / sample_path)
-                    sample = fk.Sample(full_sample_path)
-                    control['sample_path'] = full_sample_path
-                    profile = get_profile(sample, control['gate_label'], self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
-                    control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
-                    profile = profile.tolist()
-                    self.profiles[control['label']] = profile
+            try:
+                if control['sample_name'] and control['gate_label']:
+                    all_samples_reverse_lookup = {v: k for k, v in self.samples['all_samples'].items()}
+                    tubename = control['sample_name']
+                    sample_path = all_samples_reverse_lookup[tubename]
+                    nevents = self.samples['all_sample_nevents'][sample_path]
+                    if nevents > 0:
+                        full_sample_path = str(self.experiment_dir / sample_path)
+                        sample = fk.Sample(full_sample_path)
+                        control['sample_path'] = full_sample_path
 
-                    profile_dict = dict(zip(self.fluorescence_channels_pnn, profile))
-                    spectral_library.deposit_control_with_profile_and_experiment_dir(control, profile_dict, str(self.experiment_dir))
+                        positive_gate_label = control['gate_label']
+                        if not self.raw_gating.find_matching_gate_paths(positive_gate_label):
+                            raise Exception(f'Positive gate label {positive_gate_label} not present in Raw Data. ')
+                        positive_profile = get_profile(sample, positive_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
 
-                    return True
+                        if self.controller.experiment.process['negative_type'] == 'unstained':
+                            if self.unstained_negative is None:
+                                success = self.get_unstained_negative() # get it if it isn't defined
+                                if not success:
+                                    return
+                            negative_profile = self.unstained_negative
+                        else:
+                            if 'unstained' in control['label'].lower():
+                                negative_gate_label = f'Neg Unstained'
+                            else:
+                                negative_gate_label = f'Neg {control['label']}'
+
+                            if not self.raw_gating.find_matching_gate_paths(negative_gate_label):
+                                raise Exception(f'Negative gate label {negative_gate_label} not present in Raw Data. ')
+
+                            negative_profile = get_profile(sample, negative_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
+
+                        profile = positive_profile - negative_profile
+                        if profile.sum() == 0:
+                            profile = positive_profile
+
+                        if profile.sum() > 0:
+                            profile = profile / profile.max()  # max normalisation
+                        else:
+                            raise Exception(f'Failed to create label: {control['label']}. '
+                                    f'{sample_path} has no events within the positive gate. '
+                                    f'Go back to the raw data and adjust your gates. ')
+
+                        control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
+                        profile = profile.tolist()
+                        self.profiles[control['label']] = profile
+                        profile_dict = dict(zip(self.fluorescence_channels_pnn, profile))
+                        spectral_library.deposit_control_with_profile_and_experiment_dir(control, profile_dict, str(self.experiment_dir))
+                        return True
+
+            except Exception as e:
+                text = f'Failed to generate profile. {e}'
+                warnings.warn(text)
+                if self.bus:
+                    self.bus.warningMessage.emit(text)
+                return False
 
         elif control['control_type'] == 'Single Stained Spectral Control from Library':
             if control['sample_name'] and search_results:
@@ -244,6 +313,8 @@ class SpectralAutoGenerator(QObject):
             match = re.findall(r'^(.*?)(?=\(|cell|bead)', tubename, re.IGNORECASE)
             if match:
                 label = match[0].strip()
+            else:
+                label = tubename
 
             # discard if label is already in spectral model
             if label in [control['label'] for control in self.spectral_model]:
