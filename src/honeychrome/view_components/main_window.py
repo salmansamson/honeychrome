@@ -194,6 +194,9 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         main_layout = QHBoxLayout()
 
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
 
         # Left panel (samples list, acquisition panel, gains, dock)
@@ -215,6 +218,8 @@ class MainWindow(QMainWindow):
         # --- Raw ---
         self.raw_tab = QWidget()
         self.raw_layout = QVBoxLayout()
+        self.raw_layout.setContentsMargins(0, 0, 0, 0)
+        self.raw_layout.setSpacing(0)
         self.raw_tab.setLayout(self.raw_layout)
         self.raw_layout.addWidget(self.cytometry_toolbar_raw)
         self.raw_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -246,6 +251,8 @@ class MainWindow(QMainWindow):
         # --- Unmixed ---
         self.unmixed_tab = QWidget()
         self.unmixed_layout = QVBoxLayout()
+        self.unmixed_layout.setContentsMargins(0, 0, 0, 0)
+        self.unmixed_layout.setSpacing(0)
         self.unmixed_tab.setLayout(self.unmixed_layout)
         self.unmixed_layout.addWidget(self.tip_unmixed)
         self.unmixed_layout.addWidget(self.cytometry_toolbar_unmixed)
@@ -261,6 +268,8 @@ class MainWindow(QMainWindow):
         # --- Statistics ---
         self.statistics_tab = QWidget()
         self.statistics_layout = QVBoxLayout()
+        self.statistics_layout.setContentsMargins(0, 0, 0, 0)
+        self.statistics_layout.setSpacing(0)
         self.statistics_tab.setLayout(self.statistics_layout)
         self.statistics_layout.addWidget(self.tip_statistics)
         self.statistics_layout.addWidget(self.statistical_comparison_widget)

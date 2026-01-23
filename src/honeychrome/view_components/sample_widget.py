@@ -329,6 +329,9 @@ class SampleWidget(QWidget):
         self.tree_view.customContextMenuRequested.connect(self.show_context_menu)
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
         layout.addWidget(sample_toolbar)
         layout.addWidget(self.tree_view)
         self.setLayout(layout)

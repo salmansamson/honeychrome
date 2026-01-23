@@ -215,8 +215,10 @@ def main():
     app = QApplication(sys.argv)
     # Use Fusion style (works consistently across platforms)
     app.setStyle("Fusion")
+    # Ensure consistent rounding of fractional scaling factors
+    os.environ["QT_SCALE_FACTOR_ROUNDING_POLICY"] = "PassThrough"
 
-    app.setWindowIcon(QIcon(str(Path(__file__) / 'view_components' / 'assets' / 'cytkit_web_logo.png')))
+    app.setWindowIcon(QIcon(str(Path(__file__) / 'view_components' / 'assets' / 'cytkit_web_logo.ico')))
 
     # # debug space usage by highlighting
     # app.setStyleSheet("""
