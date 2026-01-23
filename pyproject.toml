@@ -7,7 +7,7 @@ name = "honeychrome"
 version = "0.6.0"
 description = "Open Source GUI App for Cytometry Acquisition and Analysis "
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     'anytree==2.13.0',
     'bitarray==3.8.0',

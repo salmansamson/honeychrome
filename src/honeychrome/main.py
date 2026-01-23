@@ -1,7 +1,9 @@
 '''
 Honeychrome - open source cytometry data acquisition and analysis software
 '''
-# from honeychrome.tools import DepthFinder # debug module imports here
+from honeychrome.tools import DepthFinder # debug module imports here
+import honeychrome.dummy_loader
+
 import os
 import sys
 from pathlib import Path
@@ -220,6 +222,8 @@ def main():
     os.environ["QT_SCALE_FACTOR_ROUNDING_POLICY"] = "PassThrough"
 
     app.setWindowIcon(QIcon(str(Path(__file__) / 'view_components' / 'assets' / 'cytkit_web_logo.ico')))
+
+    app.setDesktopFileName("honeychrome-app")
 
     # # debug space usage by highlighting
     # app.setStyleSheet("""

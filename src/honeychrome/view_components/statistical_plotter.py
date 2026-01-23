@@ -278,8 +278,8 @@ class StatisticsPlotWidget(QWidget):
         QMessageBox.information(self, "Exported", f"Exported {settings.graphics_export_format_retrieved} graphic file: \n{self.export_filename}.{settings.graphics_export_format_retrieved}\nto {self.controller.experiment_dir}")
 
     def export_csv(self):
-        import pandas as pd
-        pd.DataFrame(self.statistics_comparison['data']).to_csv(f"{self.controller.experiment_dir /self.export_filename}.csv")
+        from pandas import DataFrame
+        DataFrame(self.statistics_comparison['data']).to_csv(f"{self.controller.experiment_dir /self.export_filename}.csv")
         QMessageBox.information(self, "Exported", f"Exported CSV file: \n{self.export_filename}.csv\nto {self.controller.experiment_dir}")
 
 

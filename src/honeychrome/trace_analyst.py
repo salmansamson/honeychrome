@@ -396,7 +396,7 @@ if __name__ == '__main__':
     instrument.join()
 
     # inspect event data output
-    import pandas as pd
+    from pandas import DataFrame
     shm_events = shared_memory.SharedMemory(name=events_cache_shm.name)
     with events_cache_lock:
         events_cache = np.ndarray((max_events_in_cache, n_channels_per_event), dtype=np.int64, buffer=shm_events.buf)
@@ -406,7 +406,7 @@ if __name__ == '__main__':
         events_tail = index_tail_events_cache.value
     print([events_head, events_tail])
     with events_cache_lock:
-        events_df = pd.DataFrame(data=events_cache[events_head:events_tail], columns=event_channels_pnn)
+        events_df = DataFrame(data=events_cache[events_head:events_tail], columns=event_channels_pnn)
         print(events_df.head(5))
         #events_df.to_csv('/home/ssr/Downloads/events.csv', index=False)
 

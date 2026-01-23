@@ -93,9 +93,9 @@ def get_profile(sample, gate_label, raw_gating, fluorescence_channel_ids):
 
 def calculate_spectral_process(raw_settings, spectral_model, profiles):
     from sklearn.metrics.pairwise import cosine_similarity
-    import pandas as pd
+    from pandas import DataFrame
 
-    profiles_df = pd.DataFrame(profiles)
+    profiles_df = DataFrame(profiles)
     similarity_matrix = cosine_similarity(np.array(profiles_df).T)
 
     # calculate unmixing matrix

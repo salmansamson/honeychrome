@@ -8,7 +8,6 @@ Spectral library
 import sqlite3
 from time import time as timestamp
 from pathlib import Path
-import pandas as pd
 import json
 
 from honeychrome.settings import experiments_folder, library_file
@@ -23,8 +22,8 @@ class SpectralLibrary:
 
     def deposit_control_with_profile_and_experiment_dir(self, control, profile_dict, experiment_dir):
         # save spectral model to spectral library
-
-        library_deposit = pd.DataFrame([control])
+        from pandas import DataFrame
+        library_deposit = DataFrame([control])
         library_deposit = library_deposit.set_index('label')
         library_deposit['profile_dict'] = json.dumps(profile_dict)
         library_deposit['experiment_root_directory'] = experiment_dir  # Same value for all rows
@@ -34,14 +33,16 @@ class SpectralLibrary:
             library_deposit.to_sql('spectral_controls_history', conn, if_exists='append', index=True, index_label='label')
 
     def load_history(self):
+        from pandas import read_sql
         with sqlite3.connect(self.library_path) as conn:
-            history = pd.read_sql('SELECT * FROM spectral_controls_history', conn)
+            history = read_sql('SELECT * FROM spectral_controls_history', conn)
 
         return history
 
     def search_for_label(self, label):
+        from pandas import read_sql
         with sqlite3.connect(self.library_path) as conn:
-            results = pd.read_sql('SELECT * FROM spectral_controls_history WHERE label = :label ORDER BY timestamp DESC', conn, params={'label': label}).to_dict('index')
+            results = read_sql('SELECT * FROM spectral_controls_history WHERE label = :label ORDER BY timestamp DESC', conn, params={'label': label}).to_dict('index')
 
         return results
 
