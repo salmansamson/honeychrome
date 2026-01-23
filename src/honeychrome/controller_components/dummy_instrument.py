@@ -1,5 +1,5 @@
 from pathlib import Path
-import flowkit as fk
+from flowkit import Sample
 import numpy as np
 
 from honeychrome.instrument_configuration import n_channels_trace, n_time_points_in_event
@@ -31,7 +31,7 @@ def gaussian_rows_areas(x_grid, areas, mu, sigma):
 
 class DummyInstrument:
     def __init__(self):
-        self.sample = fk.Sample(fcs_file)
+        self.sample = Sample(fcs_file)
         fcs_file_channels = list(self.sample.channels['pnn'])
         area_channels = [s[:-2] for s in fcs_file_channels]
         self.channel_indices = [area_channels.index(channel) for channel in adc_channels]

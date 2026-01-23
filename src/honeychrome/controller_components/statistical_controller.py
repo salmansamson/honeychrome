@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 from PySide6.QtCore import QObject, Signal, QTimer
-import flowkit as fk
+from flowkit import Sample
 
 from honeychrome.controller_components.functions import timer, apply_gates_in_place, apply_transfer_matrix, calc_stats
 from honeychrome.view_components.busy_cursor import with_busy_cursor
@@ -50,7 +50,7 @@ class StatisticsCalculator(QObject):
                     category_name = None
 
                 full_sample_path = str(self.controller.experiment_dir / samples_to_calculate[n])
-                sample = fk.Sample(full_sample_path)
+                sample = Sample(full_sample_path)
                 raw_event_data = sample.get_events(source='raw')
                 n_events = sample.event_count
 

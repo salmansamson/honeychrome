@@ -27,26 +27,24 @@ Creates live sample and carries out live analysis
 
 Sends and receives signals to GUI
 '''
+
 import warnings
 from datetime import datetime
 import numpy as np
 from pathlib import Path
 from PySide6.QtCore import QObject, Slot, QTimer, QSettings
-from deepdiff import DeepDiff
-import flowkit as fk
+from flowkit import GatingStrategy, Sample, gates
 import threading
 from copy import deepcopy
 from multiprocessing import shared_memory
 import time
 
-from honeychrome.controller_components.spectral_controller import SpectralAutoGenerator
 from honeychrome.experiment_model import ExperimentModel, check_fcs_matches_experiment
 from honeychrome.controller_components.functions import apply_gates_in_place, apply_transfer_matrix, generate_transformations, update_transforms, initialise_hists, calc_hists, calc_stats, initialise_stats, assign_default_transforms, define_quad_gates, define_range_gate, define_polygon_gate, define_rectangle_gate, define_ellipse_gate, add_recent_file, empty_queue_nowait, define_process_plots, get_set_or_initialise_label_offset
 from honeychrome.controller_components.gml_functions_mod_from_flowkit import from_gml, to_gml
 from honeychrome.instrument_configuration import traces_cache_size, dtype, adc_rate
 import honeychrome.settings as settings
 from honeychrome.settings import max_events_in_cache, n_channels_per_event, experiments_folder, live_data_process_repeat_time, settings_default, process_default, samples_default, channel_dict
-from honeychrome.controller_components.spectral_functions import calculate_spectral_process
 from honeychrome.view_components.busy_cursor import with_busy_cursor
 
 base_directory = Path.home() / experiments_folder
@@ -87,7 +85,7 @@ class Controller(QObject):
             'event_data': None,
             'transformations': None,
             'statistics': {},
-            'gating': fk.GatingStrategy(),
+            'gating': GatingStrategy(),
             'plots': [],
             'histograms': [],
             'gate_membership': {}
@@ -260,10 +258,10 @@ class Controller(QObject):
                                 ### Use flowkit to make lookup table, gate by lookup table
                                 scale_x = transform_x.scale
                                 mask_coords = scale_x[mask_ones_1d[0] + 1]
-                                mask_as_fksample = fk.Sample(mask_coords, channel_labels=channels, sample_id='mask_as_fksample')
+                                mask_as_fksample = Sample(mask_coords, channel_labels=channels, sample_id='mask_as_fksample')
 
                                 # get events in gate - generate temporary gating strategy for mask only - faster
-                                temp_gating_strategy = fk.GatingStrategy()
+                                temp_gating_strategy = GatingStrategy()
                                 temp_gating_strategy.add_gate(gate, gate_path=('root',))
                                 for channel in gate.dimensions:
                                     temp_gating_strategy.transformations[channel.id] = transformations[channel.id].xform
@@ -286,10 +284,10 @@ class Controller(QObject):
                                 scale_x = transform_x.scale
                                 scale_y = transform_y.scale
                                 mask_coords = np.column_stack((scale_x[mask_ones_2d[0]+1], scale_y[mask_ones_2d[1]+1]))
-                                mask_as_fksample = fk.Sample(mask_coords, channel_labels=channels, sample_id='mask_as_fksample')
+                                mask_as_fksample = Sample(mask_coords, channel_labels=channels, sample_id='mask_as_fksample')
 
                                 # get events in gate - generate temporary gating strategy for mask only - faster
-                                temp_gating_strategy = fk.GatingStrategy()
+                                temp_gating_strategy = GatingStrategy()
                                 temp_gating_strategy.add_gate(gate, gate_path=('root',))
                                 for channel in gate.dimensions:
                                     temp_gating_strategy.transformations[channel.id] = transformations[channel.id].xform
@@ -312,10 +310,10 @@ class Controller(QObject):
                                 scale_x = transform_x.scale
                                 scale_y = transform_y.scale
                                 mask_coords = np.column_stack((scale_x[mask_ones_2d[0]+1], scale_y[mask_ones_2d[1]+1]))
-                                mask_as_fksample = fk.Sample(mask_coords, channel_labels=channels, sample_id='mask_as_fksample')
+                                mask_as_fksample = Sample(mask_coords, channel_labels=channels, sample_id='mask_as_fksample')
 
                                 # get events in gate - generate temporary gating strategy for mask only - faster
-                                temp_gating_strategy = fk.GatingStrategy()
+                                temp_gating_strategy = GatingStrategy()
                                 temp_gating_strategy.add_gate(gate, gate_path=('root',))
                                 temp_gating_strategy.transformations[xchan] = transformations[xchan].xform
                                 temp_gating_strategy.transformations[ychan] = transformations[ychan].xform
@@ -360,7 +358,7 @@ class Controller(QObject):
             self.unmixed_transformations = None
             self.raw_gating = None
             self.unmixed_gating = None
-            self.data_for_cytometry_plots = {'pnn': None, 'fluoro_indices': None, 'lookup_tables': None, 'event_data': None, 'transformations': None, 'statistics': {}, 'gating': fk.GatingStrategy(), 'plots': [], 'histograms': [], 'gate_membership': {}}
+            self.data_for_cytometry_plots = {'pnn': None, 'fluoro_indices': None, 'lookup_tables': None, 'event_data': None, 'transformations': None, 'statistics': {}, 'gating': GatingStrategy(), 'plots': [], 'histograms': [], 'gate_membership': {}}
             self.data_for_cytometry_plots_raw = deepcopy(self.data_for_cytometry_plots)
             self.data_for_cytometry_plots_process = deepcopy(self.data_for_cytometry_plots)
             self.data_for_cytometry_plots_unmixed = deepcopy(self.data_for_cytometry_plots)
@@ -482,7 +480,7 @@ class Controller(QObject):
             self.current_sample_path = str(sample_rel_path)
 
             # define empty sample and save
-            self.current_sample = fk.Sample(np.array([]), sample_id=sample_name, channel_labels=self.experiment.settings['raw']['event_channels_pnn'])
+            self.current_sample = Sample(np.array([]), sample_id=sample_name, channel_labels=self.experiment.settings['raw']['event_channels_pnn'])
             self.current_sample.metadata['tubename'] = sample_name
             self.current_sample.export(self.experiment_dir / self.current_sample_path, source='raw', include_metadata=True)
 
@@ -534,10 +532,10 @@ class Controller(QObject):
                 if self.bus:
                     self.bus.statusMessage.emit(f'Loading sample {self.current_sample_path}...')
 
-                self.current_sample = fk.Sample(self.experiment_dir / self.current_sample_path)
+                self.current_sample = Sample(self.experiment_dir / self.current_sample_path)
             except KeyError as e:
                 print(f'Controller: FlowIO reports FCS file does not conform to standards. Missing {e}. Attempting to load with use_header_offsets and ignore_offset_error set')
-                self.current_sample = fk.Sample(self.experiment_dir / self.current_sample_path, use_header_offsets=True, ignore_offset_error=True)
+                self.current_sample = Sample(self.experiment_dir / self.current_sample_path, use_header_offsets=True, ignore_offset_error=True)
 
             if self.current_sample_path == self.live_sample_path:
                 self.raw_event_data, n_events = self.copy_live_data(extent='all')
@@ -638,7 +636,7 @@ class Controller(QObject):
         self.current_sample_path = self.live_sample_path
         self.live_sample_path = None
         sample_name = Path(self.current_sample_path).stem
-        self.current_sample = fk.Sample(self.raw_event_data, sample_id=sample_name, channel_labels=self.experiment.settings['raw']['event_channels_pnn'])
+        self.current_sample = Sample(self.raw_event_data, sample_id=sample_name, channel_labels=self.experiment.settings['raw']['event_channels_pnn'])
         self.current_sample.metadata['tubename'] = sample_name
         self.current_sample.metadata['flow_rate'] = str(61.234) #todo get this flow rate (float)
         self.current_sample.export(self.experiment_dir / self.current_sample_path, source='raw', include_metadata=True)
@@ -971,7 +969,7 @@ class Controller(QObject):
 
             quad_divs, quadrants = define_quad_gates(x, y, channel_x, channel_y, transformations)
             if create:
-                gate = fk.gates.QuadrantGate(gate_name, dividers=quad_divs, quadrants=quadrants)
+                gate = gates.QuadrantGate(gate_name, dividers=quad_divs, quadrants=quadrants)
                 gating.add_gate(gate, gate_path=gate_path)
             else:
                 gate = gating.get_gate(gate_name)
@@ -985,7 +983,7 @@ class Controller(QObject):
 
             dim_x = define_range_gate(x1, x2, channel_x, transformations)
             if create:
-                gate = fk.gates.RectangleGate(gate_name, dimensions=[dim_x])
+                gate = gates.RectangleGate(gate_name, dimensions=[dim_x])
                 gating.add_gate(gate, gate_path=gate_path)
             else:
                 gate = gating.get_gate(gate_name)
@@ -1001,7 +999,7 @@ class Controller(QObject):
             vertices, dim_x, dim_y = define_polygon_gate(points, channel_x, channel_y, transformations)
 
             if create:
-                gate = fk.gates.PolygonGate(gate_name, [dim_x, dim_y], vertices, use_complement=False)
+                gate = gates.PolygonGate(gate_name, [dim_x, dim_y], vertices, use_complement=False)
                 gating.add_gate(gate, gate_path=gate_path)
             else:
                 gate = gating.get_gate(gate_name)
@@ -1016,7 +1014,7 @@ class Controller(QObject):
             dim_x, dim_y = define_rectangle_gate(pos, size, channel_x, channel_y, transformations)
 
             if create:
-                gate = fk.gates.RectangleGate(gate_name, dimensions=[dim_x, dim_y])
+                gate = gates.RectangleGate(gate_name, dimensions=[dim_x, dim_y])
                 gating.add_gate(gate, gate_path=gate_path)
             else:
                 gate = gating.get_gate(gate_name)
@@ -1034,7 +1032,7 @@ class Controller(QObject):
             dim_x, dim_y, coordinates, covariance_matrix, distance_square = define_ellipse_gate(pos, size, angle, channel_x, channel_y, transformations)
 
             if create:
-                gate = fk.gates.EllipsoidGate(gate_name, [dim_x, dim_y], coordinates, covariance_matrix, distance_square)
+                gate = gates.EllipsoidGate(gate_name, [dim_x, dim_y], coordinates, covariance_matrix, distance_square)
                 gating.add_gate(gate, gate_path=gate_path)
             else:
                 gate = gating.get_gate(gate_name)
@@ -1053,12 +1051,15 @@ class Controller(QObject):
                 get_set_or_initialise_label_offset(plot, gate_name, label_offset)
 
     def regenerate_spectral_model(self):
+        from honeychrome.controller_components.spectral_controller import SpectralAutoGenerator
         spectral_auto_generator = SpectralAutoGenerator(self.bus, self)
         spectral_auto_generator.run()
 
     @with_busy_cursor
     @Slot()
     def refresh_spectral_process(self):
+        from honeychrome.controller_components.spectral_functions import calculate_spectral_process
+
         # first build unmixed part of experiment: settings, process and cytometry
         raw_settings = self.experiment.settings['raw']
         spectral_model = self.experiment.process['spectral_model']
@@ -1088,7 +1089,7 @@ class Controller(QObject):
                         self.experiment.cytometry['transforms'][label].update(self.experiment.cytometry['raw_transforms'][label])
 
                 # copy all non-fl gates from raw
-                unmixed_gating = fk.GatingStrategy()
+                unmixed_gating = GatingStrategy()
                 unmixed_transformations = generate_transformations(self.experiment.cytometry['transforms'])
                 for label in self.experiment.settings['unmixed']['event_channels_pnn']:
                     unmixed_gating.transformations[label] = unmixed_transformations[label].xform
@@ -1225,6 +1226,7 @@ if __name__ == '__main__':
     test_experiment.load(experiment_path)
     test_experiment.scan_sample_tree() # this reloads samples
 
+    from deepdiff import DeepDiff
     diff = DeepDiff(kc.experiment,test_experiment,ignore_order=True, exclude_paths='root.progress_indicator')
     if diff == {}:
         print('Test 1b: success')

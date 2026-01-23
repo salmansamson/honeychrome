@@ -7,7 +7,7 @@ from PySide6.QtCore import QRectF, Slot, Qt, QTimer, QEvent, QObject
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QVBoxLayout, QMenu, QFrame, QFileDialog, QApplication
 import colorcet as cc
-import flowkit as fk
+from flowkit import gates as Gates
 from flowkit.exceptions import GateReferenceError
 
 from honeychrome.controller_components.functions import define_quad_gates, define_range_gate, define_ellipse_gate, define_rectangle_gate, define_polygon_gate, get_set_or_initialise_label_offset, rename_label_offset
@@ -659,7 +659,7 @@ class CytometryPlotWidget(QFrame):
         self.rois.append(roi)
 
         vertices, dim_x, dim_y = define_polygon_gate(vertices, self.plot['channel_x'], self.plot['channel_y'], self.transformations)
-        gate = fk.gates.PolygonGate(gate_name, [dim_x, dim_y], vertices, use_complement=False)
+        gate = Gates.PolygonGate(gate_name, [dim_x, dim_y], vertices, use_complement=False)
         self.gating.add_gate(gate, gate_path=self.get_gate_path())
         self.plot['child_gates'].append(gate_name)
         if self.bus is not None:
@@ -704,7 +704,7 @@ class CytometryPlotWidget(QFrame):
         self.rois.append(roi)
 
         dim_x, dim_y = define_rectangle_gate(pos, size, self.plot['channel_x'], self.plot['channel_y'], self.transformations)
-        gate = fk.gates.RectangleGate(gate_name, dimensions=[dim_x, dim_y])
+        gate = Gates.RectangleGate(gate_name, dimensions=[dim_x, dim_y])
         self.gating.add_gate(gate, gate_path=self.get_gate_path())
         self.plot['child_gates'].append(gate_name)
         if self.bus is not None:
@@ -749,7 +749,7 @@ class CytometryPlotWidget(QFrame):
 
         # define and add gate to gating
         dim_x, dim_y, coordinates, covariance_matrix, distance_square = define_ellipse_gate(pos, size, angle, self.plot['channel_x'], self.plot['channel_y'], self.transformations)
-        gate = fk.gates.EllipsoidGate(gate_name, [dim_x, dim_y], coordinates, covariance_matrix, distance_square)
+        gate = Gates.EllipsoidGate(gate_name, [dim_x, dim_y], coordinates, covariance_matrix, distance_square)
         self.gating.add_gate(gate, gate_path=self.get_gate_path())
         self.plot['child_gates'].append(gate_name)
         if self.bus is not None:
@@ -794,7 +794,7 @@ class CytometryPlotWidget(QFrame):
 
         # define and add gate to gating
         dim_x = define_range_gate(x1, x2, self.plot['channel_x'], self.transformations)
-        gate = fk.gates.RectangleGate(gate_name, dimensions=[dim_x])
+        gate = Gates.RectangleGate(gate_name, dimensions=[dim_x])
         self.gating.add_gate(gate, gate_path=self.get_gate_path())
         self.plot['child_gates'].append(gate_name)
         if self.bus is not None:
@@ -831,7 +831,7 @@ class CytometryPlotWidget(QFrame):
 
         # define and add gate to gating
         quad_divs, quadrants = define_quad_gates(x, y, self.plot['channel_x'], self.plot['channel_y'], self.transformations)
-        gate = fk.gates.QuadrantGate(gate_name, dividers=quad_divs, quadrants=quadrants)
+        gate = Gates.QuadrantGate(gate_name, dividers=quad_divs, quadrants=quadrants)
         self.gating.add_gate(gate, gate_path=self.get_gate_path())
         self.plot['child_gates'].append(gate_name)
         if self.bus is not None:

@@ -1,16 +1,15 @@
 import warnings
 
 import numpy as np
-import flowkit as fk
+from flowkit import GatingStrategy
 
-from sklearn.decomposition import PCA
-from sklearn.metrics.pairwise import cosine_similarity
-import pandas as pd
 
 import honeychrome.settings as settings
 
 
 def get_best_channel(sample, gating_strategy, base_gate_label, fluorescence_channel_ids):
+    from sklearn.decomposition import PCA
+
     # gate first by cells
     if base_gate_label != 'root':
         base_event_mask = gating_strategy.gate_sample(sample).get_gate_membership(base_gate_label) # Note this is slow
@@ -70,7 +69,7 @@ def get_best_channel(sample, gating_strategy, base_gate_label, fluorescence_chan
 
 def get_profile(sample, gate_label, raw_gating, fluorescence_channel_ids):
     gate_ids = list(raw_gating.find_matching_gate_paths(gate_label)[0]) + [gate_label]
-    temp_gating_strategy = fk.GatingStrategy()
+    temp_gating_strategy = GatingStrategy()
     for n, gate_id in enumerate(gate_ids):
         if gate_id != 'root':
             gate = raw_gating.get_gate(gate_id)
@@ -93,6 +92,9 @@ def get_profile(sample, gate_label, raw_gating, fluorescence_channel_ids):
     return profile
 
 def calculate_spectral_process(raw_settings, spectral_model, profiles):
+    from sklearn.metrics.pairwise import cosine_similarity
+    import pandas as pd
+
     profiles_df = pd.DataFrame(profiles)
     similarity_matrix = cosine_similarity(np.array(profiles_df).T)
 

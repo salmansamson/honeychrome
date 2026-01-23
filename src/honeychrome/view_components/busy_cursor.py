@@ -39,24 +39,55 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import Qt
 
 
+
+class Runnable(QRunnable):
+    def __init__(self, fn, finished_callback):
+        super().__init__()
+        self.fn = fn
+        self.finished_callback = finished_callback
+
+    def run(self):
+        try:
+            self.fn()
+        finally:
+            self.finished_callback()
+
+
 def with_busy_cursor(func):
-    @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        app = QApplication.instance()
-        if not app:
+        instance = QApplication.instance()
+        if instance is None:
             return func(*args, **kwargs)
 
-        # Set the spinner
         QApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            return func(*args, **kwargs)
-        finally:
-            # Restore the cursor
+
+        def cleanup():
             QApplication.restoreOverrideCursor()
-            # Force Windows to repaint the cursor immediately
-            app.processEvents()
+
+        runnable = Runnable(lambda: func(*args, **kwargs), cleanup)
+        QThreadPool.globalInstance().start(runnable)
 
     return wrapper
+
+### the following seems to work well on windows
+# def with_busy_cursor(func):
+#     @functools.wraps(func)
+#     def wrapper(*args, **kwargs):
+#         app = QApplication.instance()
+#         if not app:
+#             return func(*args, **kwargs)
+#
+#         # Set the spinner
+#         QApplication.setOverrideCursor(Qt.WaitCursor)
+#         try:
+#             return func(*args, **kwargs)
+#         finally:
+#             # Restore the cursor
+#             QApplication.restoreOverrideCursor()
+#             # Force Windows to repaint the cursor immediately
+#             app.processEvents()
+#
+#     return wrapper
 
 
 if __name__ == "__main__":

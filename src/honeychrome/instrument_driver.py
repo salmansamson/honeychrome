@@ -28,7 +28,6 @@ import numpy as np
 import time
 import warnings
 
-from honeychrome.controller_components.dummy_instrument import DummyInstrument
 from honeychrome.instrument_configuration import traces_cache_size, dtype, max_events_in_traces_cache, trace_n_points, operation_register, operation_memory, dummy_bytes, memory_start_address, memory_end_address, transfer_target_repeat_time, registers_map
 
 class Instrument(mp.Process):
@@ -43,7 +42,7 @@ class Instrument(mp.Process):
             self.use_dummy_instrument = True
             self.dummy_memory_head = 0 #only use if dummy
             self.max_events_in_memory_per_pop = 500
-            self.dummy_instrument = DummyInstrument()
+            self.dummy_instrument = None
         else:
             self.use_dummy_instrument = False
 
@@ -66,6 +65,9 @@ class Instrument(mp.Process):
 
 
     def run(self):
+        from honeychrome.controller_components.dummy_instrument import DummyInstrument
+        self.dummy_instrument = DummyInstrument()
+
         # initialise the things that can't be pickled
         self.stop_transfer = threading.Event()
         # initialise transfer thread

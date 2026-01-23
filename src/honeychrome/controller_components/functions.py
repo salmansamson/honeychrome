@@ -1,5 +1,5 @@
 import numpy as np
-import flowkit as fk
+from flowkit import Sample, QuadrantDivider, Dimension, gates
 from PySide6.QtCore import QSettings
 from queue import Empty
 from time import perf_counter
@@ -47,7 +47,7 @@ def add_recent_file(path):
 def export_unmixed_sample(sample_name, unmixed_folder, unmixed_event_data_without_fine_tuning, unmixed_event_channels_pnn, spillover, subsample=None):
     # note that FlowKit compensation matrix is actually spillover matrix
     unmixed_sample_name = sample_name + ' (Unmixed).fcs'
-    unmixed_sample = fk.Sample(unmixed_event_data_without_fine_tuning,
+    unmixed_sample = Sample(unmixed_event_data_without_fine_tuning,
                                     channel_labels=unmixed_event_channels_pnn,
                                     null_channel_list=['event_id'],
                                     compensation=spillover,
@@ -164,19 +164,19 @@ def define_quad_gates(x, y, channel_x, channel_y, transformations):
     # QuadrantDivider instances are similar to a Dimension, they take compensation_ref and tranformation_ref
     transformation_ref_x = channel_x if transformations[channel_x].xform else None
     transformation_ref_y = channel_y if transformations[channel_y].xform else None
-    quad_div_x = fk.QuadrantDivider('xdiv', channel_x, compensation_ref='uncompensated', transformation_ref=transformation_ref_x, values=[x])
-    quad_div_y = fk.QuadrantDivider('ydiv', channel_y, compensation_ref='uncompensated', transformation_ref=transformation_ref_y, values=[y])
+    quad_div_x = QuadrantDivider('xdiv', channel_x, compensation_ref='uncompensated', transformation_ref=transformation_ref_x, values=[x])
+    quad_div_y = QuadrantDivider('ydiv', channel_y, compensation_ref='uncompensated', transformation_ref=transformation_ref_y, values=[y])
 
     quad_divs = [quad_div_x, quad_div_y]
 
     # the 2 dividers above will be used to divide the space into 4 quadrants
-    quad_pp = fk.gates.Quadrant(quadrant_id=f'{channel_x}+ {channel_y}+', divider_refs=['xdiv', 'ydiv'],
+    quad_pp = gates.Quadrant(quadrant_id=f'{channel_x}+ {channel_y}+', divider_refs=['xdiv', 'ydiv'],
         divider_ranges=[(x, None), (y, None)])
-    quad_pn = fk.gates.Quadrant(quadrant_id=f'{channel_x}+ {channel_y}-', divider_refs=['xdiv', 'ydiv'],
+    quad_pn = gates.Quadrant(quadrant_id=f'{channel_x}+ {channel_y}-', divider_refs=['xdiv', 'ydiv'],
         divider_ranges=[(x, None), (None, y)])
-    quad_np = fk.gates.Quadrant(quadrant_id=f'{channel_x}- {channel_y}+', divider_refs=['xdiv', 'ydiv'],
+    quad_np = gates.Quadrant(quadrant_id=f'{channel_x}- {channel_y}+', divider_refs=['xdiv', 'ydiv'],
         divider_ranges=[(None, x), (y, None)])
-    quad_nn = fk.gates.Quadrant(quadrant_id=f'{channel_x}- {channel_y}-', divider_refs=['xdiv', 'ydiv'],
+    quad_nn = gates.Quadrant(quadrant_id=f'{channel_x}- {channel_y}-', divider_refs=['xdiv', 'ydiv'],
         divider_ranges=[(None, x), (None, y)])
     quadrants = [quad_pp, quad_pn, quad_np, quad_nn]
 
@@ -184,7 +184,7 @@ def define_quad_gates(x, y, channel_x, channel_y, transformations):
 
 def define_range_gate(x1, x2, channel_x, transformations):
     transformation_ref = channel_x if transformations[channel_x].xform else None
-    dim_x = fk.Dimension(channel_x, compensation_ref='uncompensated', transformation_ref=transformation_ref, range_min=x1,
+    dim_x = Dimension(channel_x, compensation_ref='uncompensated', transformation_ref=transformation_ref, range_min=x1,
                          range_max=x2)
     return dim_x
 
@@ -192,8 +192,8 @@ def define_polygon_gate(points, channel_x, channel_y, transformations):
     # print(points)
     transformation_ref_x = channel_x if transformations[channel_x].xform else None
     transformation_ref_y = channel_y if transformations[channel_y].xform else None
-    dim_x = fk.Dimension(channel_x, compensation_ref='uncompensated', transformation_ref=transformation_ref_x, range_min=0, range_max=1)
-    dim_y = fk.Dimension(channel_y, compensation_ref='uncompensated', transformation_ref=transformation_ref_y, range_min=0, range_max=1)
+    dim_x = Dimension(channel_x, compensation_ref='uncompensated', transformation_ref=transformation_ref_x, range_min=0, range_max=1)
+    dim_y = Dimension(channel_y, compensation_ref='uncompensated', transformation_ref=transformation_ref_y, range_min=0, range_max=1)
     return points, dim_x, dim_y
 
 def define_rectangle_gate(pos, size, channel_x, channel_y, transformations):
@@ -204,9 +204,9 @@ def define_rectangle_gate(pos, size, channel_x, channel_y, transformations):
 
     transformation_ref_x = channel_x if transformations[channel_x].xform else None
     transformation_ref_y = channel_y if transformations[channel_y].xform else None
-    dim_x = fk.Dimension(channel_x, compensation_ref='uncompensated', transformation_ref=transformation_ref_x, range_min=x0,
+    dim_x = Dimension(channel_x, compensation_ref='uncompensated', transformation_ref=transformation_ref_x, range_min=x0,
                          range_max=x0 + Dx)
-    dim_y = fk.Dimension(channel_y, compensation_ref='uncompensated', transformation_ref=transformation_ref_y, range_min=y0,
+    dim_y = Dimension(channel_y, compensation_ref='uncompensated', transformation_ref=transformation_ref_y, range_min=y0,
                          range_max=y0 + Dy)
 
     return dim_x, dim_y
@@ -226,9 +226,9 @@ def define_ellipse_gate(pos, size, angle, channel_x, channel_y, transformations)
     transformation_ref_x = channel_x if transformations[channel_x].xform else None
     transformation_ref_y = channel_y if transformations[channel_y].xform else None
 
-    dim_x = fk.Dimension(channel_x, compensation_ref='uncompensated', transformation_ref=transformation_ref_x, range_min=0,
+    dim_x = Dimension(channel_x, compensation_ref='uncompensated', transformation_ref=transformation_ref_x, range_min=0,
                          range_max=1)
-    dim_y = fk.Dimension(channel_y, compensation_ref='uncompensated', transformation_ref=transformation_ref_y, range_min=0,
+    dim_y = Dimension(channel_y, compensation_ref='uncompensated', transformation_ref=transformation_ref_y, range_min=0,
                          range_max=1)
 
     # print(pos, size, angle)

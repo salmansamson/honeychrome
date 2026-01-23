@@ -1,6 +1,7 @@
 '''
-Honeychrome - open source software interface for cytometry hardware, such as Cytkit
+Honeychrome - open source cytometry data acquisition and analysis software
 '''
+# from honeychrome.tools import DepthFinder # debug module imports here
 import os
 import sys
 from pathlib import Path

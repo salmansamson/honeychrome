@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from PySide6.QtCore import QObject, Signal, QTimer, QSettings
 # from PySide6.QtWidgets import QApplication
-import flowkit as fk
+from flowkit import Sample
 
 from honeychrome.controller_components.functions import apply_transfer_matrix, export_unmixed_sample
 import honeychrome.settings as settings
@@ -67,7 +67,7 @@ class UnmixedExporter(QObject):
                 full_sample_path = self.controller.experiment_dir / sample_path
                 full_unmixed_sample_path = self.controller.experiment_dir / unmixed_rel_path
                 full_unmixed_sample_path.parent.mkdir(parents=True, exist_ok=True)
-                sample = fk.Sample(full_sample_path)
+                sample = Sample(full_sample_path)
                 raw_event_data = sample.get_events(source='raw')
                 n_events = sample.event_count
 

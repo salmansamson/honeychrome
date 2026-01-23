@@ -1,4 +1,4 @@
-import flowkit as fk
+from flowkit import transforms as Transforms
 import numpy as np
 import honeychrome.settings as settings
 
@@ -39,7 +39,7 @@ class Transform:
             self.set_default()
 
     def set_linear(self):
-        self.xform = fk.transforms.LinearTransform(param_t=self.scale_t, param_a=self.linear_a)
+        self.xform = Transforms.LinearTransform(param_t=self.scale_t, param_a=self.linear_a)
         limits = self.limits
         self.scale = np.concatenate((
             [-np.inf],
@@ -56,7 +56,7 @@ class Transform:
         self.ticks = self.linear_ticks
 
     def set_logicle(self):
-        self.xform = fk.transforms.LogicleTransform(param_t=self.scale_t, param_w=self.logicle_w, param_m=self.logicle_m, param_a=self.logicle_a)
+        self.xform = Transforms.LogicleTransform(param_t=self.scale_t, param_w=self.logicle_w, param_m=self.logicle_m, param_a=self.logicle_a)
         limits = self.limits
         self.scale = np.concatenate((
             [-np.inf],
@@ -73,7 +73,7 @@ class Transform:
         self.ticks = self.logicle_ticks
 
     def set_log(self):
-        self.xform = fk.transforms.LogTransform(param_t=self.scale_t, param_m=self.log_m)
+        self.xform = Transforms.LogTransform(param_t=self.scale_t, param_m=self.log_m)
         limits = self.limits
         self.scale = np.concatenate((
             [-np.inf],

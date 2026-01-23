@@ -5,7 +5,7 @@ import warnings
 import numpy as np
 from PySide6.QtCore import QObject, Signal, QTimer
 # from PySide6.QtWidgets import QApplication
-import flowkit as fk
+from flowkit import Sample, Dimension, gates
 
 from honeychrome.controller_components.functions import timer
 from honeychrome.controller_components.spectral_functions import get_best_channel, get_profile
@@ -69,7 +69,7 @@ class ProfileUpdater:
                     break
             if sample_path:
                 full_sample_path = str(self.experiment_dir / sample_path)
-                sample = fk.Sample(full_sample_path)
+                sample = Sample(full_sample_path)
                 negative_gate_label = 'Neg Unstained'
                 if self.raw_gating.find_matching_gate_paths(negative_gate_label):
                     self.unstained_negative = get_profile(sample, negative_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
@@ -96,7 +96,7 @@ class ProfileUpdater:
                     nevents = self.samples['all_sample_nevents'][sample_path]
                     if nevents > 0:
                         full_sample_path = str(self.experiment_dir / sample_path)
-                        sample = fk.Sample(full_sample_path)
+                        sample = Sample(full_sample_path)
                         control['sample_path'] = full_sample_path
 
                         positive_gate_label = control['gate_label']
@@ -249,7 +249,7 @@ class SpectralAutoGenerator(QObject):
                     break
             if sample_path:
                 full_sample_path = str(self.experiment_dir / sample_path)
-                sample = fk.Sample(full_sample_path)
+                sample = Sample(full_sample_path)
 
                 # using unstained negative, define Pos and Neg Unstained if they don't already exist
                 positive_gate_label = 'Pos Unstained'
@@ -259,9 +259,9 @@ class SpectralAutoGenerator(QObject):
                     if not self.raw_gating.find_matching_gate_paths(target_gate_label):
                         channel_x = 'FSC-A'
                         channel_y = 'SSC-A'
-                        dim_x = fk.Dimension(channel_x, range_min=0.2, range_max=0.8, transformation_ref=channel_x)
-                        dim_y = fk.Dimension(channel_y, range_min=(0.1 if target_gate_label==positive_gate_label else 0.3), range_max=(0.7 if target_gate_label==positive_gate_label else 0.9), transformation_ref=channel_y)
-                        target_gate = fk.gates.RectangleGate(target_gate_label, dimensions=[dim_x, dim_y])
+                        dim_x = Dimension(channel_x, range_min=0.2, range_max=0.8, transformation_ref=channel_x)
+                        dim_y = Dimension(channel_y, range_min=(0.1 if target_gate_label==positive_gate_label else 0.3), range_max=(0.7 if target_gate_label==positive_gate_label else 0.9), transformation_ref=channel_y)
+                        target_gate = gates.RectangleGate(target_gate_label, dimensions=[dim_x, dim_y])
                         self.raw_gating.add_gate(target_gate, gate_path=('root',))
 
                         #### if raw_plots contains a 2D hist on channel_x and channel_y with no child gates except for pos and neg, add gate to it, otherwise create it
@@ -322,7 +322,7 @@ class SpectralAutoGenerator(QObject):
             else:
                 full_sample_path = str(self.experiment_dir / sample_path)
                 if check_fcs_matches_experiment(full_sample_path, self.controller.experiment.settings['raw']['event_channels_pnn'], self.controller.experiment.settings['raw']['magnitude_ceiling']):
-                    sample = fk.Sample(full_sample_path)
+                    sample = Sample(full_sample_path)
 
                     match = re.findall('([Uu]nstained)', label)
                     if match:
@@ -347,15 +347,15 @@ class SpectralAutoGenerator(QObject):
                             gate_channel = channel_x
                             pos_range_min = self.raw_gating.transformations[channel_x].apply(np.array([fl_top[0]]))[0]
                             pos_range_max = self.raw_gating.transformations[channel_x].apply(np.array([fl_top[1]]))[0]
-                            pos_dim_x = fk.Dimension(channel_x, range_min=pos_range_min, range_max=pos_range_max, transformation_ref=channel_x)
+                            pos_dim_x = Dimension(channel_x, range_min=pos_range_min, range_max=pos_range_max, transformation_ref=channel_x)
                             positive_gate_label = 'Pos ' + label
-                            positive_gate = fk.gates.RectangleGate(positive_gate_label, dimensions=[pos_dim_x])
+                            positive_gate = gates.RectangleGate(positive_gate_label, dimensions=[pos_dim_x])
 
                             neg_range_min = self.raw_gating.transformations[channel_x].apply(np.array([fl_bottom[0]]))[0]
                             neg_range_max = self.raw_gating.transformations[channel_x].apply(np.array([fl_bottom[1]]))[0]
-                            neg_dim_x = fk.Dimension(channel_x, range_min=neg_range_min, range_max=neg_range_max, transformation_ref=channel_x)
+                            neg_dim_x = Dimension(channel_x, range_min=neg_range_min, range_max=neg_range_max, transformation_ref=channel_x)
                             negative_gate_label = 'Neg ' + label
-                            negative_gate = fk.gates.RectangleGate(negative_gate_label, dimensions=[neg_dim_x])
+                            negative_gate = gates.RectangleGate(negative_gate_label, dimensions=[neg_dim_x])
 
                             # add all positive gates to the same gating strategy: they are distinguished by their label and by the sample_id that they refer to
                             # if gate already exists, remove it first

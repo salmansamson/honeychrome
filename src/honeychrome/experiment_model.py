@@ -33,7 +33,7 @@ methods:
 
 import json
 from pathlib import Path
-import flowkit as fk
+from flowkit import GatingStrategy, Dimension, gates
 import numpy as np
 import warnings
 import os
@@ -91,25 +91,25 @@ class ExperimentModel:
         self.cytometry['raw_transforms'] = assign_default_transforms(self.settings['raw'])
         raw_transformations = generate_transformations(self.cytometry['raw_transforms'])
 
-        raw_gating = fk.GatingStrategy()
+        raw_gating = GatingStrategy()
         for label in self.settings['raw']['event_channels_pnn']:
             raw_gating.transformations[label] = raw_transformations[label].xform
 
         label = 'Cells'
         channel_x = 'FSC-A'
         channel_y = 'SSC-A'
-        dim_x = fk.Dimension(channel_x, range_min=0.2, range_max=0.8, transformation_ref=channel_x)
-        dim_y = fk.Dimension(channel_y, range_min=0.2, range_max=0.8, transformation_ref=channel_y)
-        gate = fk.gates.RectangleGate(label, dimensions=[dim_x, dim_y])
+        dim_x = Dimension(channel_x, range_min=0.2, range_max=0.8, transformation_ref=channel_x)
+        dim_y = Dimension(channel_y, range_min=0.2, range_max=0.8, transformation_ref=channel_y)
+        gate = gates.RectangleGate(label, dimensions=[dim_x, dim_y])
         raw_gating.add_gate(gate, gate_path=('root',))
 
         label = 'Singlets'
         channel_x = 'FSC-A'
         channel_y = 'FSC-W'
-        dim_x = fk.Dimension(channel_x, range_min=0, range_max=1, transformation_ref=channel_x)
-        dim_y = fk.Dimension(channel_y, range_min=0, range_max=1, transformation_ref=channel_y)
+        dim_x = Dimension(channel_x, range_min=0, range_max=1, transformation_ref=channel_x)
+        dim_y = Dimension(channel_y, range_min=0, range_max=1, transformation_ref=channel_y)
         vertices = [(0.2,0.2), (0.8,0.2), (0.8,0.8), (0.2,0.8)]
-        gate = fk.gates.PolygonGate(label, dimensions=[dim_x, dim_y], vertices=vertices)
+        gate = gates.PolygonGate(label, dimensions=[dim_x, dim_y], vertices=vertices)
         raw_gating.add_gate(gate, gate_path=('root', 'Cells'))
 
         # plots is list of dicts

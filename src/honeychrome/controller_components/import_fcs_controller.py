@@ -1,7 +1,7 @@
 import warnings
 import numpy as np
 from PySide6.QtCore import QObject, Signal, QTimer
-import flowkit as fk
+from flowkit import GatingStrategy, Dimension, gates
 from flowio import FlowData
 
 from honeychrome.controller_components.functions import timer, apply_gates_in_place, apply_transfer_matrix, calc_stats, all_same, assign_default_transforms, generate_transformations
@@ -113,7 +113,7 @@ class ImportFCSController(QObject):
                     raw_transformations = generate_transformations(self.experiment.cytometry['raw_transforms'])
 
                     # set up raw gating
-                    raw_gating = fk.GatingStrategy()
+                    raw_gating = GatingStrategy()
                     for label in event_channels_pnn:
                         raw_gating.transformations[label] = raw_transformations[label].xform
 
@@ -147,23 +147,23 @@ class ImportFCSController(QObject):
                         label = 'Cells'
                         # range_max_x = raw_transformations[morph_x].xform.inverse(1)
                         # range_max_y = raw_transformations[morph_y].xform.inverse(1)
-                        dim_x = fk.Dimension(morph_x, range_min=0.2, range_max=0.8, transformation_ref=morph_x)
-                        dim_y = fk.Dimension(morph_y, range_min=0.2, range_max=0.8, transformation_ref=morph_y)
-                        gate = fk.gates.RectangleGate(label, dimensions=[dim_x, dim_y])
+                        dim_x = Dimension(morph_x, range_min=0.2, range_max=0.8, transformation_ref=morph_x)
+                        dim_y = Dimension(morph_y, range_min=0.2, range_max=0.8, transformation_ref=morph_y)
+                        gate = gates.RectangleGate(label, dimensions=[dim_x, dim_y])
                         raw_gating.add_gate(gate, gate_path=('root',))
                         morph_plot = [{'type': 'hist2d', 'channel_x': morph_x, 'channel_y': morph_y, 'source_gate': 'root', 'child_gates': ['Cells']}]
 
                         if (sing_x is not None) and (sing_y is not None):
                             label = 'Singlets'
                             if sing_y == 'FSC-W':
-                                dim_x = fk.Dimension(sing_x, range_min=0.2, range_max=0.8, transformation_ref=sing_x)
-                                dim_y = fk.Dimension(sing_y, range_min=0.2, range_max=0.8, transformation_ref=sing_y)
-                                gate = fk.gates.RectangleGate(label, dimensions=[dim_x, dim_y])
+                                dim_x = Dimension(sing_x, range_min=0.2, range_max=0.8, transformation_ref=sing_x)
+                                dim_y = Dimension(sing_y, range_min=0.2, range_max=0.8, transformation_ref=sing_y)
+                                gate = gates.RectangleGate(label, dimensions=[dim_x, dim_y])
                             else:  # FSC-H
-                                dim_x = fk.Dimension(sing_x, range_min=0, range_max=1, transformation_ref=sing_x)
-                                dim_y = fk.Dimension(sing_y, range_min=0, range_max=1, transformation_ref=sing_y)
+                                dim_x = Dimension(sing_x, range_min=0, range_max=1, transformation_ref=sing_x)
+                                dim_y = Dimension(sing_y, range_min=0, range_max=1, transformation_ref=sing_y)
                                 vertices = [(0.2, 0.1), (0.8, 0.7), (0.8, 0.9), (0.2, 0.3)]
-                                gate = fk.gates.PolygonGate(label, dimensions=[dim_x, dim_y], vertices=vertices)
+                                gate = gates.PolygonGate(label, dimensions=[dim_x, dim_y], vertices=vertices)
                             raw_gating.add_gate(gate, gate_path=('root', 'Cells'))
                             singlet_plot = [{'type': 'hist2d', 'channel_x': sing_x, 'channel_y': sing_y, 'source_gate': 'Cells', 'child_gates': ['Singlets']}]
 
