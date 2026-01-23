@@ -43,7 +43,6 @@ def main():
 
     args = ['src/honeychrome/main.py',
             '--name=honeychrome',
-            '--onefile',
             '--console',
             '--strip',  # Remove debug symbols
             '--clean',
