@@ -43,7 +43,7 @@ Create list of icps, all share underlying data, so updated simultaneously. Icps 
 import warnings
 from pathlib import Path
 
-from PySide6.QtGui import QPalette
+from PySide6.QtGui import QPalette, QIcon
 from PySide6.QtWidgets import QMessageBox, QWidget, QFileDialog, QApplication
 from PySide6.QtCore import Signal, QObject, Slot, QTimer, Qt
 
@@ -69,6 +69,9 @@ class View(QObject):
         self.splash = SplashScreen(self)
         self.current_window = self.splash
         self.splash.show()
+        self.splash.setWindowIcon(
+            QIcon(str(Path(__file__).resolve().parent / 'view_components' / 'assets' / 'cytkit_web_logo.ico')))
+
         self.controller = controller
 
         # debounce to avoid autosaving too frequently

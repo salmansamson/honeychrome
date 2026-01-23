@@ -3,7 +3,7 @@ import PyInstaller.__main__
 import os
 import shutil
 import sys
-
+import platform
 
 def clean():
     """Clean build directories"""
@@ -34,11 +34,14 @@ def main():
     args = ['src/honeychrome/main.py',
             '--name=honeychrome',
             '--console',
-            '--strip',  # Remove debug symbols
             '--clean',
             '--noconfirm',
-            # '--onefile',
+            '--onedir'
             ]
+
+    # 2. Add --strip ONLY if not on Windows
+    if platform.system() != "Windows":
+        args.append('--strip')
 
     # Add project files
     for source, dest in get_project_files():

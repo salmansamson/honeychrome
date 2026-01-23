@@ -3,7 +3,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QFileDialog, QLabel, QListView, QMenu, QDialog, QDialogButtonBox, QVBoxLayout as QVLayout, QStyledItemDelegate)
 from PySide6.QtCore import Qt, QSettings, QStringListModel, QPoint, QObject, QModelIndex
-from PySide6.QtGui import QPixmap, QPainter
+from PySide6.QtGui import QPixmap, QPainter, QIcon
 
 from honeychrome.controller_components.functions import q_settings, add_recent_file
 from honeychrome.settings import experiments_folder, file_extension

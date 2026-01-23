@@ -113,7 +113,7 @@ from importlib.abc import MetaPathFinder, Loader
 # --- CONFIGURATION ---
 PROJECT_ROOT = os.getcwd()
 TRACER_FILE = __file__
-MAX_DEPTH = 2
+MAX_DEPTH = 1
 
 
 # ---------------------

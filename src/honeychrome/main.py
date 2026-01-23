@@ -133,7 +133,6 @@ def setup_logging(log_file):
 # logger.warning("Warning message")
 # logger.error("Error message")
 
-
 def main():
     if getattr(sys, 'frozen', False):
         # Running as PyInstaller executable
@@ -221,7 +220,7 @@ def main():
     # Ensure consistent rounding of fractional scaling factors
     os.environ["QT_SCALE_FACTOR_ROUNDING_POLICY"] = "PassThrough"
 
-    app.setWindowIcon(QIcon(str(Path(__file__) / 'view_components' / 'assets' / 'cytkit_web_logo.ico')))
+    app.setWindowIcon(QIcon(str(Path(__file__).resolve().parent / 'view_components' / 'assets' / 'cytkit_web_logo.ico')))
 
     app.setDesktopFileName("honeychrome-app")
 
