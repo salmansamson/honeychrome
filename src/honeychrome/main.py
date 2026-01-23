@@ -60,7 +60,7 @@ View:
 --instrument control
 --oscilloscope
 '''
-from honeychrome.view import View
+from honeychrome.view import View, logo_icon
 
 import logging
 import warnings
@@ -220,9 +220,9 @@ def main():
     # Ensure consistent rounding of fractional scaling factors
     os.environ["QT_SCALE_FACTOR_ROUNDING_POLICY"] = "PassThrough"
 
-    app.setWindowIcon(QIcon(str(Path(__file__).resolve().parent / 'view_components' / 'assets' / 'cytkit_web_logo.ico')))
-
-    app.setDesktopFileName("honeychrome-app")
+    # app.setWindowIcon(QIcon(str(Path(__file__).resolve().parent / 'view_components' / 'assets' / 'cytkit_web_logo.ico')))
+    app.setWindowIcon(QIcon(logo_icon))
+    app.setDesktopFileName("honeychrome")
 
     # # debug space usage by highlighting
     # app.setStyleSheet("""

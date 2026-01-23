@@ -7,7 +7,7 @@ APP_NAME="Honeychrome"
 EXE_PATH="$INSTALL_DIR/honeychrome/honeychrome"
 # Point to the icon inside the portable package's asset folder
 ICON_PATH="$INSTALL_DIR/honeychrome/_internal/honeychrome/view_components/assets/cytkit_web_logo.png"
-INTERNAL_NAME="honeychrome-app"
+INTERNAL_NAME="honeychrome"
 
 DESKTOP_FILE_PATH="$HOME/.local/share/applications/$INTERNAL_NAME.desktop"
 

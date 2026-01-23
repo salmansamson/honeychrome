@@ -40,6 +40,7 @@ Cytometry panel is grid, each plot widget occupies one tile.
 
 Create list of icps, all share underlying data, so updated simultaneously. Icps have axes and rois. Icps can update gating and axes
 '''
+import os
 import warnings
 from pathlib import Path
 
@@ -60,8 +61,19 @@ import pyqtgraph as pg
 
 base_directory = str(Path.home() / experiments_folder)
 
-class View(QObject):
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
 
+    return os.path.join(base_path, relative_path)
+
+logo_icon = resource_path(str(Path(__file__).resolve().parent / 'view_components' / 'assets' / 'cytkit_web_logo.ico'))
+
+class View(QObject):
     def __init__(self, controller=None):
         super().__init__()
         self.bus = EventBus()
@@ -69,9 +81,7 @@ class View(QObject):
         self.splash = SplashScreen(self)
         self.current_window = self.splash
         self.splash.show()
-        self.splash.setWindowIcon(
-            QIcon(str(Path(__file__).resolve().parent / 'view_components' / 'assets' / 'cytkit_web_logo.ico')))
-
+        self.splash.setWindowIcon(QIcon(logo_icon))
         self.controller = controller
 
         # debounce to avoid autosaving too frequently

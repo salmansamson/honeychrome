@@ -30,13 +30,15 @@ def get_project_files():
 
 def main():
     clean()
+    icon_path = os.path.join('src', 'honeychrome', 'view_components', 'assets', 'cytkit_web_logo.ico')
 
     args = ['src/honeychrome/main.py',
             '--name=honeychrome',
             '--console',
             '--clean',
             '--noconfirm',
-            '--onedir'
+            '--onedir',
+            f'--icon={icon_path}'
             ]
 
     # 2. Add --strip ONLY if not on Windows
