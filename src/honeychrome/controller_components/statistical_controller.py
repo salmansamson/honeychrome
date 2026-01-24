@@ -1,4 +1,5 @@
 import json
+import warnings
 from pathlib import Path
 # from unicodedata import category
 
@@ -11,6 +12,8 @@ from honeychrome.view_components.busy_cursor import with_busy_cursor
 
 
 class StatisticsCalculator(QObject):
+    finished = Signal()
+
     def __init__(self, bus, controller):
         super().__init__()
 
@@ -69,20 +72,31 @@ class StatisticsCalculator(QObject):
                     for statistics_comparison in experiment_statistics:
                         gate_name = statistics_comparison['gate']
                         statistic = statistics_comparison['statistic']
-                        if statistic == "% Total Events":
-                            value = sample_statistics[gate_name]['p_gate_total']
-                        elif statistic == "% Parent":
-                            value = sample_statistics[gate_name]['p_gate_parent']
-                        elif statistic == "Event Concentration":
-                            value = sample_statistics[gate_name]['n_events_gate'] / 60
-                        elif statistic == "Number of Events":
-                            value = sample_statistics[gate_name]['n_events_gate']
-                        else: #if statistic == "Mean Intensity...":
-                            channel_index = data_for_statistics_comparison['pnn'].index(statistics_comparison['channel'])
-                            gate_membership = data_for_statistics_comparison['gate_membership'][gate_name]
-                            value = data_for_statistics_comparison['event_data'][gate_membership,channel_index].mean()
+                        if gate_name in sample_statistics:
+                            if statistic == "% Total Events":
+                                value = sample_statistics[gate_name]['p_gate_total']
+                            elif statistic == "% Parent":
+                                value = sample_statistics[gate_name]['p_gate_parent']
+                            elif statistic == "Event Concentration":
+                                value = sample_statistics[gate_name]['n_events_gate'] / 60
+                            elif statistic == "Number of Events":
+                                value = sample_statistics[gate_name]['n_events_gate']
+                            else: #if statistic == "Mean Intensity...":
+                                channel_index = data_for_statistics_comparison['pnn'].index(statistics_comparison['channel'])
+                                gate_membership = data_for_statistics_comparison['gate_membership'][gate_name]
+                                value = data_for_statistics_comparison['event_data'][gate_membership,channel_index].mean()
 
-                        data_by_sample[samples_to_calculate[n]]['Statistics'][(gate_name, statistic)] = value
+                            data_by_sample[samples_to_calculate[n]]['Statistics'][(gate_name, statistic)] = value
+
+                        else:
+                            text = f'Gate "{gate_name}" no longer exists. Cannot calculate statistics.'
+                            warnings.warn(text)
+                            if self.bus:
+                                self.bus.warningMessage.emit(text)
+                                self.bus.progress.emit(0,0)
+                                self.bus.statusMessage.emit(text)
+                            self.finished.emit()
+                            return
 
             # assemble the data into experiment statistics data table
             for m, statistics_comparison in enumerate(experiment_statistics):
@@ -116,8 +130,7 @@ class StatisticsCalculator(QObject):
             if self.bus:
                 self.bus.progress.emit(len(samples_to_calculate), len(samples_to_calculate))
 
-        if self.bus:
-            self.bus.showStatisticalComparisonUpdated.emit()
+        self.finished.emit()
 
 
 

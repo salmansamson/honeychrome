@@ -167,7 +167,6 @@ class View(QObject):
         self.bus.spectralModelUpdated.connect(lambda: self.bus.autoSaveRequested.emit())
         self.bus.spectralProcessRefreshed.connect(lambda: self.bus.autoSaveRequested.emit())
         self.bus.requestUpdateProcessHists.connect(lambda: self.bus.autoSaveRequested.emit())
-        self.bus.showStatisticalComparisonUpdated.connect(lambda: self.bus.autoSaveRequested.emit())
 
     @Slot()
     def about_honeychrome(self):

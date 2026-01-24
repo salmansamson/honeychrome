@@ -214,13 +214,17 @@ class StatisticalComparisonWidget(QWidget):
         self.statistics_calculator = StatisticsCalculator(self.bus, self.controller)
         self.statistics_calculator.moveToThread(self.thread)
         self.thread.started.connect(self.statistics_calculator.run)
-        self.bus.showStatisticalComparisonUpdated.connect(self.thread.quit)
+        self.statistics_calculator.finished.connect(self.thread.quit)
+        self.statistics_calculator.finished.connect(self.statistics_calculator.deleteLater)
         self.thread.finished.connect(self._on_thread_finished)
         self.thread.start()
 
     def _on_thread_finished(self):
+        self.thread.deleteLater()
         self.setEnabled(True)
         self.initialise()
+        self.bus.autoSaveRequested.emit()
+
 
 
 
