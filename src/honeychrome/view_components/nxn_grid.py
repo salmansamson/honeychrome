@@ -289,7 +289,7 @@ class NxNGrid(QFrame):
             self.controller.data_for_cytometry_plots_process.update({'plots': process_plots})
 
             # calculate histograms
-            # self.controller.initialise_data_for_cytometry_plots()
+            self.controller.initialise_data_for_cytometry_plots(force_recalc_histograms=True) # make sure all histograms are present before constructing grid
             self.set_headers_to_all_labels()
             self.refresh_heatmaps() #produces dummy hists
 
@@ -358,14 +358,16 @@ class NxNGrid(QFrame):
     @Slot(str)
     def request_update_process_plots(self, source_gate):
         # runs if source combo selection is changed, label selection changed or spillover changed,
+        # unless spectral model has changed (in that case wait for reinitialisation)
         # redefines process plots and forces reinitialisation of data,
         # ultimately signalling histstatsrecalculated
         if self.controller.experiment.settings['unmixed']['fluorescence_channels']:
-            process_plots = define_process_plots(self.horizontal_headers, self.vertical_headers, source_gate=source_gate)
-            self.controller.data_for_cytometry_plots_process.update({'plots': process_plots})
-            if self.controller.current_mode == 'process':
-                if source_gate:
-                    self.bus.requestUpdateProcessHists.emit()
+            if list(self.controller.experiment.process['profiles'].keys()) == self.horizontal_headers:
+                process_plots = define_process_plots(self.horizontal_headers, self.vertical_headers, source_gate=source_gate)
+                self.controller.data_for_cytometry_plots_process.update({'plots': process_plots})
+                if self.controller.current_mode == 'process':
+                    if source_gate:
+                        self.bus.requestUpdateProcessHists.emit()
 
     @Slot(str)
     def refresh_heatmaps(self, mode='process'):
@@ -374,9 +376,9 @@ class NxNGrid(QFrame):
         # access data_for_cytometry_plots_process instead of data_for_cytometry_plots since mode may be different (probably on raw) when initialised
         if mode == 'process':
             if self.horizontal_headers:
-                self.setVisible(True)
                 plots = self.controller.data_for_cytometry_plots_process['plots']
                 if plots:
+                    self.setVisible(True)
                     histograms = self.controller.data_for_cytometry_plots_process['histograms']
                     if not histograms:
                         dummy_hist = np.zeros((settings.tile_size_nxn_grid_retrieved, settings.tile_size_nxn_grid_retrieved))
@@ -398,6 +400,9 @@ class NxNGrid(QFrame):
 
                     # self.view.setModel(self.model)
                     self.model.update_data(self.heatmaps, self.horizontal_headers, self.vertical_headers)
+
+                else:
+                    self.setVisible(False)
             else:
                 self.setVisible(False)
 

@@ -1,7 +1,7 @@
 '''
 Honeychrome - open source cytometry data acquisition and analysis software
 '''
-from honeychrome.tools import DepthFinder # debug module imports here
+# from honeychrome.tools import DepthFinder # debug module imports here
 import honeychrome.dummy_loader
 
 import os
@@ -86,6 +86,8 @@ def setup_logging(log_file):
 
     # Create logger
     logger = logging.getLogger()
+    # logger = logging.getLogger(__name__)  # Only logs from this file
+    logging.getLogger('matplotlib').setLevel(logging.WARNING)
     logger.setLevel(logging.DEBUG)
     logger.handlers.clear()
 
@@ -98,7 +100,7 @@ def setup_logging(log_file):
     console_handler.setFormatter(formatter)
 
     # File handler
-    file_handler = logging.FileHandler(log_file, mode='w')
+    file_handler = logging.FileHandler(log_file, mode='a')
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
 
@@ -123,25 +125,16 @@ def setup_logging(log_file):
     return logger
 
 
-# # Usage
-# (Path.home() / experiments_folder).mkdir(parents=True, exist_ok=True)
-# logger = setup_logging(Path.home() / experiments_folder / 'honeychrome.log')
-
-# # Log messages at different levels
-# logger.debug("Debug message")  # Only to file
-# logger.info("Info message")  # To both console and file
-# logger.warning("Warning message")
-# logger.error("Error message")
-
 def main():
-    if getattr(sys, 'frozen', False):
-        # Running as PyInstaller executable
-        import multiprocessing
-        multiprocessing.freeze_support()  # Required for Windows
-        # On Unix systems, also need:
-        if os.name == 'posix':
-            import multiprocessing
-            multiprocessing.set_start_method('spawn', force=True)
+    # Usage
+    (Path.home() / experiments_folder).mkdir(parents=True, exist_ok=True)
+    logger = setup_logging(Path.home() / experiments_folder / 'honeychrome.log')
+
+    # # Log messages at different levels
+    # logger.debug("Debug message")  # Only to file
+    # logger.info("Info message")  # To both console and file
+    # logger.warning("Warning message")
+    # logger.error("Error message")
 
     '''
     define objects for communication between processes
@@ -215,6 +208,12 @@ def main():
     start application and view
     '''
     app = QApplication(sys.argv)
+
+    if sys.platform == 'win32':
+        import ctypes
+        myappid = 'honeychrome.cytometry.v0.6.0'
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+
     # Use Fusion style (works consistently across platforms)
     app.setStyle("Fusion")
     # Ensure consistent rounding of fractional scaling factors
@@ -253,11 +252,11 @@ def main():
     '''
     start QT application
     '''
-    print('Started Honeychrome')
+    print('***** Started Honeychrome *****')
     exit_code = app.exec()
 
     # end processes, free memory
-    print('Quitting Honeychrome')
+    print('***** Quitting Honeychrome *****')
     controller.quit_instrument_quit_analyser()
     trace_analyser.join()
     instrument.join()
@@ -269,4 +268,13 @@ def main():
     sys.exit(exit_code)
 
 if __name__ == '__main__':
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller executable
+        import multiprocessing
+        multiprocessing.freeze_support()  # Required for Windows
+        # On Unix systems, also need:
+        if os.name == 'posix':
+            import multiprocessing
+            multiprocessing.set_start_method('spawn', force=True)
+
     main()

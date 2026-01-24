@@ -223,6 +223,7 @@ class Controller(QObject):
 
     def calculate_lookup_tables(self, mode=None, top_gate='root'):
         # apply gating strategy to unit images to produce masks
+        # called on initialise ephemeral data or if gate added
         if mode is None:
             sets_to_update = [
                 (self.raw_transformations, self.raw_gating, self.raw_lookup_tables),
@@ -778,7 +779,8 @@ class Controller(QObject):
         if self.current_mode == 'process':
             self.data_for_cytometry_plots.update({'event_data': self.unmixed_event_data})
             self.data_for_cytometry_plots['histograms'] = initialise_hists(self.data_for_cytometry_plots['plots'], self.data_for_cytometry_plots)
-            self.calc_hists_and_stats(gates_to_calculate='for speed, calc hists but do not reapply gates')
+            gates_to_calculate = list(set(self.data_for_cytometry_plots['lookup_tables'].keys()) - set(self.data_for_cytometry_plots['gate_membership'].keys()) | {'root'})
+            self.calc_hists_and_stats(gates_to_calculate=gates_to_calculate)
             print(f'Controller: prepared hists for process plots')
 
     @Slot(str, str)
@@ -926,10 +928,8 @@ class Controller(QObject):
         if self.data_for_cytometry_plots['event_data'] is not None:
             # apply gates to event data
             # if gates_to_calculate is none, then initialise gates_to_calculate dict, otherwise reference it from data_for_cytometry_plots
-            if gates_to_calculate is None:
-                #todo something causes crashes here. is it because calc_hists_and_stats is called too often in quick succession?
-                # instead of reinitialising gate_membership, try just updating it in place?
-                # one crash happens because gate calculation was avoided in reinitialise_data_for_process_plots
+            if not gates_to_calculate:
+                #todo hopefully verify bug has gone here?
                 gate_membership = {'root': np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)}
                 self.data_for_cytometry_plots.update({'gate_membership': gate_membership})
                 # self.data_for_cytometry_plots['gate_membership']['root'] = np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)
@@ -1129,6 +1129,9 @@ class Controller(QObject):
                             new_plot_child_gates.append(gate)
                     new_plot['child_gates'] = new_plot_child_gates
                     self.experiment.cytometry['plots'].append(new_plot)
+
+                    if self.bus:
+                        self.bus.changedGatingHierarchy.emit('unmixed', 'root')
         else:
             unmixed_settings = settings_default['unmixed'].copy()
             self.experiment.settings['unmixed'].update(unmixed_settings)

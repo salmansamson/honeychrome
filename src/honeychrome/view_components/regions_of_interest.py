@@ -77,7 +77,7 @@ class DraggableRoiLabel(pg.TextItem):
 
         # Style: bold + bigger font
         font = QFont()
-        font.setStyleHint(QFont.StyleHint.SansSerif)
+        # font.setStyleHint(QFont.StyleHint.SansSerif)
         font.setPointSize(12)
         font.setWeight(QFont.Weight.Bold)
         self.setFont(font)

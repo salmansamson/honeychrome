@@ -523,7 +523,7 @@ class SpectralControlsEditor(QFrame):
         self.spectral_auto_generator = SpectralAutoGenerator(self.bus, self.controller)
 
         self.spectral_auto_generator.moveToThread(self.thread)
-        self.bus.spectralControlAdded.connect(self._on_spectral_control_added)
+        self.bus.spectralControlAdded.connect(self._on_spectral_control_added_by_autogenerator)
         self.thread.started.connect(self.spectral_auto_generator.run)
         self.bus.spectralModelUpdated.connect(self.thread.quit)
         self.thread.finished.connect(self.refresh_table_and_enable)
@@ -551,12 +551,12 @@ class SpectralControlsEditor(QFrame):
         self.model.layoutChanged.emit() #table view
         self.bus.spectralModelUpdated.emit() #unmixing matrix etc
 
-    def _on_spectral_control_added(self):
+    def _on_spectral_control_added_by_autogenerator(self):
         self.model.layoutChanged.emit()
-        control = self.model._data[-1]['label']
-        if control:
-            if control in self.controller.experiment.process['profiles']:
-                self.bus.showSelectedProfiles.emit([control])
+        # control = self.model._data[-1]['label']
+        # if control:
+        #     if control in self.controller.experiment.process['profiles']:
+        #         self.bus.showSelectedProfiles.emit([control])
 
     def refresh_table_and_enable(self):
         self.refresh_comboboxes()
@@ -589,15 +589,17 @@ class SpectralControlsEditor(QFrame):
 
     @Slot()
     def _on_force_recalc(self):
+        self.setEnabled(False)
         self.profile_updater.flush()  # remove profiles that are not in the model
         for index, control in enumerate(self.model._data):
             control_valid = self.profile_updater.generate(control, self.spectral_library_search_results) # generate profile, pass in search results in case control is from library
             if not control_valid:
                 break
-        self.refresh_comboboxes()
-        self.bus.showSelectedProfiles.emit([])
+
         self.bus.spectralModelUpdated.emit()
+        self.refresh_table_and_enable()
         print(f'SpectralModelEditor: forced recalculation')
+
 
     @Slot(list)
     def _on_delete_controls(self, labels):

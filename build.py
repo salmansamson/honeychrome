@@ -34,7 +34,7 @@ def main():
 
     args = ['src/honeychrome/main.py',
             '--name=honeychrome',
-            '--console',
+            '--noconsole',
             '--clean',
             '--noconfirm',
             '--onedir',

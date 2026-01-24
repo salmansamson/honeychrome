@@ -211,7 +211,6 @@ class ReportGenerator(QObject):
 
                 ### export also all individual plots
                 # export_widget_png(plot_widget, full_sample_path.with_name(f"{current_sample_path.stem}_{plot_widget.n_in_plot_sequence}").with_suffix('.docx'), scale_factor=scale_factor)
-            container.deleteLater()
 
             self.bus.statusMessage.emit(f'ReportGenerator: adding statistics')
             statistics = self.controller.data_for_cytometry_plots['statistics']
@@ -310,6 +309,7 @@ class ReportGenerator(QObject):
 
         # Save - one line!
         doc.save(docx_path)
+        container.deleteLater()
 
         # restore cytometry
         self.controller.set_mode(current_mode)

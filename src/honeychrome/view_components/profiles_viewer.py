@@ -179,6 +179,7 @@ class ProfilesViewer(QFrame):
 
         if self.bus:
             self.bus.showSelectedProfiles.connect(self.plot_profiles)
+            self.bus.spectralControlAdded.connect(self.plot_latest_profile)
 
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -215,8 +216,17 @@ class ProfilesViewer(QFrame):
         # Empty method to completely disable context menu
         pass
 
+    @Slot()
+    def plot_latest_profile(self):
+        spectral_model = self.controller.experiment.process['spectral_model']
+        if spectral_model:
+            control = spectral_model[-1]['label']
+            if control:
+                if control in self.controller.experiment.process['profiles']:
+                    self.plot_profiles([control], show_legend=False)
+
     @Slot(list)
-    def plot_profiles(self, profile_list):
+    def plot_profiles(self, profile_list, show_legend=True):
 
         # Clear previous plots
         self.plot_widget.clear()
@@ -244,8 +254,9 @@ class ProfilesViewer(QFrame):
                 pen = pg.mkPen(color=color, width=self.pen_width)
                 plot_item = self.plot_widget.plot(x, profiles[profile_name], pen=pen)
                 self.plot_items[profile_name] = plot_item
-                entry = LegendEntry(color, profile_name)
-                self.legendLayout.addWidget(entry)
+                if show_legend:
+                    entry = LegendEntry(color, profile_name)
+                    self.legendLayout.addWidget(entry)
 
         # self.plot_widget.autoRange()
         self.plot_widget.setXRange(0, len(self.controller.filtered_raw_fluorescence_channel_ids))  # Set custom x-axis range
