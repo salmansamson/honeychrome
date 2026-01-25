@@ -5,9 +5,8 @@ from pathlib import Path
 
 import numpy as np
 from PySide6.QtCore import QObject, Signal, QTimer
-from flowkit import Sample
 
-from honeychrome.controller_components.functions import timer, apply_gates_in_place, apply_transfer_matrix, calc_stats
+from honeychrome.controller_components.functions import timer, apply_gates_in_place, apply_transfer_matrix, calc_stats, sample_from_fcs
 from honeychrome.view_components.busy_cursor import with_busy_cursor
 
 
@@ -53,7 +52,7 @@ class StatisticsCalculator(QObject):
                     category_name = None
 
                 full_sample_path = str(self.controller.experiment_dir / samples_to_calculate[n])
-                sample = Sample(full_sample_path)
+                sample = sample_from_fcs(full_sample_path)
                 raw_event_data = sample.get_events(source='raw')
                 n_events = sample.event_count
 
@@ -74,9 +73,9 @@ class StatisticsCalculator(QObject):
                         statistic = statistics_comparison['statistic']
                         if gate_name in sample_statistics:
                             if statistic == "% Total Events":
-                                value = sample_statistics[gate_name]['p_gate_total']
+                                value = sample_statistics[gate_name]['p_gate_total'] * 100
                             elif statistic == "% Parent":
-                                value = sample_statistics[gate_name]['p_gate_parent']
+                                value = sample_statistics[gate_name]['p_gate_parent'] * 100
                             elif statistic == "Event Concentration":
                                 value = sample_statistics[gate_name]['n_events_gate'] / 60
                             elif statistic == "Number of Events":

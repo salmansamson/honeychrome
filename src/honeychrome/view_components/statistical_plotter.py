@@ -246,7 +246,9 @@ class StatisticsPlotWidget(QWidget):
         plot_label = QLabel(f'''
             <p>
             Plot type: {self.statistics_comparison['plot_type']}<br/>
-            Sample set: {self.statistics_comparison['sample_set']}<br/>
+            Sample set: {'All Samples' 
+                            if self.statistics_comparison['sample_set'] == self.controller.experiment.settings['raw']['raw_samples_subdirectory'] 
+                            else self.statistics_comparison['sample_set']}<br/>
             Gate: {self.statistics_comparison['gate']}<br/>
             Statistic: {self.statistics_comparison['statistic']}<br/>
             {'Channel: ' + self.statistics_comparison['channel'] if self.statistics_comparison['statistic'] == 'Mean Intensity' else ''}

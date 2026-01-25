@@ -40,7 +40,7 @@ from multiprocessing import shared_memory
 import time
 
 from honeychrome.experiment_model import ExperimentModel, check_fcs_matches_experiment
-from honeychrome.controller_components.functions import apply_gates_in_place, apply_transfer_matrix, generate_transformations, update_transforms, initialise_hists, calc_hists, calc_stats, initialise_stats, assign_default_transforms, define_quad_gates, define_range_gate, define_polygon_gate, define_rectangle_gate, define_ellipse_gate, add_recent_file, empty_queue_nowait, define_process_plots, get_set_or_initialise_label_offset
+from honeychrome.controller_components.functions import apply_gates_in_place, apply_transfer_matrix, generate_transformations, update_transforms, initialise_hists, calc_hists, calc_stats, initialise_stats, assign_default_transforms, define_quad_gates, define_range_gate, define_polygon_gate, define_rectangle_gate, define_ellipse_gate, add_recent_file, empty_queue_nowait, define_process_plots, get_set_or_initialise_label_offset, sample_from_fcs
 from honeychrome.controller_components.gml_functions_mod_from_flowkit import from_gml, to_gml
 from honeychrome.instrument_configuration import traces_cache_size, dtype, adc_rate
 import honeychrome.settings as settings
@@ -529,14 +529,7 @@ class Controller(QObject):
         print(f'Controller: loading sample {sample_path}')
         if check_fcs_matches_experiment(self.experiment_dir / sample_path, self.experiment.settings['raw']['event_channels_pnn'], self.experiment.settings['raw']['magnitude_ceiling']):
             self.current_sample_path = sample_path
-            try:
-                if self.bus:
-                    self.bus.statusMessage.emit(f'Loading sample {self.current_sample_path}...')
-
-                self.current_sample = Sample(self.experiment_dir / self.current_sample_path)
-            except KeyError as e:
-                print(f'Controller: FlowIO reports FCS file does not conform to standards. Missing {e}. Attempting to load with use_header_offsets and ignore_offset_error set')
-                self.current_sample = Sample(self.experiment_dir / self.current_sample_path, use_header_offsets=True, ignore_offset_error=True)
+            self.current_sample = sample_from_fcs(self.experiment_dir / self.current_sample_path, self.bus)
 
             if self.current_sample_path == self.live_sample_path:
                 self.raw_event_data, n_events = self.copy_live_data(extent='all')

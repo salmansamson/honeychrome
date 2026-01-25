@@ -5,9 +5,9 @@ import warnings
 import numpy as np
 from PySide6.QtCore import QObject, Signal, QTimer
 # from PySide6.QtWidgets import QApplication
-from flowkit import Sample, Dimension, gates
+from flowkit import Dimension, gates
 
-from honeychrome.controller_components.functions import timer
+from honeychrome.controller_components.functions import timer, sample_from_fcs
 from honeychrome.controller_components.spectral_functions import get_best_channel, get_profile
 from honeychrome.controller_components.spectral_librarian import SpectralLibrary
 from honeychrome.experiment_model import check_fcs_matches_experiment
@@ -69,7 +69,7 @@ class ProfileUpdater:
                     break
             if sample_path:
                 full_sample_path = str(self.experiment_dir / sample_path)
-                sample = Sample(full_sample_path)
+                sample = sample_from_fcs(full_sample_path)
                 negative_gate_label = 'Neg Unstained'
                 if self.raw_gating.find_matching_gate_paths(negative_gate_label):
                     self.unstained_negative = get_profile(sample, negative_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
@@ -96,7 +96,7 @@ class ProfileUpdater:
                     nevents = self.samples['all_sample_nevents'][sample_path]
                     if nevents > 0:
                         full_sample_path = str(self.experiment_dir / sample_path)
-                        sample = Sample(full_sample_path)
+                        sample = sample_from_fcs(full_sample_path)
                         control['sample_path'] = full_sample_path
 
                         positive_gate_label = control['gate_label']
@@ -249,7 +249,7 @@ class SpectralAutoGenerator(QObject):
                     break
             if sample_path:
                 full_sample_path = str(self.experiment_dir / sample_path)
-                sample = Sample(full_sample_path)
+                sample = sample_from_fcs(full_sample_path)
 
                 # using unstained negative, define Pos and Neg Unstained if they don't already exist
                 positive_gate_label = 'Pos Unstained'
@@ -322,7 +322,7 @@ class SpectralAutoGenerator(QObject):
             else:
                 full_sample_path = str(self.experiment_dir / sample_path)
                 if check_fcs_matches_experiment(full_sample_path, self.controller.experiment.settings['raw']['event_channels_pnn'], self.controller.experiment.settings['raw']['magnitude_ceiling']):
-                    sample = Sample(full_sample_path)
+                    sample = sample_from_fcs(full_sample_path)
 
                     match = re.findall('([Uu]nstained)', label)
                     if match:

@@ -11,6 +11,17 @@ from honeychrome.settings import linear_a, logicle_w, logicle_m, logicle_a, log_
 
 q_settings = QSettings("honeychrome", "ExperimentSelector")
 
+def sample_from_fcs(path, bus=None):
+    try:
+        if bus:
+            bus.statusMessage.emit(f'Loading sample {path}...')
+
+        sample = Sample(path)
+    except KeyError as e:
+        print(f'Controller: FlowIO reports FCS file does not conform to standards. Missing {e}. Attempting to load with use_header_offsets and ignore_offset_error set')
+        sample = Sample(path, use_header_offsets=True, ignore_offset_error=True)
+
+    return sample
 
 def define_process_plots(fluorescence_channels_x, fluorescence_channels_y, source_gate):
     process_plots = [{'type': 'hist2d', 'channel_x': x, 'channel_y': y, 'source_gate': source_gate, 'child_gates': []} if x != y
