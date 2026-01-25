@@ -79,9 +79,11 @@ class UnmixedExporter(QObject):
 
             if self.bus:
                 self.bus.progress.emit(len(samples_to_calculate), len(samples_to_calculate))
-                self.bus.popupMessage.emit(f'Exported {len(samples_to_calculate)} unmixed samples as FCS files. \n\n'
-                                           f'Open <a href="file:///{self.controller.experiment_dir / self.controller.experiment.settings['unmixed']['unmixed_samples_subdirectory']}">'
-                                           f'{self.controller.experiment.settings['unmixed']['unmixed_samples_subdirectory']}</a> folder.')
+                # self.bus.popupMessage.emit(f'Exported {len(samples_to_calculate)} unmixed samples as FCS files. \n\n'
+                #                            f'Open <a href="file:///{self.controller.experiment_dir / self.controller.experiment.settings['unmixed']['unmixed_samples_subdirectory']}">'
+                #                            f'{self.controller.experiment.settings['unmixed']['unmixed_samples_subdirectory']}</a> folder.')
+                self.bus.popupMessage.emit(f'Exported {len(samples_to_calculate)} unmixed samples as FCS files, to \n'
+                                           f'"{self.controller.experiment.settings['unmixed']['unmixed_samples_subdirectory']}" folder in experiment folder')
         self.finished.emit()
 
 

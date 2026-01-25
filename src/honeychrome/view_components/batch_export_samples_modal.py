@@ -12,6 +12,7 @@ class BatchExportSamplesModal(QDialog):
         super().__init__(parent)
         self.bus = bus
         self.setWindowTitle("Batch Export Unmixed")
+        self.setGeometry(200, 200, 500, 350)
 
         self.folders = get_all_subfolders_recursive(path, experiment_dir)
         self.sample_sets = [str((experiment_dir / f).relative_to(path)) for f in self.folders]
