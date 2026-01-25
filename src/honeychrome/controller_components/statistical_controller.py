@@ -89,7 +89,8 @@ class StatisticsCalculator(QObject):
                             data_by_sample[samples_to_calculate[n]]['Statistics'][(gate_name, statistic)] = value
 
                         else:
-                            text = f'Gate "{gate_name}" no longer exists. Cannot calculate statistics.'
+                            text = (f'Cannot calculate statistics: gate "{gate_name}" no longer exists.  '
+                                    f'Please either create the gate again or delete any statistics plots below that reference {gate_name}.')
                             warnings.warn(text)
                             if self.bus:
                                 self.bus.warningMessage.emit(text)

@@ -190,11 +190,13 @@ class CytometryGridWidget(QScrollArea):
 
     def proceed_to_delete_plot(self):
         plots = self.data_for_cytometry_plots['plots']
+        hists = self.data_for_cytometry_plots['histograms']
         widgets = self.plot_widgets
 
         n = widgets.index(self.selected_plot)
         self.selected_plot.remove_gate_and_roi()
         plots.pop(n)
+        hists.pop(n)
         widgets.pop(n)
         self.selected_plot.deleteLater()
         self.selected_plot = None
@@ -276,6 +278,7 @@ class CytometryGridWidget(QScrollArea):
                     plot_widget = self.plot_widgets[n]
 
                     self.place_tile(plot_widget, w, h)
+                    plot_widget.n_in_plot_sequence = n
 
                     # print(self.n_columns)
                     # print(n, w, h, self.data_for_cytometry_plots['plots'])

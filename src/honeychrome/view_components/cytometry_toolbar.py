@@ -71,6 +71,9 @@ class CytometryToolbar(QToolBar):
                 margin: 1px 18px;
                 border-radius: 1px;
             }}
+            QToolButton {{
+                margin-left: 10px;
+            }}
         """)
 
         self.update_button_state(None)

@@ -96,6 +96,7 @@ class StatisticalComparisonWidget(QWidget):
         self.initialise()
 
     def initialise(self):
+        # initialise plots (if statistics already defined) and initialise menu
         if self.controller.experiment.statistics:
             self.buttons.setVisible(True)
 
@@ -242,6 +243,20 @@ class StatisticsPlotWidget(QWidget):
             export_filename += ' ' + self.statistics_comparison['channel']
         self.export_filename = export_filename
 
+        plot_label = QLabel(f'''
+            <p>
+            Plot type: {self.statistics_comparison['plot_type']}<br/>
+            Sample set: {self.statistics_comparison['sample_set']}<br/>
+            Gate: {self.statistics_comparison['gate']}<br/>
+            Statistic: {self.statistics_comparison['statistic']}<br/>
+            {'Channel: ' + self.statistics_comparison['channel'] if self.statistics_comparison['statistic'] == 'Mean Intensity' else ''}
+            </p>
+        ''')
+        plot_label.setTextFormat(Qt.RichText)
+        plot_label.setWordWrap(True)
+        plot_label.setMinimumWidth(200)
+        plot_label.setMaximumWidth(500)
+
         # Matplotlib imports for embedding
         from matplotlib.figure import Figure
         from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
@@ -258,6 +273,7 @@ class StatisticsPlotWidget(QWidget):
         self.export_csv_button = QPushButton('Export CSV')
         self.export_csv_button.clicked.connect(self.export_csv)
         buttons_layout = QVBoxLayout()
+        buttons_layout.addWidget(plot_label)
         buttons_layout.addWidget(self.delete_button)
         buttons_layout.addWidget(self.export_graphic_button)
         buttons_layout.addWidget(self.export_csv_button)

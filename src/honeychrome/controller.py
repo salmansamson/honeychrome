@@ -721,7 +721,6 @@ class Controller(QObject):
         elif tab_name == 'Statistics':
             self.current_mode = 'statistics'
             self.data_for_cytometry_plots = self.data_for_cytometry_plots_unmixed
-            return # don't initialise data for cytometry plots
 
         self.initialise_data_for_cytometry_plots()
 

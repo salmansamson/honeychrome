@@ -289,7 +289,7 @@ class SampleWidget(QWidget):
         sample_toolbar.setMovable(False)
         action_new_sample = QAction(load_icon('square-plus'), "New Sample", self)
         action_open_explorer = QAction(load_icon('folder-search'), "Open sample directory externally to create / modify folders", self)
-        action_batch_add_samples = QAction(load_icon('files'), "Batch add samples from CSV", self)
+        action_batch_add_samples = QAction(load_icon('file-import'), "Batch add samples from CSV", self)
         action_batch_add_samples.setToolTip('Batch add samples from CSV file \n\n'
                                             'CSV should have up to three columns: \n'
                                             '• (sample),\n'
@@ -300,7 +300,7 @@ class SampleWidget(QWidget):
                                             '• and sample is in format \'Label (Cells)\' or \'Label (Beads)\'.')
         action_refresh = QAction(load_icon('refresh'), "Refresh sample view (rescan folder tree)", self)
         action_generate_report = QAction(load_icon('file-type-docx'), "Generate DOCX report on a selected sample \n(raw / unmixed / spectral process) according to settings", self)
-        action_export_all = QAction(load_icon('files'), "Batch FCS export all unmixed", self)
+        action_export_all = QAction(load_icon('file-export'), "Batch FCS export all unmixed", self)
         sample_toolbar.addAction(action_new_sample)
         sample_toolbar.addAction(action_batch_add_samples)
         sample_toolbar.addAction(action_open_explorer)
