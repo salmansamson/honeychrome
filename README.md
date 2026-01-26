@@ -27,13 +27,20 @@ code or just download an executable. For most users, it is sufficient to downloa
 an executable for your platform (Windows/Linux/MacOS).
 
 ### For non-technical users: download and run executable
+A set of compressed binary packages are available in the releases section.
 #### Windows
+1. Download [Honeychrome for Windows x64](https://github.com/salmansamson/honeychrome/releases/download/v0.6.0-beta/Honeychrome-v0.6.0-windows-x64.exe)
+2. Double click to run the installer
+
 #### Linux
-#### MacOs
-2. Download the compressed binary package for your system in ...
+1. Download [Honeychrome for Linux x64](https://github.com/salmansamson/honeychrome/releases/download/v0.6.0-beta/honeychrome-v0.6.0-linux-x64.tar.gz)
+2. Extract the honeychrome folder and put it somewhere appropriate
+3. Change to the honeychrome folder and run ./install_linux.sh
 
+#### Other systems
+We intend to release a MacOS executable very soon. For all other systems, please follow the Python instructions below.
 
-### For programmers: clone and run Python source
+### For Python users: clone and run Python source
 1. Clone or download the repository, navigate to the project folder. 
 2. Install Python (or make sure you have already installed) version >= 3.12
 3. Install a venv: python3 -m venv venv
