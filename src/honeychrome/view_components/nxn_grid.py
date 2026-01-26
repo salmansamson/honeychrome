@@ -362,7 +362,7 @@ class NxNGrid(QFrame):
         # redefines process plots and forces reinitialisation of data,
         # ultimately signalling histstatsrecalculated
         if self.controller.experiment.settings['unmixed']['fluorescence_channels']:
-            if list(self.controller.experiment.process['profiles'].keys()) == self.horizontal_headers:
+            if set(self.controller.experiment.process['profiles'].keys()) == set(self.horizontal_headers):
                 process_plots = define_process_plots(self.horizontal_headers, self.vertical_headers, source_gate=source_gate)
                 self.controller.data_for_cytometry_plots_process.update({'plots': process_plots})
                 if self.controller.current_mode == 'process':
@@ -374,38 +374,41 @@ class NxNGrid(QFrame):
         # called when nxn grid initialised, when experiment loaded, and on histstatsrecalculated
         # triggers update of model and view
         # access data_for_cytometry_plots_process instead of data_for_cytometry_plots since mode may be different (probably on raw) when initialised
-        if mode == 'process':
-            if self.horizontal_headers:
-                plots = self.controller.data_for_cytometry_plots_process['plots']
-                if plots:
-                    self.setVisible(True)
-                    histograms = self.controller.data_for_cytometry_plots_process['histograms']
-                    if not histograms:
-                        dummy_hist = np.zeros((settings.tile_size_nxn_grid_retrieved, settings.tile_size_nxn_grid_retrieved))
-                        histograms += [dummy_hist for plot in plots]
+        try:
 
-                    # build data arrays
-                    # vertical headers are the unmixed filtered set
-                    # horizontal headers are the raw fluorescence set
-                    self.heatmaps = []
-                    for r in self.vertical_headers:
-                        row = []
-                        for c in self.horizontal_headers:
-                            if c != r:
-                                index = [plots.index(plot) for plot in plots if plot['type'] == 'hist2d' and plot['channel_x'] == c and plot['channel_y'] == r][0]
-                                row.append(histograms[index])
-                            else:
-                                row.append(None)
-                        self.heatmaps.append(row)
+            if mode == 'process':
+                if self.horizontal_headers:
+                    plots = self.controller.data_for_cytometry_plots_process['plots']
+                    if plots:
+                        self.setVisible(True)
+                        histograms = self.controller.data_for_cytometry_plots_process['histograms']
+                        if not histograms:
+                            dummy_hist = np.zeros((settings.tile_size_nxn_grid_retrieved, settings.tile_size_nxn_grid_retrieved))
+                            histograms += [dummy_hist for plot in plots]
 
-                    # self.view.setModel(self.model)
-                    self.model.update_data(self.heatmaps, self.horizontal_headers, self.vertical_headers)
+                        # build data arrays
+                        # vertical headers are the unmixed filtered set
+                        # horizontal headers are the raw fluorescence set
+                        self.heatmaps = []
+                        for r in self.vertical_headers:
+                            row = []
+                            for c in self.horizontal_headers:
+                                if c != r:
+                                    index = [plots.index(plot) for plot in plots if plot['type'] == 'hist2d' and plot['channel_x'] == c and plot['channel_y'] == r][0]
+                                    row.append(histograms[index])
+                                else:
+                                    row.append(None)
+                            self.heatmaps.append(row)
 
+                        # self.view.setModel(self.model)
+                        self.model.update_data(self.heatmaps, self.horizontal_headers, self.vertical_headers)
+
+                    else:
+                        self.setVisible(False)
                 else:
                     self.setVisible(False)
-            else:
-                self.setVisible(False)
-
+        except:
+            self._process_spillover_change()
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Wheel:
