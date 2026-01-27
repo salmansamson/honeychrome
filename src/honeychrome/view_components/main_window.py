@@ -317,6 +317,7 @@ class MainWindow(QMainWindow):
     def populate_recent_menu(self, recent_menu: QMenu):
         recent_menu.clear()  # Clear old actions before repopulating
         recent_files = q_settings.value("recent_files", [])
+        recent_files = [file for file in recent_files if Path(file).exists()]
 
         if not recent_files:
             # Add disabled placeholder
