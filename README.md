@@ -61,6 +61,7 @@ We also welcome anyone wishing to contribute to and improve the software!
 
 We will shortly release documentation for programmers wishing to build on Honeychrome in
 new open source cytometry projects. In the meantime, please contact us if you require assistance.
+
 Honeychrome builds on several great open source Python packages:
 - [FlowKit](https://github.com/whitews/flowkit) - for definition of gates, gating hierarchies, transforms, and FCS input/output
 - [PySide6](https://pypi.org/project/PySide6/) - the GUI system, Qt for Python
