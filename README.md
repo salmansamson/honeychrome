@@ -43,7 +43,7 @@ We intend to release a MacOS executable very soon. For all other systems, please
 ### For Python users: clone and run Python source
 1. Clone or download the repository, navigate to the project folder. 
 2. Install Python (or make sure you have already installed) version >= 3.12
-3. Install a venv: python3 -m venv venv
+3. Install a venv: python3 -m venv .venv
 4. Upgrade pip: python3 -m pip install --upgrade pip
 5. Install requirements: python3 -m pip install -r requirements.txt
 6. Run the app: python3 src/honeychrome/main.py

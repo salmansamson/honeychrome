@@ -58,9 +58,8 @@ class StatisticsCalculator(QObject):
                 raw_event_data = sample.get_events(source='raw')
                 n_events = sample.event_count
 
+                data_by_sample[samples_to_calculate[n]] = {'Sample': sample_name, 'Group': group_name, 'Category': category_name, 'Statistics': {}}
                 if n_events > 0:
-                    data_by_sample[samples_to_calculate[n]] = {'Sample':sample_name, 'Group':group_name, 'Category':category_name, 'Statistics':{}}
-
                     unmixed_event_data = apply_transfer_matrix(self.controller.transfer_matrix, raw_event_data)
                     data_for_statistics_comparison.update({'event_data': unmixed_event_data})
 
@@ -104,11 +103,17 @@ class StatisticsCalculator(QObject):
             for m, statistics_comparison in enumerate(experiment_statistics):
                 data_list = []
                 for sample in samples_by_set[sample_sets[m]]:
+                    key = (statistics_comparison['gate'], statistics_comparison['statistic'])
+                    if key in data_by_sample[sample]['Statistics'].keys():
+                        value = data_by_sample[sample]['Statistics'][key]
+                    else:
+                        value = np.nan
+
                     data_list.append({
                         'Sample': data_by_sample[sample]['Sample'],
                         'Group': data_by_sample[sample]['Group'],
                         'Category': data_by_sample[sample]['Category'],
-                        statistics_comparison['statistic']: data_by_sample[sample]['Statistics'][(statistics_comparison['gate'],statistics_comparison['statistic'])]
+                        statistics_comparison['statistic']: value
                     })
 
                 data_dict_of_lists = {}
@@ -117,15 +122,15 @@ class StatisticsCalculator(QObject):
                         data_dict_of_lists.setdefault(key, []).append(value)
 
                 statistics_comparison['data'] = data_dict_of_lists
-
-                depth = 3
-                if None in statistics_comparison['data']['Category'] or len(set(statistics_comparison['data']['Category']))==1:
-                    statistics_comparison['data'].pop('Category')
-                    depth = 2
-                if None in statistics_comparison['data']['Group'] or len(set(statistics_comparison['data']['Group']))==1:
-                    statistics_comparison['data'].pop('Group')
-                    depth = 1
-                statistics_comparison['depth'] = depth
+                if statistics_comparison['data']: # empty if there are no samples
+                    depth = 3
+                    if None in statistics_comparison['data']['Category'] or len(set(statistics_comparison['data']['Category']))==1:
+                        statistics_comparison['data'].pop('Category')
+                        depth = 2
+                    if None in statistics_comparison['data']['Group'] or len(set(statistics_comparison['data']['Group']))==1:
+                        statistics_comparison['data'].pop('Group')
+                        depth = 1
+                    statistics_comparison['depth'] = depth
 
             logger.info(f'StatisticsCalculator: calculated statistics {json.dumps(experiment_statistics, indent=2)}')
 

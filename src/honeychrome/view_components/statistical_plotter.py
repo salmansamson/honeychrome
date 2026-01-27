@@ -118,7 +118,10 @@ class StatisticalComparisonWidget(QWidget):
         self.sample_set_combo.addItem("Select Sample Set:")  # placeholder for "no selection"
         source_folder = str(self.controller.experiment_dir / self.controller.experiment.settings['raw']['raw_samples_subdirectory'])
         self.folders = get_all_subfolders_recursive(source_folder, self.controller.experiment_dir)
-        sample_sets = [str(f.relative_to(self.controller.experiment.settings['raw']['raw_samples_subdirectory'])) for f in self.folders]
+        all_samples = self.controller.experiment.samples['all_samples']
+        samples_by_folder = {str(folder): [sample for sample in all_samples if sample.startswith(str(folder))] for folder in self.folders}
+        self.folders = [folder for folder in self.folders if samples_by_folder[str(folder)]]
+        sample_sets = [str(folder.relative_to(self.controller.experiment.settings['raw']['raw_samples_subdirectory'])) for folder in self.folders]
         sample_sets[0] = '[All FCS files in experiment folder]'
         self.sample_set_combo.addItems(sample_sets)
 
@@ -135,9 +138,8 @@ class StatisticalComparisonWidget(QWidget):
             self.initialise()
 
     def add_statistics_plot(self, statistics_comparison):
-        if statistics_comparison['data']:
-            plot_widget = StatisticsPlotWidget(statistics_comparison, self.controller, parent=self)
-            self.statistical_plots_container_layout.addWidget(plot_widget)
+        plot_widget = StatisticsPlotWidget(statistics_comparison, self.controller, parent=self)
+        self.statistical_plots_container_layout.addWidget(plot_widget)
 
     def on_sample_set_selected(self, text: str):
         if text != 'Select Sample Set:':
@@ -312,81 +314,88 @@ class StatisticsPlotWidget(QWidget):
         # Clean appearance for publication-like aesthetics
         sns.set_theme(style="whitegrid", font_scale=1.2)
 
-        ax = self.figure.add_subplot(111)
 
-        if self.statistics_comparison['depth'] == 3:
-            x = 'Category'
-            hue = 'Group'
-            palette = None
-        elif self.statistics_comparison['depth'] == 2:
-            if self.statistics_comparison['plot_type'] == 'Box and Whisker Chart':
-                x = 'Group'
-                hue = None
+        if self.statistics_comparison['data']:
+            ax = self.figure.add_subplot(111)
+            if self.statistics_comparison['depth'] == 3:
+                x = 'Category'
+                hue = 'Group'
                 palette = None
+            elif self.statistics_comparison['depth'] == 2:
+                if self.statistics_comparison['plot_type'] == 'Box and Whisker Chart':
+                    x = 'Group'
+                    hue = None
+                    palette = None
+                else:
+                    x = 'Group'
+                    hue = 'Sample'
+                    palette = None
             else:
-                x = 'Group'
-                hue = 'Sample'
-                palette = None
+                x = 'Sample'
+                hue = None
+                palette = 'Set2'
+
+            max_length = max([len(x_label) for x_label in self.statistics_comparison['data'][x]])
+            if max_length > 20:
+                rotation = 60
+            elif max_length > 16:
+                rotation = 40
+            elif max_length > 12:
+                rotation = 20
+            else:
+                rotation = 0
+
+            y = self.statistics_comparison['statistic']
+
+            if self.statistics_comparison['plot_type'] == 'Box and Whisker Chart':
+                sns.boxplot(
+                    data=self.statistics_comparison['data'],
+                    x=x,
+                    y=y,
+                    hue=hue,
+                    showfliers=True,
+                    width=0.6,
+                    palette="Set2",
+                    ax=ax,
+                )
+            else:
+                sns.barplot(
+                    data=self.statistics_comparison['data'],
+                    x=x,
+                    y=y,
+                    hue=hue,
+                    width=0.6,
+                    palette=palette,
+                    ax=ax,
+                )
+
+            if self.statistics_comparison['depth'] == 3 or (self.statistics_comparison['depth'] == 2 and self.statistics_comparison['plot_type'] == 'Box and Whisker Chart'):
+                sns.swarmplot(
+                    data=self.statistics_comparison['data'],
+                    x=x,
+                    y=y,
+                    hue=hue,
+                    dodge=True,
+                    color="k",
+                    alpha=0.55,
+                    size=10,
+                    ax=ax,
+                )
+
+            # Remove duplicate legends (swarmplot adds more)
+            handles, labels = ax.get_legend_handles_labels()
+
+            if hue:
+                indices = [labels.index(label) for label in set(labels)]
+                ax.legend([handles[index] for index in indices], [labels[index] for index in indices], title=hue, bbox_to_anchor=(1.05, 1), loc="upper left")
+
+            # ax.set_xticklabels(ax.get_xticklabels(), rotation=rotation, ha='right')
+            ax.tick_params(axis='x', rotation=rotation, labelrotation=rotation)
+            ax.set_xlabel("")
+            ax.set_title(self.statistics_comparison['gate'])
+
         else:
-            x = 'Sample'
-            hue = None
-            palette = 'Set2'
-
-        max_length = max([len(x_label) for x_label in self.statistics_comparison['data'][x]])
-        if max_length > 12:
-            rotation = 15
-        else:
-            rotation = 0
-
-        y = self.statistics_comparison['statistic']
-
-        if self.statistics_comparison['plot_type'] == 'Box and Whisker Chart':
-            sns.boxplot(
-                data=self.statistics_comparison['data'],
-                x=x,
-                y=y,
-                hue=hue,
-                showfliers=True,
-                width=0.6,
-                palette="Set2",
-                ax=ax,
-            )
-        else:
-            sns.barplot(
-                data=self.statistics_comparison['data'],
-                x=x,
-                y=y,
-                hue=hue,
-                width=0.6,
-                palette=palette,
-                ax=ax,
-            )
-
-        if self.statistics_comparison['depth'] == 3 or (self.statistics_comparison['depth'] == 2 and self.statistics_comparison['plot_type'] == 'Box and Whisker Chart'):
-            sns.swarmplot(
-                data=self.statistics_comparison['data'],
-                x=x,
-                y=y,
-                hue=hue,
-                dodge=True,
-                color="k",
-                alpha=0.55,
-                size=10,
-                ax=ax,
-            )
-
-        # Remove duplicate legends (swarmplot adds more)
-        handles, labels = ax.get_legend_handles_labels()
-
-        if hue:
-            indices = [labels.index(label) for label in set(labels)]
-            ax.legend([handles[index] for index in indices], [labels[index] for index in indices], title=hue, bbox_to_anchor=(1.05, 1), loc="upper left")
-
-        # ax.set_xticklabels(ax.get_xticklabels(), rotation=rotation, ha='right')
-        ax.tick_params(axis='x', rotation=rotation, labelrotation=rotation)
-        ax.set_xlabel("")
-
-        ax.set_title(self.statistics_comparison['gate'])
+            self.figure.suptitle('No samples in selected sample set!', color='red')
 
         self.canvas.draw()
 
