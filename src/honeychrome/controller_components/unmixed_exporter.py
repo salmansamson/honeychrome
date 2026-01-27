@@ -11,6 +11,9 @@ from honeychrome.controller_components.functions import apply_transfer_matrix, e
 import honeychrome.settings as settings
 from honeychrome.view_components.busy_cursor import with_busy_cursor
 
+import logging
+logger = logging.getLogger(__name__)
+
 class UnmixedExporter(QObject):
     finished = Signal()
 
@@ -56,7 +59,7 @@ class UnmixedExporter(QObject):
 
 
             for n, sample_path in enumerate(samples_to_calculate):
-                print(f'UnmixedExporter: sample {n+1}/{len(samples_to_calculate)}')
+                logger.info(f'UnmixedExporter: sample {n+1}/{len(samples_to_calculate)}')
                 if self.bus:
                     self.bus.progress.emit(n, len(samples_to_calculate))
 
@@ -75,7 +78,7 @@ class UnmixedExporter(QObject):
                     unmixed_event_data_without_fine_tuning = apply_transfer_matrix(transfer_matrix, raw_event_data)
                     export_unmixed_sample(sample_name, full_unmixed_sample_path.parent, unmixed_event_data_without_fine_tuning, pnn_unmixed, spillover, subsample=self.subsample)
 
-            print(f'UnmixedExporter: finished')
+            logger.info(f'UnmixedExporter: finished')
 
             if self.bus:
                 self.bus.progress.emit(len(samples_to_calculate), len(samples_to_calculate))

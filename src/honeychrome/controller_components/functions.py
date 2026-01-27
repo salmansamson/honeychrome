@@ -5,11 +5,13 @@ from queue import Empty
 from time import perf_counter
 from functools import wraps
 from pathlib import Path
-
 from honeychrome.controller_components.transform import Transform
 from honeychrome.settings import linear_a, logicle_w, logicle_m, logicle_a, log_m
 
 q_settings = QSettings("honeychrome", "ExperimentSelector")
+
+import logging
+logger = logging.getLogger(__name__)
 
 def sample_from_fcs(path, bus=None):
     try:
@@ -18,7 +20,7 @@ def sample_from_fcs(path, bus=None):
 
         sample = Sample(path)
     except KeyError as e:
-        print(f'Controller: FlowIO reports FCS file does not conform to standards. Missing {e}. Attempting to load with use_header_offsets and ignore_offset_error set')
+        logging.warning(f'Controller: FlowIO reports FCS file does not conform to standards. Missing {e}. Attempting to load with use_header_offsets and ignore_offset_error set')
         sample = Sample(path, use_header_offsets=True, ignore_offset_error=True)
 
     return sample
@@ -79,7 +81,7 @@ def timer(func):
         result = func(*args, **kwargs)
         end_time = perf_counter()
         execution_time = end_time - start_time
-        print(f"Function '{func.__name__}' executed in {execution_time:0.6f} seconds")
+        logging.info(f"Function '{func.__name__}' executed in {execution_time:0.6f} seconds")
         return result
     return wrapper
 

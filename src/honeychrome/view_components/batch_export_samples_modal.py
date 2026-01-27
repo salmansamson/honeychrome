@@ -6,6 +6,8 @@ import sys
 
 from honeychrome.controller_components.functions import get_all_subfolders_recursive
 
+import logging
+logger = logging.getLogger(__name__)
 
 class BatchExportSamplesModal(QDialog):
     def __init__(self, parent=None, bus=None, path=None, experiment_dir=None):
@@ -76,7 +78,7 @@ class BatchExportSamplesModal(QDialog):
         """Standard submit (dialog closes)."""
         folder = self.get_subfolder()
         subsample = self.subsample_checkbox.isChecked()
-        print(f'BatchExportSamples: {folder}, subsample {subsample}')
+        logger.info(f'BatchExportSamples: {folder}, subsample {subsample}')
         if self.bus is not None:
             self.bus.batchExportRequested.emit(str(folder), subsample)
         self.accept()

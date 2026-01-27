@@ -13,6 +13,10 @@ from honeychrome.controller_components.spectral_librarian import SpectralLibrary
 from honeychrome.experiment_model import check_fcs_matches_experiment
 from honeychrome.view_components.busy_cursor import with_busy_cursor
 
+
+import logging
+logger = logging.getLogger(__name__)
+
 # connect to spectral library
 spectral_library = SpectralLibrary()
 
@@ -229,8 +233,8 @@ class SpectralAutoGenerator(QObject):
             if self.bus:
                 self.bus.updateRois.emit('raw', index)
 
-        print('SpectralAutoGenerator: regenerated spectral model and raw gating hierarchy:')
-        print(self.raw_gating.get_gate_hierarchy())
+        logger.info('SpectralAutoGenerator: regenerated spectral model and raw gating hierarchy:')
+        logger.info(self.raw_gating.get_gate_hierarchy())
 
         if self.bus:
             # self.bus.changedGatingHierarchy.emit('raw', 'root')

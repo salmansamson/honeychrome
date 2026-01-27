@@ -12,10 +12,14 @@ from honeychrome.controller_components.spectral_functions import sanitise_contro
 from honeychrome.view_components.icon_loader import icon
 from honeychrome.settings import spectral_model_column_labels, heading_style
 
+import logging
+logger = logging.getLogger(__name__)
+
 COLUMNS = list(spectral_model_column_labels.keys())
 CONTROL_TYPES = ["Single Stained Spectral Control", "Single Stained Spectral Control from Library", "Channel Assignment"]
 PARTICLE_TYPES = ["Beads", "Cells"]
 NEGATIVE_TYPES = ["Internal Negative", "Unstained Negative"]
+
 
 
 class ResizingTable(QTableView):
@@ -315,7 +319,7 @@ class SpectralControlsEditor(QFrame):
             self.controller.experiment.process['negative_type'] = 'internal'
             self.negatives_combo.setCurrentText('Using internal negatives')
             self.negatives_combo.setToolTip('Negative set to bottom percentile of each control sample')
-        print(f'SpectralModelEditor: set negative type to {self.controller.experiment.process['negative_type']}')
+        logger.info(f'SpectralModelEditor: set negative type to {self.controller.experiment.process['negative_type']}')
 
     def set_fluorescence_channel_filter(self):
         if self.model.rowCount():
@@ -337,7 +341,7 @@ class SpectralControlsEditor(QFrame):
         else:
             self.controller.experiment.process['fluorescence_channel_filter'] = 'area_only'
             self.fluorescence_channel_filter_combo.setToolTip('Ignoring height channels in spectral model')
-        print(f'SpectralModelEditor: set fluorescence channel filter to {self.controller.experiment.process['fluorescence_channel_filter']}')
+        logger.info(f'SpectralModelEditor: set fluorescence channel filter to {self.controller.experiment.process['fluorescence_channel_filter']}')
 
         if self.bus:
             self.bus.spectralModelUpdated.emit()
@@ -585,7 +589,7 @@ class SpectralControlsEditor(QFrame):
         if control_valid:
             self.bus.showSelectedProfiles.emit([control['label']])
             self.bus.spectralModelUpdated.emit()
-        print(f'SpectralModelEditor: updated {'valid' if control_valid else 'invalid'} control {control}')
+        logger.info(f'SpectralModelEditor: updated {'valid' if control_valid else 'invalid'} control {control}')
 
     @Slot()
     def _on_force_recalc(self):
@@ -598,7 +602,7 @@ class SpectralControlsEditor(QFrame):
 
         self.bus.spectralModelUpdated.emit()
         self.refresh_table_and_enable()
-        print(f'SpectralModelEditor: forced recalculation')
+        logger.info(f'SpectralModelEditor: forced recalculation')
 
 
     @Slot(list)

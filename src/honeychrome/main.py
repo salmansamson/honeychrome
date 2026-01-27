@@ -66,20 +66,19 @@ import logging
 import warnings
 
 
-class StreamToLogger(object):
-    """Redirect a stream (stdout/stderr) to a logger."""
-    def __init__(self, logger, level):
-        self.logger = logger
-        self.level = level
-        self.buffer = ""
-
-    def write(self, message):
-        if message.rstrip():
-            self.logger.log(self.level, message.rstrip())
-
-    def flush(self):
-        pass
-
+# class StreamToLogger(object):
+#     """Redirect a stream (stdout/stderr) to a logger."""
+#     def __init__(self, logger, level):
+#         self.logger = logger
+#         self.level = level
+#         self.buffer = ""
+#
+#     def write(self, message):
+#         if message.rstrip():
+#             self.logger.log(self.level, message.rstrip())
+#
+#     def flush(self):
+#         pass
 
 def setup_logging(log_file):
     """Set up logging to both console and file, and capture all output."""
@@ -87,7 +86,6 @@ def setup_logging(log_file):
     # Create logger
     logger = logging.getLogger()
     # logger = logging.getLogger(__name__)  # Only logs from this file
-    logging.getLogger('matplotlib').setLevel(logging.WARNING)
     logger.setLevel(logging.DEBUG)
     logger.handlers.clear()
 
@@ -100,17 +98,13 @@ def setup_logging(log_file):
     console_handler.setFormatter(formatter)
 
     # File handler
-    file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
+    file_handler = logging.FileHandler(log_file, mode='a')
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
 
     # Add handlers
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
-
-    # Redirect stdout and stderr
-    sys.stdout = StreamToLogger(logger, logging.INFO)
-    sys.stderr = StreamToLogger(logger, logging.ERROR)
 
     # Redirect warnings module to logging
     logging.captureWarnings(True)
@@ -252,11 +246,11 @@ def main():
     '''
     start QT application
     '''
-    print('***** Started Honeychrome *****')
+    logger.info('***** Started Honeychrome *****')
     exit_code = app.exec()
 
     # end processes, free memory
-    print('***** Quitting Honeychrome *****')
+    logger.info('***** Quitting Honeychrome *****')
     controller.quit_instrument_quit_analyser()
     trace_analyser.join()
     instrument.join()

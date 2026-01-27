@@ -20,6 +20,8 @@ from honeychrome.view_components.heatmap_viewedit import HeatmapViewEditor
 from honeychrome.view_components.nxn_grid import NxNGrid
 from honeychrome.view_components.profiles_viewer import ProfilesViewer
 
+import logging
+logger = logging.getLogger(__name__)
 
 def resize_tableview(widget):
     table = widget.view
@@ -119,7 +121,7 @@ class ReportGenerator(QObject):
     @with_busy_cursor
     def export(self):
         current_sample = self.controller.current_sample
-        print(f'ReportGenerator: started {current_sample}')
+        logger.info(f'ReportGenerator: started {current_sample}')
 
         # Do some checks
         if not current_sample:
@@ -166,7 +168,7 @@ class ReportGenerator(QObject):
         try:
             desc += f"Sample acquired: {current_sample.get_metadata()['date']}; begin time: {current_sample.get_metadata()['btim']}; end time: {current_sample.get_metadata()['etim']}"
         except:
-            print('No acquisition date in metadata')
+            logger.info('No acquisition date in metadata')
         doc.add_paragraph(desc)
 
         self.bus.statusMessage.emit(f'ReportGenerator: added header')
@@ -315,7 +317,7 @@ class ReportGenerator(QObject):
         self.controller.set_mode(current_mode)
         pg.setConfigOptions(background=old_bg, foreground=old_fg)
 
-        print(f'ReportGenerator: finished {docx_path}')
+        logger.info(f'ReportGenerator: finished {docx_path}')
         self.bus.statusMessage.emit(f'ReportGenerator: exported {docx_path}')
         self.bus.popupMessage.emit(f"Exported report: {docx_path}")
         self.finished.emit()

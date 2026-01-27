@@ -9,6 +9,9 @@ from honeychrome.view_components.cytometry_plot_widget import CytometryPlotWidge
 from honeychrome.view_components.cytometry_toolbar_popout import CytometryToolbarPopout
 from honeychrome.view_components.new_plot_widget import NewPlotWidget
 
+import logging
+logger = logging.getLogger(__name__)
+
 class CytometryGridWidget(QScrollArea):
     def __init__(self, bus=None, mode=None, gating_tree=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -82,7 +85,7 @@ class CytometryGridWidget(QScrollArea):
         layout.addWidget(cytometry_toolbar_popout)
         plot_widget._mouse_events_enabled = False
         layout.addWidget(plot_widget)
-        print(f'CytometryGridWidget: popped out plot {plot_widget.n_in_plot_sequence}')
+        logger.info(f'CytometryGridWidget: popped out plot {plot_widget.n_in_plot_sequence}')
 
         # Add close button
         close_btn = QPushButton("Pop back in")
@@ -148,7 +151,7 @@ class CytometryGridWidget(QScrollArea):
         if mode == self.mode:
             n_in_plot_sequence = len(self.data_for_cytometry_plots['plots'])-1
             plot = self.data_for_cytometry_plots['plots'][-1]
-            print(f'CytometryGridWidget {self.mode}: new plot {n_in_plot_sequence}, {self.data_for_cytometry_plots['plots'][n_in_plot_sequence]}')
+            logger.info(f'CytometryGridWidget {self.mode}: new plot {n_in_plot_sequence}, {self.data_for_cytometry_plots['plots'][n_in_plot_sequence]}')
             new_widget = CytometryPlotWidget(bus=self.bus, mode=self.mode, n_in_plot_sequence=n_in_plot_sequence, plot=plot,
                                              data_for_cytometry_plots=self.data_for_cytometry_plots, parent=self.container)
             self.plot_widgets.append(new_widget)
@@ -184,7 +187,7 @@ class CytometryGridWidget(QScrollArea):
                 if msg_box.clickedButton() == yes_button:
                     self.proceed_to_delete_plot()
                 else:
-                    print("Action cancelled")
+                    logger.info("Action cancelled")
             else:
                 self.proceed_to_delete_plot()
 
@@ -255,7 +258,7 @@ class CytometryGridWidget(QScrollArea):
                 elif self.n_columns > 10:
                     self.n_columns = 10
 
-                print(f'Cytometry Grid Widget: setting width to {self.n_columns} columns')
+                logger.info(f'Cytometry Grid Widget: setting width to {self.n_columns} columns')
 
                 # # Create container widget
                 # if self.container is not None:

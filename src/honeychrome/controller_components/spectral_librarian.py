@@ -29,8 +29,12 @@ class SpectralLibrary:
         library_deposit['experiment_root_directory'] = experiment_dir  # Same value for all rows
         library_deposit['timestamp'] = timestamp()
 
-        with sqlite3.connect(self.library_path) as conn:
+
+        conn = sqlite3.connect(self.library_path)
+        try:
             library_deposit.to_sql('spectral_controls_history', conn, if_exists='append', index=True, index_label='label')
+        finally:
+            conn.close()
 
     def load_history(self):
         from pandas import read_sql
@@ -41,8 +45,19 @@ class SpectralLibrary:
 
     def search_for_label(self, label):
         from pandas import read_sql
-        with sqlite3.connect(self.library_path) as conn:
-            results = read_sql('SELECT * FROM spectral_controls_history WHERE label = :label ORDER BY timestamp DESC', conn, params={'label': label}).to_dict('index')
+
+        conn = sqlite3.connect(self.library_path)
+        try:
+            results = read_sql(
+                'SELECT * FROM spectral_controls_history WHERE label = :label ORDER BY timestamp DESC',
+                conn,
+                params={'label': label}
+            ).to_dict('index')
+        finally:
+            conn.close()
+
+        # with sqlite3.connect(self.library_path) as conn:
+        #     results = read_sql('SELECT * FROM spectral_controls_history WHERE label = :label ORDER BY timestamp DESC', conn, params={'label': label}).to_dict('index')
 
         return results
 

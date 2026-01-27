@@ -6,6 +6,8 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QTreeView, QWidget, QV
                                QMessageBox)
 from PySide6.QtCore import Qt, QAbstractItemModel, QModelIndex, Slot, QMimeData
 
+import logging
+logger = logging.getLogger(__name__)
 
 class TreeItem:
     def __init__(self, name, event_count, p_root, p_parent, event_conc, parent=None):
@@ -408,13 +410,13 @@ class GatingHierarchyWidget(QWidget):
             self.gating_hierarchy = self.data_for_cytometry_plots['gating'].get_gate_hierarchy(output='dict')
             self.model.set_dict(self.gating_hierarchy, self.data_for_cytometry_plots['statistics'])
             self.tree_view.expandAll()
-            print(f'GatingTree {self.mode}: hierarchy refreshed')
+            logger.info(f'GatingTree {self.mode}: hierarchy refreshed')
 
     @Slot(str)
     def update_data(self, mode):
         if mode == self.mode:
             self.model.update_statistics(self.data_for_cytometry_plots['statistics'])
-            print(f'GatingTree {self.mode} updated stats')
+            logger.info(f'GatingTree {self.mode} updated stats')
 
 
 if __name__ == "__main__":

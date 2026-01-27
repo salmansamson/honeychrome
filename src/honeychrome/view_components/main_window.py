@@ -31,6 +31,8 @@ from honeychrome.view_components.help_texts import process_help_text
 
 base_directory = Path.home() / experiments_folder
 
+import logging
+logger = logging.getLogger(__name__)
 
 def clear_layout(widget):
     """Safely clear all widgets from current layout"""
@@ -346,7 +348,7 @@ class MainWindow(QMainWindow):
 
     def on_tab_changed(self, index):
         tab_name = self.tabs.tabText(index)
-        print(f'View: tab changed {tab_name}')
+        logger.info(f'View: tab changed {tab_name}')
         self.bus.modeChangeRequested.emit(tab_name)
 
     def closeEvent(self, event):

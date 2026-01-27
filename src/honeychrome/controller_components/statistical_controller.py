@@ -9,6 +9,8 @@ from PySide6.QtCore import QObject, Signal, QTimer
 from honeychrome.controller_components.functions import timer, apply_gates_in_place, apply_transfer_matrix, calc_stats, sample_from_fcs
 from honeychrome.view_components.busy_cursor import with_busy_cursor
 
+import logging
+logger = logging.getLogger(__name__)
 
 class StatisticsCalculator(QObject):
     finished = Signal()
@@ -33,7 +35,7 @@ class StatisticsCalculator(QObject):
             # set up data first by sample
             data_by_sample = {}
             for n in range(len(samples_to_calculate)):
-                print(f'StatisticsCalculator: sample {n+1}/{len(samples_to_calculate)}')
+                logger.info(f'StatisticsCalculator: sample {n+1}/{len(samples_to_calculate)}')
                 if self.bus:
                     self.bus.progress.emit(n, len(samples_to_calculate))
 
@@ -125,7 +127,7 @@ class StatisticsCalculator(QObject):
                     depth = 1
                 statistics_comparison['depth'] = depth
 
-            print(f'StatisticsCalculator: calculated statistics {json.dumps(experiment_statistics, indent=2)}')
+            logger.info(f'StatisticsCalculator: calculated statistics {json.dumps(experiment_statistics, indent=2)}')
 
             if self.bus:
                 self.bus.progress.emit(len(samples_to_calculate), len(samples_to_calculate))

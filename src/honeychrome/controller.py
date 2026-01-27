@@ -49,6 +49,9 @@ from honeychrome.view_components.busy_cursor import with_busy_cursor
 
 base_directory = Path.home() / experiments_folder
 
+import logging
+logger = logging.getLogger(__name__)
+
 class Controller(QObject):
     def __init__(self,
         events_cache_name=None,
@@ -135,7 +138,7 @@ class Controller(QObject):
         experiment_path = Path(experiment_path).with_suffix('.kit')
         if template_path is not None:
             self.experiment.load(template_path)
-            print(f'Controller: template loaded {template_path}')
+            logger.info(f'Controller: template loaded {template_path}')
             self.experiment.experiment_path = str(experiment_path)
             self.experiment.save()
         else:
@@ -145,7 +148,7 @@ class Controller(QObject):
         self.experiment_dir = self.experiment.generate_subdirs()
         self.current_mode = 'raw'
         self.initialise_ephemeral_data()
-        print(f'Controller: new experiment created {self.experiment_dir}')
+        logger.info(f'Controller: new experiment created {self.experiment_dir}')
 
     def load_experiment(self, experiment_path):
         self.experiment.load(experiment_path)
@@ -154,7 +157,7 @@ class Controller(QObject):
 
         self.current_mode = 'raw'
         self.initialise_ephemeral_data()
-        print(f'Controller: experiment loaded {self.experiment_dir}')
+        logger.info(f'Controller: experiment loaded {self.experiment_dir}')
 
         # # load first sample in order: #legacy: consider reinstate autoload of first sample
         # if sample_list:
@@ -176,7 +179,7 @@ class Controller(QObject):
 
         if not experiment_path:
             self.experiment.save()
-            print(f'Controller: experiment saved {self.experiment_dir}')
+            logger.info(f'Controller: experiment saved {self.experiment_dir}')
             if self.bus:
                 QTimer.singleShot(100, lambda: self.bus.statusMessage.emit(f'Autosaved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}'))
 
@@ -188,7 +191,7 @@ class Controller(QObject):
             experiment_template.samples = samples_default.copy()
             experiment_template.save()
             add_recent_file(experiment_path)
-            print(f'Controller: experiment template saved {experiment_path}')
+            logger.info(f'Controller: experiment template saved {experiment_path}')
             if self.bus:
                 self.bus.popupMessage.emit(f'Experiment saved as a template: {experiment_path}'
                                            f'\n\n'
@@ -404,7 +407,7 @@ class Controller(QObject):
                     if gate.lower() in unmixed_gate_names:
                         source_gate = gate
                         break
-                print(f'Controller: using {source_gate} as base gate for process NxN plots')
+                logger.info(f'Controller: using {source_gate} as base gate for process NxN plots')
                 process_plots = define_process_plots(self.experiment.settings['unmixed']['fluorescence_channels'], self.experiment.settings['unmixed']['fluorescence_channels'], source_gate=source_gate)
             else:
                 self.unmixed_gating = None
@@ -526,7 +529,7 @@ class Controller(QObject):
 
     @with_busy_cursor
     def load_sample(self, sample_path):
-        print(f'Controller: loading sample {sample_path}')
+        logger.info(f'Controller: loading sample {sample_path}')
         if check_fcs_matches_experiment(self.experiment_dir / sample_path, self.experiment.settings['raw']['event_channels_pnn'], self.experiment.settings['raw']['magnitude_ceiling']):
             self.current_sample_path = sample_path
             self.current_sample = sample_from_fcs(self.experiment_dir / self.current_sample_path, self.bus)
@@ -560,14 +563,14 @@ class Controller(QObject):
 
     @Slot()
     def on_gain_change(self, ch_name, value):
-        print(f"{ch_name} gain changed to {value}")
+        logger.info(f"{ch_name} gain changed to {value}")
 
 
     def connect_instrument(self):
         self.pipe_connection_instrument.send({'command': 'connect'})
         response = self.pipe_connection_instrument.recv()
         #TODO self.view.display_instrument_status(response)
-        print(response)
+        logger.info(response)
 
     @Slot()
     def start_acquisition(self):
@@ -590,29 +593,29 @@ class Controller(QObject):
         # start acquisition on instrument
         self.pipe_connection_instrument.send({'command': 'start'})
         response = self.pipe_connection_instrument.recv()
-        print(response)
+        logger.info(response)
 
         # start analyser (flush cache and start analysing incoming traces and producing events)
         self.pipe_connection_analyser.send({'command': 'start'})
         response = self.pipe_connection_analyser.recv()
-        print(response)
+        logger.info(response)
 
         if self.bus:
             self.bus.statusMessage.emit(f'Acquisition started')
 
-        print('Controller: acquisition started')
+        logger.info('Controller: acquisition started')
 
     @Slot()
     def stop_acquisition(self):
         # stop instrument
         self.pipe_connection_instrument.send({'command': 'stop'})
         response = self.pipe_connection_instrument.recv()
-        print(response)
+        logger.info(response)
 
         # stop analyser
         self.pipe_connection_analyser.send({'command': 'stop'})
         response = self.pipe_connection_analyser.recv()
-        print(response)
+        logger.info(response)
 
         if self.bus:
             self.bus.statusMessage.emit(f'Acquisition stopped')
@@ -621,7 +624,7 @@ class Controller(QObject):
         self.stop_live_data_processing.set()
         time.sleep(0.25)
         while self.thread.is_alive():
-            print('Controller: waiting until live data processing is complete')
+            logger.info('Controller: waiting until live data processing is complete')
             time.sleep(0.25)
         self.thread.join()
 
@@ -638,7 +641,7 @@ class Controller(QObject):
 
         # empty oscilloscope traces queue
         removed = empty_queue_nowait(self.oscilloscope_traces_queue)
-        print(f"Controller: emptied oscilloscope traces queue ({removed} traces)")
+        logger.info(f"Controller: emptied oscilloscope traces queue ({removed} traces)")
 
         # update experiment file samples list
         self.experiment.samples['all_sample_nevents'][self.current_sample_path] = self.current_sample.event_count
@@ -652,17 +655,17 @@ class Controller(QObject):
         self.pipe_connection_instrument.send({'command': 'set', 'data': 'TODO insert settings update here'})
         response = self.pipe_connection_instrument.recv()
 
-        print(response)
+        logger.info(response)
         # TODO self.view.display_instrument_status(response)
 
     def quit_instrument_quit_analyser(self):
         self.pipe_connection_analyser.send({'command': 'quit'})  # quit analyser
         response = self.pipe_connection_analyser.recv()
-        print(response)
+        logger.info(response)
 
         self.pipe_connection_instrument.send({'command': 'quit'})  # quit instrument
         response = self.pipe_connection_instrument.recv()
-        print(response)
+        logger.info(response)
 
     def copy_live_data(self, extent='all'):
         with self.index_head_events_cache.get_lock():
@@ -679,19 +682,19 @@ class Controller(QObject):
 
         if events_tail > start:
             with self.events_cache_lock:
-                print(f'Controller: copying live data {[start, events_tail]}')
+                logger.info(f'Controller: copying live data {[start, events_tail]}')
                 data = self.events_cache[start:events_tail, :].astype(np.float64)
                 data[:,self.experiment.settings['raw']['time_channel_id']] /= 1000 #convert to seconds
 
             # update head of traces cache and tail of events cache
             events_head_new = events_tail
-            print(f'Controller: processed {n_new_events} events (events cache head:{events_head}, tail:{events_tail})')
+            logger.info(f'Controller: processed {n_new_events} events (events cache head:{events_head}, tail:{events_tail})')
 
             with self.index_head_events_cache.get_lock():
                 self.index_head_events_cache.value = events_head_new
         else:
             data = None
-            print(f'Controller: awaiting events (events cache head:{events_head}, tail:{events_tail})')
+            logger.info(f'Controller: awaiting events (events cache head:{events_head}, tail:{events_tail})')
 
         return data, n_new_events
 
@@ -699,7 +702,7 @@ class Controller(QObject):
     @Slot(str)
     def set_mode(self, tab_name):
         # select set of plots: raw, process or unmixed
-        print(f"Controller: set mode to {tab_name}")
+        logger.info(f"Controller: set mode to {tab_name}")
         if tab_name == 'Raw Data':
             self.current_mode = 'raw'
             self.data_for_cytometry_plots = self.data_for_cytometry_plots_raw
@@ -755,7 +758,7 @@ class Controller(QObject):
                 self.bus.statusMessage.emit(f'Calculating {len(self.data_for_cytometry_plots['plots'])} histograms...')
             self.calc_hists_and_stats(status_message_signal=(self.bus.statusMessage if self.bus else None))
 
-            print(f'Controller: prepared hists and stats, mode: {self.current_mode}')
+            logger.info(f'Controller: prepared hists and stats, mode: {self.current_mode}')
             if self.bus:
                 self.bus.statusMessage.emit(f'Ready.')
 
@@ -773,7 +776,7 @@ class Controller(QObject):
             self.data_for_cytometry_plots['histograms'] = initialise_hists(self.data_for_cytometry_plots['plots'], self.data_for_cytometry_plots)
             gates_to_calculate = list(set(self.data_for_cytometry_plots['lookup_tables'].keys()) - set(self.data_for_cytometry_plots['gate_membership'].keys()) | {'root'})
             self.calc_hists_and_stats(gates_to_calculate=gates_to_calculate)
-            print(f'Controller: prepared hists for process plots')
+            logger.info(f'Controller: prepared hists for process plots')
 
     @Slot(str, str)
     def create_new_plot(self, channel_x, channel_y):
@@ -788,13 +791,13 @@ class Controller(QObject):
         plots.append(new_plot)
         if self.bus is not None:
             self.bus.showNewPlot.emit(self.current_mode)
-            print(f'Controller: signal emitted showNewPlot for plot={len(plots)-1}')
+            logger.info(f'Controller: signal emitted showNewPlot for plot={len(plots)-1}')
 
         self.data_for_cytometry_plots['histograms'] += initialise_hists([new_plot], self.data_for_cytometry_plots)
         indices_plots_to_calculate = [len(plots)-1]
         self.calc_hists_and_stats(indices_plots_to_calculate=indices_plots_to_calculate)
 
-        print(f'Controller: created plot {new_plot}')
+        logger.info(f'Controller: created plot {new_plot}')
 
 
     @Slot(str, int)
@@ -809,7 +812,7 @@ class Controller(QObject):
                 self.data_for_cytometry_plots['histograms'].append(hist)
 
             self.calc_hists_and_stats(indices_plots_to_calculate=[n_in_plot_sequence])
-            print(f'Controller: changed plot {n_in_plot_sequence}')
+            logger.info(f'Controller: changed plot {n_in_plot_sequence}')
 
     @Slot(str)
     def recalc_after_axis_transform(self, channel):
@@ -843,8 +846,8 @@ class Controller(QObject):
 
         self.data_for_cytometry_plots['statistics'] = initialise_stats(self.data_for_cytometry_plots['gating'])
         self.calc_hists_and_stats(gates_to_calculate=gates_to_recalculate, indices_plots_to_calculate=indices_plots_to_recalculate)
-        print(f'Controller: plots recalculated {indices_plots_to_recalculate}')
-        print(f'Controller: gates recalculated {gates_to_recalculate}')
+        logger.info(f'Controller: plots recalculated {indices_plots_to_recalculate}')
+        logger.info(f'Controller: gates recalculated {gates_to_recalculate}')
         # todo update all child gates too, perhaps within cytometryplotwidget
 
     @Slot(list)
@@ -869,7 +872,7 @@ class Controller(QObject):
 
             self.data_for_cytometry_plots['transformations'][channel] = transformations[channel]
             self.recalc_after_axis_transform(channel)
-        print(f'Controller: channels reset {channels}')
+        logger.info(f'Controller: channels reset {channels}')
 
     def reset_axes_transforms_all(self):
         # currently not used
@@ -888,11 +891,11 @@ class Controller(QObject):
 
     def update_hists_and_stats(self):
         # update thread, calculate hists and stats
-        print('Controller: live update hists and stats started')
+        logger.info('Controller: live update hists and stats started')
         last_update_time = time.perf_counter()
         while True:
             if self.stop_live_data_processing.is_set() or self.current_sample_path != self.live_sample_path:
-                print('Controller: live update hists and stats stopped')
+                logger.info('Controller: live update hists and stats stopped')
                 break
 
             # copy live data
@@ -939,7 +942,7 @@ class Controller(QObject):
 
             if self.bus is not None:
                 self.bus.histsStatsRecalculated.emit(self.current_mode, indices_plots_to_calculate)
-                print(f'Controller: signal emitted histStatsRecalculated for plots={indices_plots_to_calculate}')
+                logger.info(f'Controller: signal emitted histStatsRecalculated for plots={indices_plots_to_calculate}')
 
     def create_or_update_gate(self, gate_name=None, gate_type=None, gate_path=None, gate_data=None, channel_x=None, channel_y=None):
         '''
@@ -967,7 +970,7 @@ class Controller(QObject):
                 gate = gating.get_gate(gate_name)
                 gate.quadrants = {q.id: q for q in quadrants}
 
-            print('Quad gate dividers:', [q[1]._divider_ranges for q in gate.quadrants.items()])
+            logger.info('Quad gate dividers:', [q[1]._divider_ranges for q in gate.quadrants.items()])
 
         elif gate_type == 'range':
             x1 = gate_data['x1']
@@ -981,7 +984,7 @@ class Controller(QObject):
                 gate = gating.get_gate(gate_name)
                 gate.dimensions = [dim_x]
 
-            print([gate, gate.dimensions, gate.dimensions[0].min, gate.dimensions[0].max])
+            logger.info([gate, gate.dimensions, gate.dimensions[0].min, gate.dimensions[0].max])
 
         elif gate_type == 'polygon':
             origin = gate_data['origin']
@@ -997,7 +1000,7 @@ class Controller(QObject):
                 gate = gating.get_gate(gate_name)
                 gate.vertices = vertices
 
-            print([gate, gate.vertices])
+            logger.info([gate, gate.vertices])
 
         elif gate_type == 'rectangle':
             pos = np.array(gate_data['pos'])
@@ -1012,7 +1015,7 @@ class Controller(QObject):
                 gate = gating.get_gate(gate_name)
                 gate.dimensions = [dim_x, dim_y]
 
-            print([gate, gate.dimensions, gate.dimensions[0].min, gate.dimensions[0].max, gate.dimensions[1].min,
+            logger.info([gate, gate.dimensions, gate.dimensions[0].min, gate.dimensions[0].max, gate.dimensions[1].min,
                    gate.dimensions[1].max])
 
 
@@ -1032,9 +1035,9 @@ class Controller(QObject):
                 gate.covariance_matrix = covariance_matrix
                 gate.distance_square = distance_square
 
-            print([gate, gate.coordinates, gate.covariance_matrix, gate.distance_square])
+            logger.info([gate, gate.coordinates, gate.covariance_matrix, gate.distance_square])
 
-        print(gating.get_gate_ids())
+        logger.info(gating.get_gate_ids())
 
     @Slot(str, tuple)
     def update_child_gate_label_offset(self, gate_name, label_offset):
@@ -1143,7 +1146,7 @@ class Controller(QObject):
             self.bus.spectralProcessRefreshed.emit()
             # self.bus.changedGatingHierarchy.emit('unmixed', 'root')
             self.bus.statusMessage.emit(f'Spectral process refreshed.')
-        print(f'Controller: refreshed spectral process, unmixed settings, unmixed cytometry')
+        logger.warning(f'Controller: refreshed spectral process, unmixed settings, unmixed cytometry')
 
 
 

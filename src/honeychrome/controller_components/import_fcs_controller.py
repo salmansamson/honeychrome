@@ -9,6 +9,9 @@ from honeychrome.controller_components.gml_functions_mod_from_flowkit import to_
 from honeychrome.settings import settings_default, process_default, cytometry_default
 from honeychrome.view_components.busy_cursor import with_busy_cursor
 
+import logging
+logger = logging.getLogger(__name__)
+
 class ImportFCSController(QObject):
     finished = Signal()
 
@@ -202,7 +205,7 @@ class ImportFCSController(QObject):
                             f'Time channel ID: {self.experiment.settings['raw']['time_channel_id']}\n'
                             f'Event ID channel ID: {self.experiment.settings['raw']['event_id_channel_id']}\n'
                             )
-                    print(text)
+                    logger.info(text)
                     if self.bus:
                         self.bus.reloadExpRequested.emit()
                         self.bus.popupMessage.emit(text)

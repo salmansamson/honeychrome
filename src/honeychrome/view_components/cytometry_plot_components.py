@@ -3,6 +3,9 @@ from PySide6.QtGui import QFont, QPen, QColor, QCursor, QWheelEvent, QMouseEvent
 from PySide6.QtWidgets import QApplication, QMenu, QScrollArea
 import pyqtgraph as pg
 
+import logging
+logger = logging.getLogger(__name__)
+
 import warnings
 warnings.filterwarnings("ignore", message="t.core.qobject.connect: QObject::connect(QStyleHints, QStyleHints): unique connections require a pointer to member function of a QObject subclass")
 
@@ -220,7 +223,7 @@ class InteractiveLabel(pg.LabelItem):
             self.leftItemSelected = actions[chosen_action]
             func = self.leftClickMenuFunction
             func(self.leftItemSelected, self.parent())
-            print(f"{func} called with option {self.leftItemSelected} parent {self.parent()}")
+            logger.info(f"{func} called with option {self.leftItemSelected} parent {self.parent()}")
 
 
     def show_right_context_menu(self, pos):
@@ -239,4 +242,4 @@ class InteractiveLabel(pg.LabelItem):
             self.rightItemSelected = actions[chosen_action]
             func = self.rightClickMenuFunction
             func(self.rightItemSelected, self.parent())
-            print(f"{func} called with option {self.rightItemSelected} parent {self.parent()}")
+            logger.info(f"{func} called with option {self.rightItemSelected} parent {self.parent()}")

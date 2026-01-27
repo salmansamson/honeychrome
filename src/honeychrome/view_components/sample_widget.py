@@ -17,6 +17,9 @@ from honeychrome.view_components.busy_cursor import with_busy_cursor
 from honeychrome.view_components.icon_loader import icon as load_icon, icon
 from honeychrome.view_components.new_sample_modal import NewSampleModal
 
+import logging
+logger = logging.getLogger(__name__)
+
 class SampleRenameDialog(QDialog):
     """Minimal dialog with just a QLineEdit for editing text."""
     def __init__(self, text="", existing_names=[], parent=None):
@@ -528,9 +531,9 @@ class SampleWidget(QWidget):
             self.tree_view.scrollTo(index)
         else:
             if current_sample_path:
-                print(f"SampleWidget: {current_sample_path} not found")
+                logger.info(f"SampleWidget: {current_sample_path} not found")
             else:
-                print('SampleWidget: no sample selected')
+                logger.info('SampleWidget: no sample selected')
 
 
 if __name__ == "__main__":

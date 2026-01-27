@@ -143,7 +143,7 @@ class DraggableRoiLabel(pg.TextItem):
                 self.bus.updateSourceChildGates.emit(self.parent_roi.vb.parent().mode, new_name)
                 self.bus.changedGatingHierarchy.emit(self.parent_roi.vb.parent().mode, new_name)
 
-        print(self.gating.get_gate_ids())
+        # print(self.gating.get_gate_ids())
 
 class ContextMenuTargetItem(pg.TargetItem):
     def __init__(self, *args, **kwargs):
@@ -466,7 +466,7 @@ class PolygonROIConstructor(QObject):
 
     def drawing_polygon_handle_click(self, event):
         pos = self.parent().vb.mapSceneToView(event.scenePos())
-        print(pos)
+        # print(pos)
         if event.button() == Qt.MouseButton.LeftButton:
             # Add vertex to current polygon
             self.vertices.append(pos)

@@ -11,6 +11,8 @@ from honeychrome.controller_components.functions import define_process_plots
 from honeychrome.view_components.help_texts import nxn_help_text
 from honeychrome.view_components.help_toggle_widget import HelpToggleWidget
 
+import logging
+logger = logging.getLogger(__name__)
 
 # ---------------------------
 # Model
@@ -284,7 +286,7 @@ class NxNGrid(QFrame):
                 if gate.lower() in unmixed_gate_names:
                     source_gate = gate
                     break
-            print(f'NxN Grid: using {source_gate} as base gate for process NxN plots')
+            logger.info(f'NxN Grid: using {source_gate} as base gate for process NxN plots')
             process_plots = define_process_plots(self.controller.experiment.settings['unmixed']['fluorescence_channels'], self.controller.experiment.settings['unmixed']['fluorescence_channels'], source_gate=source_gate)
             self.controller.data_for_cytometry_plots_process.update({'plots': process_plots})
 

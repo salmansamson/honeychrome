@@ -14,6 +14,8 @@ base_directory = str(Path.home() / experiments_folder)
 ASSETS_DIR = Path(__file__).parent / "assets"
 n_recent = 10
 
+import logging
+logger = logging.getLogger(__name__)
 
 class HoverDelegate(QStyledItemDelegate):
     def __init__(self, parent=None):
@@ -161,7 +163,7 @@ if __name__ == "__main__":
 
         def load_main_window_with_experiment_and_template(self, experiment_file, new=False, template_path=None):
             self.splash.close()
-            print([experiment_file, new, template_path])
+            logger.info([experiment_file, new, template_path])
             # self.main_window = MainWindow(experiment_file, experiment_model, new=new, template=template)
             # self.main_window.show()
 

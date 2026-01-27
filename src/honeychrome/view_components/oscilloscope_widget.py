@@ -10,6 +10,9 @@ from honeychrome.instrument_configuration import n_time_points_in_event, adc_rat
 from honeychrome.settings import analyser_target_repeat_time, line_colors, adc_channels, scatter_channels, fluorescence_channels
 from honeychrome.view_components.profiles_viewer import FlowLayout, LegendEntry
 
+import logging
+logger = logging.getLogger(__name__)
+
 class OscilloscopeWidget(QWidget):
     _instance = None
 
@@ -101,7 +104,7 @@ class OscilloscopeWidget(QWidget):
             self.label.setText(f"event_id={self.trace['event_id']} time={self.trace['time']}")
 
         except Exception as e:
-            print(f"Error updating plot: {e}")
+            logger.info(f"Error updating plot: {e}")
 
     def closeEvent(self, event):
         self.timer.stop()

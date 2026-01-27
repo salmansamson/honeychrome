@@ -2,6 +2,10 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QComboBox, QPushButton
 )
+
+import logging
+logger = logging.getLogger(__name__)
+
 max_visible_items = 15
 
 class NewPlotWidget(QWidget):
@@ -119,7 +123,7 @@ if __name__ == "__main__":
     )
 
     def handle_new_plot(x, y):
-        print(f"New plot requested: X={x}, Y={y}")
+        logger.info(f"New plot requested: X={x}, Y={y}")
 
     widget.bus.newPlotRequested.connect(handle_new_plot)
     widget.show()
