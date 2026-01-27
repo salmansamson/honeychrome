@@ -150,6 +150,7 @@ class Controller(QObject):
         self.initialise_ephemeral_data()
         logger.info(f'Controller: new experiment created {self.experiment_dir}')
 
+    @with_busy_cursor
     def load_experiment(self, experiment_path):
         self.experiment.load(experiment_path)
         self.experiment_dir = self.experiment.generate_subdirs()

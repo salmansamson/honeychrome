@@ -49,6 +49,7 @@ from PySide6.QtWidgets import QMessageBox, QWidget, QFileDialog, QApplication
 from PySide6.QtCore import Signal, QObject, Slot, QTimer, Qt
 
 import honeychrome.settings as settings
+from honeychrome.view_components.busy_cursor import with_busy_cursor
 from honeychrome.view_components.event_bus import EventBus
 from honeychrome.view_components.splash_dialog import SplashScreen
 from honeychrome.view_components.main_window import MainWindow

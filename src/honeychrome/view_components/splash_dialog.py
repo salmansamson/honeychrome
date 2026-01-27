@@ -7,6 +7,7 @@ from PySide6.QtGui import QPixmap, QPainter, QIcon
 
 from honeychrome.controller_components.functions import q_settings, add_recent_file
 from honeychrome.settings import experiments_folder, file_extension
+from honeychrome.view_components.busy_cursor import with_busy_cursor
 
 base_directory = str(Path.home() / experiments_folder)
 
@@ -96,18 +97,18 @@ class SplashScreen(QDialog):
 
         layout.addWidget(QLabel("Select an option to start:"))
 
-        btn_new = QPushButton("New Experiment")
-        btn_new.clicked.connect(self.view.new_experiment)
-        layout.addWidget(btn_new)
+        self.btn_new = QPushButton("New Experiment")
+        self.btn_new.clicked.connect(self.view.new_experiment)
+        layout.addWidget(self.btn_new)
 
-        btn_open = QPushButton("Open Experiment")
-        btn_open.clicked.connect(self.view.open_experiment)
-        layout.addWidget(btn_open)
+        self.btn_open = QPushButton("Open Experiment")
+        self.btn_open.clicked.connect(self.view.open_experiment)
+        layout.addWidget(self.btn_open)
 
-        btn_template = QPushButton("New Experiment from Template")
-        btn_template.setToolTip('Copy settings and spectral model from an existing experiment file')
-        btn_template.clicked.connect(self.view.new_from_template)
-        layout.addWidget(btn_template)
+        self.btn_template = QPushButton("New Experiment from Template")
+        self.btn_template.setToolTip('Copy settings and spectral model from an existing experiment file')
+        self.btn_template.clicked.connect(self.view.new_from_template)
+        layout.addWidget(self.btn_template)
 
         # recent files
         self.recent_model = QStringListModel()
@@ -131,6 +132,10 @@ class SplashScreen(QDialog):
         self.setLayout(layout)
 
     def handle_recent_clicked(self, index):
+        self.btn_new.setEnabled(False)
+        self.btn_open.setEnabled(False)
+        self.btn_template.setEnabled(False)
+        self.recent_view.setEnabled(False)
         #path = self.recent_model.data(index, Qt.ItemDataRole.DisplayRole)
         path = self.display_path_list[index.row()]
         self.view.load_main_window_with_experiment_and_template(path)

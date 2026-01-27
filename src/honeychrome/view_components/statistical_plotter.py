@@ -1,6 +1,6 @@
 from PySide6.QtCore import QThread, QTimer, Qt, QSettings
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QComboBox, QLabel, QVBoxLayout, QScrollArea, QMessageBox
-
+from pathlib import Path
 from honeychrome.controller_components.functions import get_all_subfolders_recursive
 from honeychrome.controller_components.statistical_controller import StatisticsCalculator
 import honeychrome.settings as settings
@@ -61,7 +61,7 @@ class StatisticalComparisonWidget(QWidget):
         self.statistic_combo.addItem("Select Statistic:")  # placeholder for "no selection"
         self.statistic_combo.addItem("% Total Events")
         self.statistic_combo.addItem("% Parent")
-        self.statistic_combo.addItem("Event Concentration")
+        # self.statistic_combo.addItem("Event Concentration") # disable until standardised
         self.statistic_combo.addItem("Number of Events")
         self.statistic_combo.addItem("Mean Intensity")
 
@@ -122,7 +122,8 @@ class StatisticalComparisonWidget(QWidget):
         samples_by_folder = {str(folder): [sample for sample in all_samples if sample.startswith(str(folder))] for folder in self.folders}
         self.folders = [folder for folder in self.folders if samples_by_folder[str(folder)]]
         sample_sets = [str(folder.relative_to(self.controller.experiment.settings['raw']['raw_samples_subdirectory'])) for folder in self.folders]
-        sample_sets[0] = '[All FCS files in experiment folder]'
+        if sample_sets:
+            sample_sets[0] = '[All FCS files in experiment folder]'
         self.sample_set_combo.addItems(sample_sets)
 
         self.plot_type_combo.setVisible(False)
@@ -248,9 +249,10 @@ class StatisticsPlotWidget(QWidget):
         plot_label = QLabel(f'''
             <p>
             Plot type: {self.statistics_comparison['plot_type']}<br/>
-            Sample set: {'All Samples' 
-                            if self.statistics_comparison['sample_set'] == self.controller.experiment.settings['raw']['raw_samples_subdirectory'] 
-                            else self.statistics_comparison['sample_set']}<br/>
+            Sample set: {
+                'All Samples' if self.statistics_comparison['sample_set'] == self.controller.experiment.settings['raw']['raw_samples_subdirectory'] 
+                else str(Path(self.statistics_comparison['sample_set']).relative_to(Path(self.controller.experiment.settings['raw']['raw_samples_subdirectory'])))
+            }<br/>
             Gate: {self.statistics_comparison['gate']}<br/>
             Statistic: {self.statistics_comparison['statistic']}<br/>
             {'Channel: ' + self.statistics_comparison['channel'] if self.statistics_comparison['statistic'] == 'Mean Intensity' else ''}

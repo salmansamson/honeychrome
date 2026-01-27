@@ -627,8 +627,9 @@ class CytometryPlotWidget(QFrame):
 
                 elif gate.gate_type == 'QuadrantGate':
                     quadrants = gate.quadrants
-                    x, y = [value[0] for key,value in quadrants[list(quadrants)[0]]._divider_ranges.items()]
-
+                    divider_double_positive = quadrants[list(quadrants)[0]]._divider_ranges
+                    x = max([val if val else 0 for val in divider_double_positive['xdiv']])
+                    y = max([val if val else 0 for val in divider_double_positive['ydiv']])
                     roi = QuadROI(x, y, gate_name, self.gating, self.mode, self.vb)
                     roi.sigPosChanged.connect(lambda *args, r=roi: self.update_quad(r))
 
@@ -845,6 +846,7 @@ class CytometryPlotWidget(QFrame):
 
         gate = self.gating.get_gate(roi.gate_name)
         gate.quadrants = {q.id: q for q in quadrants}
+        gate.dimensions = quad_divs
 
         if self.bus is not None:
             self.bus.changedGatingHierarchy.emit(self.mode, roi.gate_name)

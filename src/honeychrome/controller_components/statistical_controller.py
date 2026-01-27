@@ -27,7 +27,7 @@ class StatisticsCalculator(QObject):
         all_samples = self.controller.experiment.samples['all_samples']
         experiment_statistics = self.controller.experiment.statistics
         sample_sets = [statistics_comparison['sample_set'] for statistics_comparison in experiment_statistics]
-        samples_to_calculate = [sample for sample in all_samples if any([sample.startswith(folder.rstrip('/') + '/') for folder in sample_sets])]
+        samples_to_calculate = [sample for sample in all_samples if any([Path(sample).is_relative_to(folder) for folder in sample_sets])]
         samples_by_set = {sample_set:[sample for sample in samples_to_calculate if sample.startswith(sample_set)] for sample_set in sample_sets}
 
         if self.controller.experiment.process['unmixing_matrix'] is not None:

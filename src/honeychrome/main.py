@@ -106,6 +106,10 @@ def setup_logging(log_file):
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
 
+    # Silence specific libraries
+    logging.getLogger('matplotlib').setLevel(logging.WARNING)
+    # logging.getLogger('PIL').setLevel(logging.WARNING)  # Often useful to block PIL too
+
     # Redirect warnings module to logging
     logging.captureWarnings(True)
     warnings.simplefilter("default")  # ensure warnings fire
