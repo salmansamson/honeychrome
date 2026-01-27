@@ -115,6 +115,8 @@ class SplashScreen(QDialog):
         full_recent_files = q_settings.value("recent_files", [])
         if isinstance(full_recent_files, str):
             full_recent_files = [full_recent_files]
+        full_recent_files = [file for file in full_recent_files if Path(file).exists()]
+
         if full_recent_files:
             layout.addWidget(QLabel("Recent Experiments:"))
             self.display_path_list = full_recent_files[:n_recent]
