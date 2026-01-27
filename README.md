@@ -14,13 +14,13 @@ power cytometrists, biologists, students, innovators.
 The app is lightweight but provides all the features one expects: 
 
 - acquire data (starting with Cytkit, perhaps with drivers for other instruments in the future)
-- import FCS files from any instrument
+- analyse data from any instrument's FCS files 
 - provide both conventional compensation and spectral unmixing
-- give simple statistical comparisons between samples, publication quality graphs and exports
-- use intuitively with minimal instructions
-- support the major operating systems (Windows, macOS, Linux)
+- give simple statistical comparisons between samples, publication-quality graphs and exports
+- provide intuitive usability with minimal instructions
+- support the major operating systems (Windows, MacOS, Linux...)
 
-It is also fully open source, to provide a platform that innovators can exploit, 
+Honeychrome is fully open source to provide a platform that innovators can exploit, 
 for developing both new instrumentation and new methods in data analysis/visualisation.
 
 See the blog https://cytkit.com/blog/
