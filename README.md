@@ -1,6 +1,10 @@
 # Honeychrome
 Open Source GUI App for Cytometry Acquisition and Analysis. Now in beta.
 
+<div>
+  <img src="other/honeychrome screenshot animation.webp" alt="Animated Demo" width="400">
+</div>
+
 ## Mission statement
 
 For too long, our field lacked a general purpose, 
