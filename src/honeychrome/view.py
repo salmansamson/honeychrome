@@ -175,6 +175,16 @@ class View(QObject):
         <h3>Honeychrome<sup>TM</sup> is part of the Cytkit<sup>TM</sup> project</h3>
         <p>Version {__version__} (beta)</p>
         <p>This software is licensed as open source under the GNU Public License V2.0</p>
+        
+        <p>
+        For too long, our field lacked a general purpose, 
+        free and open-source cytometry software package. 
+        We are plugging that gap to provide a software package that is useful for everybody: 
+        power cytometrists, biologists, students, innovators. 
+        It is also fully open source, to provide a platform that innovators can exploit, 
+        for developing both new instrumentation and new methods in data analysis/visualisation.
+        <p>
+                
         <p>Visit <a href="https://cytkit.com/honeychrome">https://cytkit.com/honeychrome</a> for more info.</p>
         <p>Send your feedback to <a href="mailto:hello@cytkit.com">hello@cytkit.com</a>.</p>
         </body>

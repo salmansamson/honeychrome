@@ -1,7 +1,7 @@
 # Honeychrome
 Open Source GUI App for Cytometry Acquisition and Analysis. Now in beta.
 
-## About
+## Mission statement
 
 For too long, our field lacked a general purpose, 
 free and open-source cytometry software package. 
@@ -16,8 +16,8 @@ The app is lightweight but provides all the features one expects:
 - use intuitively with minimal instructions
 - support the major operating systems (Windows, macOS, Linux)
 
-It should also be fully open source, and provide a platform that innovators can exploit, 
-for developing both instrumentation and data analysis and visualisation techniques.
+It is also fully open source, to provide a platform that innovators can exploit, 
+for developing both new instrumentation and new methods in data analysis/visualisation.
 
 See the blog https://cytkit.com/blog/
 
@@ -48,10 +48,13 @@ We intend to release a MacOS executable very soon. For all other systems, please
 5. Install requirements: python3 -m pip install -r requirements.txt
 6. Run the app: python3 src/honeychrome/main.py
 
-## For programmers
-We aim to release documentation for programmers wishing to build on Honeychrome in
-new open source cytometry projects. Please contact us if you require assistance.
-Honeychrome builds on several excellent open source Python packages:
+## Contributions
+We have many ideas for Honeychrome and welcome new ones. 
+We also welcome anyone wishing to contribute to and improve the software!
+
+We will shortly release documentation for programmers wishing to build on Honeychrome in
+new open source cytometry projects. In the meantime, please contact us if you require assistance.
+Honeychrome builds on several great open source Python packages:
 - [FlowKit](https://github.com/whitews/flowkit) - for definition of gates, gating hierarchies, transforms, and FCS input/output
 - [PySide6](https://pypi.org/project/PySide6/) - the GUI system, Qt for Python
 - [pyqtgraph](https://www.pyqtgraph.org/) - extremely fast plotting and manipulation of plots in Qt
