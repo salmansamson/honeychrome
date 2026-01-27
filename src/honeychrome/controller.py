@@ -1147,7 +1147,8 @@ class Controller(QObject):
             self.bus.spectralProcessRefreshed.emit()
             # self.bus.changedGatingHierarchy.emit('unmixed', 'root')
             self.bus.statusMessage.emit(f'Spectral process refreshed.')
-        logger.warning(f'Controller: refreshed spectral process, unmixed settings, unmixed cytometry')
+
+        logger.info(f'Controller: refreshed spectral process, unmixed settings, unmixed cytometry')
 
 
 

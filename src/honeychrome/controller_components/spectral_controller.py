@@ -234,7 +234,7 @@ class SpectralAutoGenerator(QObject):
                 self.bus.updateRois.emit('raw', index)
 
         logger.info('SpectralAutoGenerator: regenerated spectral model and raw gating hierarchy:')
-        logger.info(self.raw_gating.get_gate_hierarchy())
+        logger.info(self.raw_gating.get_gate_hierarchy(output='json'))
 
         if self.bus:
             # self.bus.changedGatingHierarchy.emit('raw', 'root')
