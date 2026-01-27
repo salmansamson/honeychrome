@@ -38,11 +38,14 @@ A set of compressed binary packages are available in the releases section.
 
 #### Linux
 1. Download [Honeychrome for Linux x64](https://github.com/salmansamson/honeychrome/releases/download/v0.6.0-beta/honeychrome-v0.6.0-linux-x64.tar.gz)
-2. Extract the honeychrome folder and put it somewhere appropriate
+2. Extract the honeychrome folder and put it somewhere appropriate for the single user or system
 3. Change to the honeychrome folder and run ./install_linux.sh
 
+#### MacOs
+We intend to release a MacOS executable very soon; in the meantime, please follow the Python instructions below. 
+
 #### Other systems
-We intend to release a MacOS executable very soon. For all other systems, please follow the Python instructions below.
+For all other systems, please follow the Python instructions below.
 
 ### For Python users: clone and run Python source
 1. Clone or download the repository, navigate to the project folder. 
