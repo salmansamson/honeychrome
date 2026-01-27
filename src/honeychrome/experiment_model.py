@@ -43,6 +43,9 @@ from honeychrome.controller_components.functions import generate_transformations
 from honeychrome.controller_components.gml_functions_mod_from_flowkit import to_gml
 from honeychrome.settings import settings_default, samples_default, process_default, cytometry_default, sample_name_source
 
+import logging
+logger = logging.getLogger(__name__)
+
 def safe_save(content, filename):
     temp_name = filename + '.tmp'
 
@@ -52,7 +55,10 @@ def safe_save(content, filename):
         os.fsync(f.fileno())
 
     # Atomic rename
-    os.replace(temp_name, filename)
+    try:
+        os.replace(temp_name, filename)
+    except Exception as e:
+        logger.error(f'Failed to replace {filename}. Saved as {temp_name}. {e}')
 
 def check_fcs_matches_experiment(sample_full_path, experiment_pnn_raw, magnitude_ceiling):
     # sample_metadata = flowio_v14.FlowData(sample_full_path, only_text=True)
