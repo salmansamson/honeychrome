@@ -2,7 +2,7 @@
 Open Source GUI App for Cytometry Acquisition and Analysis. Now in beta.
 
 <div>
-  <img src="other/honeychrome screenshot animation.webp" alt="Animated Demo" width="400">
+  <img src="other/honeychrome screenshot animation.webp" alt="Animated Demo" width="800">
 </div>
 
 ## Mission statement
