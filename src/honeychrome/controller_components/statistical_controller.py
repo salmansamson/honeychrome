@@ -40,7 +40,7 @@ class StatisticsCalculator(QObject):
                     self.bus.progress.emit(n, len(samples_to_calculate))
 
                 sample_name = all_samples[samples_to_calculate[n]]
-                path_components = str(Path(samples_to_calculate[n])).split('/')
+                path_components = Path(samples_to_calculate[n]).parts
                 depth = len(path_components)
 
                 if depth > 2:
