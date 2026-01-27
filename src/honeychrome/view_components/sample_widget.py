@@ -476,7 +476,7 @@ class SampleWidget(QWidget):
         self.tree_view.expandAll()
 
     def open_samples_folder(self):
-        QDesktopServices.openUrl(QUrl.fromLocalFile(self.controller.experiment_dir / self.controller.experiment.settings['raw']['raw_samples_subdirectory']))
+        QDesktopServices.openUrl(QUrl.fromLocalFile(self.controller.experiment_dir))
 
     @Slot()
     def batch_add_samples_csv(self):
