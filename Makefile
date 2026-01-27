@@ -1,5 +1,5 @@
 # Variables
-PYTHON = venv/bin/python
+PYTHON = .venv/bin/python
 BUILD_SCRIPT = build.py
 INSTALL_SCRIPT = install_linux.sh
 
@@ -13,7 +13,7 @@ help:
 	@echo "  make clean   - Remove build artifacts and logs"
 
 venv:
-	python3 -m venv venv
+	python3 -m venv .venv
 	$(PYTHON) -m pip install --upgrade pip
 	$(PYTHON) -m pip install -r requirements.txt
 	$(PYTHON) -m pip install pyinstaller

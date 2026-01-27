@@ -340,6 +340,9 @@ class PolygonROI(pg.PolyLineROI):
         self.action_delete = self.menu.addAction("Delete Gate", self.request_remove)
         self.vb.addItem(self)
 
+        for segment in self.segments:
+            segment.mouseClickEvent = lambda event, s=segment: self.segmentClickEvent(event, s)
+
     def addHandle(self, *args, **kwargs):
         self.handleSize = roi_handle_size
         return super().addHandle(*args, **kwargs)
@@ -352,6 +355,13 @@ class PolygonROI(pg.PolyLineROI):
         else:
             # Keep normal ROI drag/resize behavior
             super().mouseClickEvent(event)
+
+    def segmentClickEvent(self, event, segment):
+        if event.button() == Qt.MouseButton.RightButton:
+            event.accept()
+            self.menu.exec(event.screenPos().toPoint())
+        else:
+            pg.LineSegmentROI.mouseClickEvent(segment, event)
 
     def request_remove(self, delete_gate=True):
         """Emit sigRemoveRequested (same as built-in ROI behavior)."""
