@@ -68,3 +68,9 @@ Honeychrome builds on several great open source Python packages:
 - [pyqtgraph](https://www.pyqtgraph.org/) - extremely fast plotting and manipulation of plots in Qt
 - Several others for processing of data, including numpy, scikit, sklearn
 - Seaborn and Matplotlib for publication-quality graphics
+
+## Roadmap
+By January 2027, we hope to get to a stable release labeled v1.0.0, including the following:
+- all bugs fixed
+- documentation for users
+- documentation for developers

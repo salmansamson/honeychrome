@@ -1,10 +1,89 @@
 from PySide6.QtCore import QThread, QTimer, Qt, QSettings
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QComboBox, QLabel, QVBoxLayout, QScrollArea, QMessageBox
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QComboBox, QLabel, QVBoxLayout, QScrollArea, QMessageBox, QLayout
 from pathlib import Path
 from honeychrome.controller_components.functions import get_all_subfolders_recursive
 from honeychrome.controller_components.statistical_controller import StatisticsCalculator
 import honeychrome.settings as settings
 from honeychrome.view_components.busy_cursor import with_busy_cursor
+
+from PySide6.QtCore import Qt, QPoint, QRect, QSize
+
+class FlowLayout(QLayout):
+    def __init__(self, parent=None, margin=0, spacing=-1):
+        super().__init__(parent)
+        if parent is not None:
+            self.setContentsMargins(margin, margin, margin, margin)
+        self.setSpacing(spacing)
+        self.items = []
+
+    def __del__(self):
+        del self.items
+
+    def addItem(self, item):
+        self.items.append(item)
+
+    def count(self):
+        return len(self.items)
+
+    def itemAt(self, index):
+        if 0 <= index < len(self.items):
+            return self.items[index]
+        return None
+
+    def takeAt(self, index):
+        if 0 <= index < len(self.items):
+            return self.items.pop(index)
+        return None
+
+    def expandingDirections(self):
+        return Qt.Orientations(0)
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        return self._do_layout(QRect(0, 0, width, 0), apply_geometry=False)
+
+    def setGeometry(self, rect):
+        super().setGeometry(rect)
+        self._do_layout(rect, apply_geometry=True)
+
+    def sizeHint(self):
+        return self.minimumSize()
+
+    def minimumSize(self):
+        size = QSize()
+        for item in self.items:
+            size = size.expandedTo(item.minimumSize())
+        margin = self.contentsMargins().left()
+        size += QSize(2 * margin, 2 * margin)
+        return size
+
+    def _do_layout(self, rect, apply_geometry):
+        """ The magic happens here: calculating x and y positions """
+        x = rect.x()
+        y = rect.y()
+        line_height = 0
+
+        for item in self.items:
+            wid = item.widget()
+            space_x = self.spacing()
+            space_y = self.spacing()
+
+            next_x = x + item.sizeHint().width() + space_x
+            if next_x - space_x > rect.right() and line_height > 0:
+                x = rect.x()
+                y = y + line_height + space_y
+                next_x = x + item.sizeHint().width() + space_x
+                line_height = 0
+
+            if apply_geometry:
+                item.setGeometry(QRect(QPoint(x, y), item.sizeHint()))
+
+            x = next_x
+            line_height = max(line_height, item.sizeHint().height())
+
+        return y + line_height - rect.y()
 
 class StatisticalComparisonWidget(QWidget):
     def __init__(self, bus=None, controller=None, parent=None):
@@ -75,7 +154,8 @@ class StatisticalComparisonWidget(QWidget):
 
         self.create_button = QPushButton("Calculate!")
 
-        menu_layout = QHBoxLayout(menu)
+        # menu_layout = QHBoxLayout(menu)
+        menu_layout = FlowLayout(menu)
         menu_layout.addWidget(QLabel('New Statistical Comparison:'))
         menu_layout.addWidget(self.sample_set_combo)
         menu_layout.addWidget(self.plot_type_combo)
@@ -83,7 +163,7 @@ class StatisticalComparisonWidget(QWidget):
         menu_layout.addWidget(self.statistic_combo)
         menu_layout.addWidget(self.channel_combo)
         menu_layout.addWidget(self.create_button)
-        menu_layout.addStretch()
+        # menu_layout.addStretch()
 
         # --- Connections ---
         self.sample_set_combo.currentTextChanged.connect(self.on_sample_set_selected)

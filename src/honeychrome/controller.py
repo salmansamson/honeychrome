@@ -279,7 +279,7 @@ class Controller(QObject):
                                 xchan = channels[0]
                                 ychan = channels[1]
                                 transform_x = transformations[xchan]
-                                transform_y = transformations[ychan]
+                                transform_y = transformations[ychan] #on loading/creating new experiment, sometimes crashes on this line, e.g. saying no transformations['FSC-W']
 
                                 unit_2d = np.ones((transform_x.scale_bins + 1, transform_y.scale_bins + 1), dtype=np.bool_)
                                 # unit_2d = np.ones((settings.hist_bins_retrieved+1, settings.hist_bins_retrieved+1), dtype=np.bool_)

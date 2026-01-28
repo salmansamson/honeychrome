@@ -180,7 +180,7 @@ class CytometryPlotWidget(QFrame):
 
         # initialise image and histogram curve
         colors = cc.palette[settings.colourmap_name_retrieved]  # Get the colormap from Colorcet
-        cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, len(colors)), color=colors)  # Convert Colorcet colormap to PyQtGraph's format
+        cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, len(colors))**2, color=colors)  # Convert Colorcet colormap to PyQtGraph's format
         rgba_lut = cmap.getLookupTable(alpha=True)
         rgba_lut[0, 3] = 0  # Fully transparent for 0
         self.img = pg.ImageItem(parent=self)
