@@ -71,6 +71,9 @@ Honeychrome builds on several great open source Python packages:
 - Several others for processing of data, including numpy, scikit, sklearn
 - Seaborn and Matplotlib for publication-quality graphics
 
+Samson Rogers has been the main developer so far. Thanks to support and advice from many people 
+including Oliver Burton, C. Vant, Lotte Carr, Scott Tasker, Philip Jones, Robyn Pritchard.
+
 ## Roadmap
 By January 2027, we hope to get to a stable release labeled v1.0.0, including the following:
 - all bugs fixed
