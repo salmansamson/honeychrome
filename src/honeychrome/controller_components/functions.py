@@ -467,9 +467,20 @@ def calc_hist2d(event_data, mask, id_channel_x, id_channel_y, transform_x, trans
     heatmap, xedges, yedges = np.histogram2d(x, y, bins=[transform_x.scale, transform_y.scale])
 
     # make sure all unit bins get lowest LUT
-    max_value = heatmap.max()
+    global_max_value = heatmap.max()
+    inside_max_value = heatmap[1:-1,1:-1].max()
+    if inside_max_value < global_max_value:
+        heatmap[0,:] *= inside_max_value
+        heatmap[-1,:] *= inside_max_value
+        heatmap[1:-1,0] *= inside_max_value
+        heatmap[1:-1,-1] *= inside_max_value
+        heatmap[0,:] /= global_max_value
+        heatmap[-1,:] /= global_max_value
+        heatmap[1:-1,0] /= global_max_value
+        heatmap[1:-1,-1] /= global_max_value
+
     mask_1 = (heatmap > 1)
-    heatmap[mask_1] += max_value//255+1  # Maps to LUT[1]
+    heatmap[mask_1] += inside_max_value//255+1  # Maps to LUT[1]
 
     return heatmap
 

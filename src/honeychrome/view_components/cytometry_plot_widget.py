@@ -27,6 +27,13 @@ from PySide6.QtCore import QPoint
 from PySide6.QtGui import QPixmap, Qt, QPainter
 import pyqtgraph as pg
 
+# initialise image and histogram curve
+colors = cc.palette[settings.colourmap_name_retrieved]  # Get the colormap from Colorcet
+# cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, len(colors)), color=colors)  # Convert Colorcet colormap to PyQtGraph's format
+cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, len(colors)) ** 2, color=colors)  # Convert Colorcet colormap to PyQtGraph's format
+# cmap = pg.ColorMap(pos=(np.exp(np.linspace(0.0, 1.0, len(colors)))-1)/(np.exp(1)-1), color=colors)  # Convert Colorcet colormap to PyQtGraph's format
+rgba_lut = cmap.getLookupTable(alpha=True)
+rgba_lut[0, 3] = 0  # Fully transparent for 0
 
 def get_widget_pixmap(widget, scale_factor=2):
     pm = QPixmap(widget.size() * scale_factor)
@@ -96,20 +103,6 @@ def pm_to_png_buffer(pm):
     return image_stream
 
 
-def preprocess_data_for_lut(data):
-    """
-    Convert data so:
-    - value 0 → output 0 (maps to LUT[0])
-    - value 1 → output 1 (maps to LUT[1])
-    - values [1, max_value] → output [2, 255]
-    """
-    max_value = data.max()
-    processed = data.copy()
-    mask_1 = (data == 1)
-    processed[mask_1] = max_value//255+1  # Maps to LUT[1]
-
-    return processed
-
 
 class CytometryPlotWidget(QFrame):
     def __init__(self, bus=None, mode=None, n_in_plot_sequence=None, plot=None, data_for_cytometry_plots=None, parent=None):
@@ -178,11 +171,6 @@ class CytometryPlotWidget(QFrame):
         self.statistics = self.data_for_cytometry_plots['statistics']
         self.gating = self.data_for_cytometry_plots['gating']
 
-        # initialise image and histogram curve
-        colors = cc.palette[settings.colourmap_name_retrieved]  # Get the colormap from Colorcet
-        cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, len(colors))**2, color=colors)  # Convert Colorcet colormap to PyQtGraph's format
-        rgba_lut = cmap.getLookupTable(alpha=True)
-        rgba_lut[0, 3] = 0  # Fully transparent for 0
         self.img = pg.ImageItem(parent=self)
         self.img.setLookupTable(rgba_lut)
         self.vb.addItem(self.img)
@@ -987,7 +975,7 @@ class CytometryPlotWidget(QFrame):
 
     def plot_hist2d(self):
         heatmap = self.data_for_cytometry_plots['histograms'][self.n_in_plot_sequence]
-        self.img.setImage(preprocess_data_for_lut(heatmap))
+        self.img.setImage(heatmap)
 
         # Set the position and scale of the image
         x0 = self.transformations[self.plot['channel_x']].limits[0]
