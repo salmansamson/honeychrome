@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from PySide6.QtCore import QObject, Signal, QTimer
 
-from honeychrome.controller_components.functions import timer, apply_gates_in_place, apply_transfer_matrix, calc_stats, sample_from_fcs
+from honeychrome.controller_components.functions import timer, apply_gates_in_place, apply_transfer_matrix, calc_stats, sample_from_fcs, calc_hist1d
 from honeychrome.view_components.busy_cursor import with_busy_cursor
 
 import logging
@@ -81,10 +81,15 @@ class StatisticsCalculator(QObject):
                                 value = sample_statistics[gate_name]['n_events_gate'] / 60
                             elif statistic == "Number of Events":
                                 value = sample_statistics[gate_name]['n_events_gate']
-                            else: #if statistic == "Mean Intensity...":
+                            else: #if statistic == "Mean Intensity..." or "Intensity...":
                                 channel_index = data_for_statistics_comparison['pnn'].index(statistics_comparison['channel'])
                                 gate_membership = data_for_statistics_comparison['gate_membership'][gate_name]
-                                value = data_for_statistics_comparison['event_data'][gate_membership,channel_index].mean()
+                                if statistic.startswith('Mean'):
+                                    value = float(data_for_statistics_comparison['event_data'][gate_membership,channel_index].mean())
+                                else:
+                                    transform = data_for_statistics_comparison['transformations'][statistics_comparison['channel']]
+                                    histogram = calc_hist1d(data_for_statistics_comparison['event_data'], gate_membership, channel_index, transform)
+                                    value = histogram.tolist()
 
                             data_by_sample[samples_to_calculate[n]]['Statistics'][(gate_name, statistic)] = value
 
@@ -148,16 +153,44 @@ if __name__ == "__main__":
     # from honeychrome.view_components.event_bus import EventBus
 
     kc = Controller()
-    base_directory = Path.home() / 'spectral_cytometry'
-    experiment_name = base_directory / '20240620 Spectral Symposium-poor cell unmixed'
+    # base_directory = Path.home() / 'spectral_cytometry'
+    # experiment_name = base_directory / '20240620 Spectral Symposium-poor cell unmixed'
+    base_directory = Path.home() / 'Experiments'
+    experiment_name = base_directory / 'AutoSpectral Full Workflow Imported'
     experiment_path = experiment_name.with_suffix('.kit')
     kc.load_experiment(experiment_path) # note this loads first sample too and runs calculate all histograms and statistics
     kc.set_mode('Unmixed Data')
     kc.initialise_data_for_cytometry_plots()
     kc.set_mode('Statistics')
 
-    kc.experiment.statistics = [{'sample_set': 'Raw/Samples', 'plot_type': 'Box and Whisker Chart', 'gate': 'Singlets', 'statistic': 'Mean Intensity', 'channel': 'A2 Spark UV 387', 'data':None}]
+    kc.experiment.statistics = [
+        {
+            "sample_set": "Raw/Set1/Stained",
+            "plot_type": "Bar Chart",
+            "gate": "A3 CD45 BUV395+ A4 CD11b BUV805+",
+            "statistic": "% Parent",
+            "depth": 1,
+            'data':None
+        },
+        {
+            "sample_set": "Raw/Set1",
+            "plot_type": "Box and Whisker Chart",
+            "gate": "Singlets",
+            "statistic": "% Parent",
+            "depth": 2,
+            'data':None
+        },
+        {
+            'sample_set': 'Raw/Set1/Stained',
+            'plot_type': '1D Histogram Overlay',
+            'gate': 'Singlets',
+            'channel': 'A6 Siglec F PE',
+            'statistic': 'Intensity A6 Siglec F PE',
+            'depth': 1,
+            'data': None}
+    ]
 
     statistics_calculator = StatisticsCalculator(None, kc)
     statistics_calculator.run()
+    print(json.dumps(kc.experiment.statistics, indent=2))
 

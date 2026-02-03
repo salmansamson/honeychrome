@@ -137,13 +137,6 @@ class StatisticalComparisonWidget(QWidget):
         self.plot_type_combo = QComboBox()
         self.gate_combo = QComboBox()
         self.statistic_combo = QComboBox()
-        self.statistic_combo.addItem("Select Statistic:")  # placeholder for "no selection"
-        self.statistic_combo.addItem("% Total Events")
-        self.statistic_combo.addItem("% Parent")
-        # self.statistic_combo.addItem("Event Concentration") # disable until standardised
-        self.statistic_combo.addItem("Number of Events")
-        self.statistic_combo.addItem("Mean Intensity")
-
         self.channel_combo = QComboBox()
         self.channel_combo.setMaxVisibleItems(100)
         self.channel_combo.setStyleSheet("""
@@ -228,6 +221,7 @@ class StatisticalComparisonWidget(QWidget):
             self.plot_type_combo.addItem("Select Chart Type:")  # placeholder for "no selection"
             self.plot_type_combo.addItem("Bar Chart")
             self.plot_type_combo.addItem("Box and Whisker Chart")
+            self.plot_type_combo.addItem("1D Histogram Overlay")
             self.plot_type_combo.setVisible(True)
         else:
             self.plot_type_combo.setVisible(False)
@@ -250,7 +244,19 @@ class StatisticalComparisonWidget(QWidget):
 
     def on_gate_selected(self, text: str):
         if text != 'Select Gate:':
-            self.statistic_combo.setVisible(True)
+            self.statistic_combo.clear()
+            if self.plot_type_combo.currentText() == '1D Histogram Overlay':
+                self.statistic_combo.addItem("Intensity")
+                self.on_statistic_selected('Intensity')
+                self.statistic_combo.setVisible(False)
+            else:
+                self.statistic_combo.addItem("Select Statistic:")  # placeholder for "no selection"
+                self.statistic_combo.addItem("% Total Events")
+                self.statistic_combo.addItem("% Parent")
+                # self.statistic_combo.addItem("Event Concentration") # disable until standardised
+                self.statistic_combo.addItem("Number of Events")
+                self.statistic_combo.addItem("Mean Intensity")
+                self.statistic_combo.setVisible(True)
         else:
             self.statistic_combo.setVisible(False)
             self.channel_combo.setVisible(False)
@@ -260,7 +266,7 @@ class StatisticalComparisonWidget(QWidget):
         if text == 'Select Statistic:':
             self.channel_combo.setVisible(False)
             self.create_button.setVisible(False)
-        elif text == 'Mean Intensity':
+        elif text == 'Mean Intensity' or text == 'Intensity':
             self.channel_combo.clear()
             self.channel_combo.addItem("Select Channel:")  # placeholder for "no selection"
             self.channel_combo.addItems(self.controller.data_for_cytometry_plots_unmixed['pnn'])
@@ -282,7 +288,7 @@ class StatisticalComparisonWidget(QWidget):
         gate = self.gate_combo.currentText()
         statistics_comparison = {'sample_set': sample_set, 'plot_type': plot_type, 'gate': gate, 'data':None}
         statistic = self.statistic_combo.currentText()
-        if statistic == 'Mean Intensity':
+        if statistic == 'Mean Intensity' or statistic == 'Intensity':
             channel = self.channel_combo.currentText()
             statistic += ' ' + channel
             statistics_comparison['channel'] = channel
@@ -335,7 +341,8 @@ class StatisticsPlotWidget(QWidget):
             }<br/>
             Gate: {self.statistics_comparison['gate']}<br/>
             Statistic: {self.statistics_comparison['statistic']}<br/>
-            {'Channel: ' + self.statistics_comparison['channel'] if self.statistics_comparison['statistic'] == 'Mean Intensity' else ''}
+            {'Channel: ' + self.statistics_comparison['channel'] if self.statistics_comparison['statistic'].startswith('Mean Intensity') 
+                                                                    or self.statistics_comparison['statistic'].startswith('Intensity') else ''}
             </p>
         ''')
         plot_label.setTextFormat(Qt.RichText)
@@ -399,82 +406,111 @@ class StatisticsPlotWidget(QWidget):
 
         if self.statistics_comparison['data']:
             ax = self.figure.add_subplot(111)
-            if self.statistics_comparison['depth'] == 3:
-                x = 'Category'
-                hue = 'Group'
-                palette = None
-            elif self.statistics_comparison['depth'] == 2:
-                if self.statistics_comparison['plot_type'] == 'Box and Whisker Chart':
-                    x = 'Group'
-                    hue = None
-                    palette = None
-                else:
-                    x = 'Group'
-                    hue = 'Sample'
-                    palette = None
-            else:
-                x = 'Sample'
-                hue = None
-                palette = 'Set2'
-
-            max_length = max([len(x_label) for x_label in self.statistics_comparison['data'][x]])
-            if max_length > 20:
-                rotation = 60
-            elif max_length > 16:
-                rotation = 40
-            elif max_length > 12:
-                rotation = 20
-            else:
-                rotation = 0
-
-            y = self.statistics_comparison['statistic']
-
-            if self.statistics_comparison['plot_type'] == 'Box and Whisker Chart':
-                sns.boxplot(
-                    data=self.statistics_comparison['data'],
-                    x=x,
-                    y=y,
-                    hue=hue,
-                    showfliers=True,
-                    width=0.6,
-                    palette="Set2",
-                    ax=ax,
-                )
-            else:
-                sns.barplot(
-                    data=self.statistics_comparison['data'],
-                    x=x,
-                    y=y,
-                    hue=hue,
-                    width=0.6,
-                    palette=palette,
-                    ax=ax,
-                )
-
-            if self.statistics_comparison['depth'] == 3 or (self.statistics_comparison['depth'] == 2 and self.statistics_comparison['plot_type'] == 'Box and Whisker Chart'):
-                sns.swarmplot(
-                    data=self.statistics_comparison['data'],
-                    x=x,
-                    y=y,
-                    hue=hue,
-                    dodge=True,
-                    color="k",
-                    alpha=0.55,
-                    size=10,
-                    ax=ax,
-                )
-
-            # Remove duplicate legends (swarmplot adds more)
-            handles, labels = ax.get_legend_handles_labels()
-
-            if hue:
-                indices = [labels.index(label) for label in set(labels)]
-                ax.legend([handles[index] for index in indices], [labels[index] for index in indices], title=hue, bbox_to_anchor=(1.05, 1), loc="upper left")
-
-            # ax.set_xticklabels(ax.get_xticklabels(), rotation=rotation, ha='right')
-            ax.tick_params(axis='x', rotation=rotation, labelrotation=rotation)
-            ax.set_xlabel("")
             ax.set_title(self.statistics_comparison['gate'])
+            if self.statistics_comparison['plot_type'] == '1D Histogram Overlay':
+                import matplotlib.ticker as ticker
+                transformation = self.controller.data_for_cytometry_plots_unmixed['transformations'][self.statistics_comparison['channel']]
+                x = transformation.step_scale[:-1]
+                for n, sample in enumerate(self.statistics_comparison['data']['Sample']):
+                    y = self.statistics_comparison['data'][self.statistics_comparison['statistic']][n]
+                    colour = settings.line_colors[n % len(settings.line_colors)]
+                    ax.plot(x, y, color=colour, linewidth=2, label=sample)
+                    ax.fill_between(x, y, color=colour, alpha=0.3)
+
+                [minor_ticks, major_ticks] = transformation.ticks()
+                major_tick_values = [val for (val, name) in major_ticks]
+                major_tick_labels = [name for (val, name) in major_ticks]
+                minor_tick_values = [val for (val, name) in minor_ticks]
+                ax.xaxis.set_major_locator(ticker.FixedLocator(major_tick_values))
+                ax.xaxis.set_major_formatter(ticker.FixedFormatter(major_tick_labels))
+                ax.xaxis.set_minor_locator(ticker.FixedLocator(minor_tick_values))
+
+                ax.tick_params(axis='x', which='major', length=10, width=2, color='black')
+                ax.tick_params(axis='x', which='minor', length=5, width=1, color='gray')
+
+                ax.grid(which='major', linestyle='-', alpha=0.8)
+                ax.grid(which='minor', linestyle='-', alpha=0.4)
+                ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+                ax.set_xlabel(self.statistics_comparison['statistic'])
+                ax.set_ylabel('Count')
+                ax.set_xlim([transformation.step_scale[0], transformation.step_scale[-1]])
+
+            else:
+                if self.statistics_comparison['depth'] == 3:
+                    x = 'Category'
+                    hue = 'Group'
+                    palette = None
+                elif self.statistics_comparison['depth'] == 2:
+                    if self.statistics_comparison['plot_type'] == 'Box and Whisker Chart':
+                        x = 'Group'
+                        hue = None
+                        palette = None
+                    else:
+                        x = 'Group'
+                        hue = 'Sample'
+                        palette = None
+                else:
+                    x = 'Sample'
+                    hue = None
+                    palette = 'Set2'
+
+                max_length = max([len(x_label) for x_label in self.statistics_comparison['data'][x]])
+                if max_length > 20:
+                    rotation = 60
+                elif max_length > 16:
+                    rotation = 40
+                elif max_length > 12:
+                    rotation = 20
+                else:
+                    rotation = 0
+
+                y = self.statistics_comparison['statistic']
+
+                if self.statistics_comparison['plot_type'] == 'Box and Whisker Chart':
+                    sns.boxplot(
+                        data=self.statistics_comparison['data'],
+                        x=x,
+                        y=y,
+                        hue=hue,
+                        showfliers=True,
+                        width=0.6,
+                        palette="Set2",
+                        ax=ax,
+                    )
+                else:
+                    sns.barplot(
+                        data=self.statistics_comparison['data'],
+                        x=x,
+                        y=y,
+                        hue=hue,
+                        width=0.6,
+                        palette=palette,
+                        ax=ax,
+                    )
+
+                if self.statistics_comparison['depth'] == 3 or (self.statistics_comparison['depth'] == 2 and self.statistics_comparison['plot_type'] == 'Box and Whisker Chart'):
+                    sns.swarmplot(
+                        data=self.statistics_comparison['data'],
+                        x=x,
+                        y=y,
+                        hue=hue,
+                        dodge=True,
+                        color="k",
+                        alpha=0.55,
+                        size=10,
+                        ax=ax,
+                    )
+
+                # Remove duplicate legends (swarmplot adds more)
+                handles, labels = ax.get_legend_handles_labels()
+
+                if hue:
+                    indices = [labels.index(label) for label in set(labels)]
+                    ax.legend([handles[index] for index in indices], [labels[index] for index in indices], title=hue, bbox_to_anchor=(1.05, 1), loc="upper left")
+
+                # ax.set_xticklabels(ax.get_xticklabels(), rotation=rotation, ha='right')
+                ax.tick_params(axis='x', rotation=rotation, labelrotation=rotation)
+                ax.set_xlabel("")
 
         else:
             self.figure.suptitle('No samples in selected sample set!', color='red')
