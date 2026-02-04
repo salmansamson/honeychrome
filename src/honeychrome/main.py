@@ -66,20 +66,6 @@ import logging
 import warnings
 
 
-# class StreamToLogger(object):
-#     """Redirect a stream (stdout/stderr) to a logger."""
-#     def __init__(self, logger, level):
-#         self.logger = logger
-#         self.level = level
-#         self.buffer = ""
-#
-#     def write(self, message):
-#         if message.rstrip():
-#             self.logger.log(self.level, message.rstrip())
-#
-#     def flush(self):
-#         pass
-
 def setup_logging(log_file):
     """Set up logging to both console and file, and capture all output."""
 
