@@ -1,4 +1,5 @@
-from PySide6.QtCore import QPointF, QRectF, Qt, QRect, QSize, QPoint, Slot
+from PySide6.QtCore import QPointF, QRectF, Qt, QRect, QSize, QPoint, Slot, QObject, QEvent
+from PySide6.QtGui import QWheelEvent
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QLayout, QWidget, QHBoxLayout, QLabel, QSizePolicy
 import pyqtgraph as pg
 
@@ -168,6 +169,12 @@ class BottomAxisVerticalTickLabels(pg.AxisItem):
             p.restore()
         p.restore()
 
+class TransparentPlotWidget(pg.PlotWidget):
+    def wheelEvent(self, event: QWheelEvent):
+        # We explicitly ignore the event.
+        # This tells Qt: "I don't want this, give it to my parent."
+        event.ignore()
+
 class ProfilesViewer(QFrame):
     def __init__(self, bus, controller, pen_width=2, parent=None):
         super().__init__(parent)
@@ -195,10 +202,9 @@ class ProfilesViewer(QFrame):
 
         # Create the PyQtGraph widget
         bottom_axis_vertical_tick_labels = BottomAxisVerticalTickLabels()
-        self.plot_widget = pg.PlotWidget(axisItems={'bottom': bottom_axis_vertical_tick_labels})
+        self.plot_widget = TransparentPlotWidget(axisItems={'bottom': bottom_axis_vertical_tick_labels})
         self.layout.addWidget(self.plot_widget, stretch=1)
         vb = self.plot_widget.getViewBox()
-        vb.setMouseEnabled(False, False)
         vb.setMenuEnabled(False)  # disable right-click menu
 
         # Configure the plot
