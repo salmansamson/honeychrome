@@ -72,3 +72,4 @@ class EventBus(QObject):
     spectralModelUpdated = Signal()
     spectralProcessRefreshed = Signal()
     requestUpdateProcessHists = Signal()
+    spilloverSelectedCellChanged = Signal(str, str)

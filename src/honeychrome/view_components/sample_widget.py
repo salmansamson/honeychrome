@@ -317,6 +317,8 @@ class SampleWidget(QWidget):
         action_generate_report.triggered.connect(self.generate_report)
         action_export_all.triggered.connect(self.show_export_modal)
 
+        if not self.controller.experiment_compatible_with_acquisition:
+            action_batch_add_samples.setVisible(False)
 
         # create tree view and select first sample
         self.tree_view = QTreeView()

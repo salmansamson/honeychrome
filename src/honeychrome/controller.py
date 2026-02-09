@@ -755,7 +755,7 @@ class Controller(QObject):
             self.data_for_cytometry_plots['histograms'] = initialise_hists(self.data_for_cytometry_plots['plots'], self.data_for_cytometry_plots)
 
             # initialise plots
-            if self.bus:
+            if self.bus and self.data_for_cytometry_plots['plots']:
                 self.bus.statusMessage.emit(f'Calculating {len(self.data_for_cytometry_plots['plots'])} histograms...')
             self.calc_hists_and_stats(status_message_signal=(self.bus.statusMessage if self.bus else None))
 

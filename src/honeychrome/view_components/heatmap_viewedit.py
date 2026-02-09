@@ -1,10 +1,9 @@
 import sys
 import numpy as np
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QObject, QEvent, Slot, QSize, QTimer
-from PySide6.QtWidgets import QApplication, QTableView, QStyledItemDelegate, QLineEdit, QFrame, QVBoxLayout, QLabel, \
-    QHeaderView
-from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QObject, QEvent, Slot, QSize, QTimer, QItemSelectionModel, QSignalBlocker
+from PySide6.QtWidgets import QApplication, QTableView, QStyledItemDelegate, QLineEdit, QFrame, QVBoxLayout, QLabel, QHeaderView, QStyle, QAbstractItemView
+from PySide6.QtGui import QColor, QPen
 
 import pyqtgraph as pg
 import colorcet as cc
@@ -132,9 +131,7 @@ class HeatmapDelegate(QStyledItemDelegate):
             super().setEditorData(editor, index)
 
     def paint(self, painter, option, index):
-        if not self.disable_diagonal:
-            super().paint(painter, option, index)
-        else:
+        if self.disable_diagonal:
             r, c = index.row(), index.column()
 
             # Hide diagonal: paint background color of table with no text
@@ -142,8 +139,29 @@ class HeatmapDelegate(QStyledItemDelegate):
                 painter.fillRect(option.rect, option.palette.window())  # blank area
                 return  # skip default painting
 
-            # Normal painting for all other cells
-            super().paint(painter, option, index)
+        # 1. Clear the "Selected" state so the default renderer
+        # doesn't paint the blue background fill.
+        custom_option = option
+        is_selected = option.state & QStyle.State_Selected
+        if is_selected:
+            custom_option.state &= ~QStyle.State_Selected
+
+        # 2. Draw the standard cell content (text, etc.)
+        super().paint(painter, custom_option, index)
+
+        # 3. Manually draw the border if the cell is selected
+        if is_selected:
+            painter.save()
+
+            # Setup the pen (color and thickness)
+            pen = QPen(QColor("#3498db"), 2)  # Modern Blue
+            painter.setPen(pen)
+
+            # Adjust the rect slightly so the border isn't clipped
+            rect = option.rect.adjusted(1, 1, -1, -1)
+            painter.drawRect(rect)
+
+            painter.restore()
 
 # ---------------------------
 # Wheel handler (event filter)
@@ -164,11 +182,16 @@ class WheelEditor(QObject):
 
             # ignore diagonal cells
             if index.row() == index.column():
-                return True
+                return super().eventFilter(obj, event)
 
             old = self.model.data(index, Qt.EditRole)
             if old is None:
-                return True
+                return super().eventFilter(obj, event)
+
+            # ignore if not selected
+            selection_model = self.view.selectionModel()
+            if not selection_model.isSelected(index):
+                return super().eventFilter(obj, event)
 
             step = wheel_speed if event.angleDelta().y() > 0 else -wheel_speed
             new_value = float(old) + step
@@ -192,6 +215,12 @@ class ResizingTable(QTableView):
         self.horizontalHeader().setDefaultSectionSize(60)
         self.verticalHeader().setDefaultSectionSize(60)
         self.setWordWrap(True)
+
+        #single selection
+        # 1. Allow only one item to be selected at a time
+        self.setSelectionMode(QAbstractItemView.SingleSelection)
+        # 2. Ensure selection happens at the cell level (not the whole row)
+        self.setSelectionBehavior(QAbstractItemView.SelectItems)
 
     def setModel(self, model):
         super().setModel(model)
@@ -262,13 +291,13 @@ class HeatmapViewEditor(QFrame):
         self.title = None
         delegate = None
         if process_key == 'similarity_matrix':
-            self.title = QLabel('Similarity Matrix')
+            self.title = QLabel('Similarity')
             delegate = HeatmapDelegate(disable_diagonal=True)
         elif process_key == 'unmixing_matrix':
             self.title = QLabel('Unmixing Matrix')
             delegate = HeatmapDelegate()
         elif self.process_key == 'spillover':
-            self.title = QLabel('Spillover (Fine Tuning) Matrix: double click to edit, or roll scroll wheel')
+            self.title = QLabel('Spillover (Fine Tuning) Matrix: double click to edit, or click to select then roll scroll wheel')
             delegate = HeatmapDelegate(enable_editor=True, disable_diagonal=True)
 
         self.layout.addWidget(self.title)
@@ -282,8 +311,11 @@ class HeatmapViewEditor(QFrame):
             self.wheel_handler = WheelEditor(self.view, self.model)
             self.view.viewport().installEventFilter(self.wheel_handler)
             self.model.dataChanged.connect(self._on_edit)
+            self.view.selectionModel().currentChanged.connect(self.selected_cell_changed)
             if self.bus:
                 self.bus.requestUpdateProcessHists.connect(self.refresh_heatmap)
+                self.bus.spilloverSelectedCellChanged.connect(self.set_selected_cell)
+
 
         self.layout.addWidget(self.view)
 
@@ -327,6 +359,8 @@ class HeatmapViewEditor(QFrame):
                 fl_pnn = [pnn[n] for n in fl_ids]
                 horizontal_headers = fl_pnn
                 vertical_headers = fl_pnn
+                self.model.update_data(self.matrix, horizontal_headers, vertical_headers)
+                self.setVisible(True)
             elif self.process_key == 'unmixing_matrix':
                 pnn = self.controller.experiment.settings['raw']['event_channels_pnn']
                 fl_ids = self.controller.filtered_raw_fluorescence_channel_ids
@@ -334,6 +368,8 @@ class HeatmapViewEditor(QFrame):
                 pnn = self.controller.experiment.settings['unmixed']['event_channels_pnn']
                 fl_ids = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
                 vertical_headers = [pnn[n] for n in fl_ids]
+                self.model.update_data(self.matrix, horizontal_headers, vertical_headers)
+                self.setVisible(True)
             elif self.process_key == 'spillover':
                 pnn = self.controller.experiment.settings['unmixed']['event_channels_pnn']
                 fl_ids = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
@@ -341,11 +377,40 @@ class HeatmapViewEditor(QFrame):
                 horizontal_headers = fl_pnn
                 vertical_headers = fl_pnn
 
-            self.model.update_data(self.matrix, horizontal_headers, vertical_headers)
-            self.setVisible(True)
+                # if there is a current selection, look it up and set it after the model is reset
+                index = self.view.selectionModel().currentIndex()
+                if index.isValid() and vertical_headers and horizontal_headers:
+                    selected_row_chan = vertical_headers[index.row()]
+                    selected_col_chan = horizontal_headers[index.column()]
+
+                self.model.update_data(self.matrix, horizontal_headers, vertical_headers)
+                self.setVisible(True)
+
+                if index.isValid() and self.process_key == 'spillover':
+                    QTimer.singleShot(0, lambda: self.set_selected_cell(selected_row_chan, selected_col_chan))
+
         else:
             self.setVisible(False)
 
+
+    @Slot(QModelIndex, QModelIndex)
+    def selected_cell_changed(self, current, previous):
+        if current.isValid():
+            row_chan = self.model.vertical_headers[current.row()]
+            col_chan = self.model.horizontal_headers[current.column()]
+            self.bus.spilloverSelectedCellChanged.emit(row_chan, col_chan)
+
+    @Slot(str, str)
+    def set_selected_cell(self, row_chan, col_chan):#
+        if row_chan in self.model.vertical_headers and col_chan in self.model.horizontal_headers:
+            self.view.selectionModel().setCurrentIndex(
+                self.model.index(self.model.vertical_headers.index(row_chan),
+                                 self.model.horizontal_headers.index(col_chan)
+                                 ), QItemSelectionModel.ClearAndSelect)
+        else:
+            with QSignalBlocker(self.view.selectionModel()):
+                self.view.selectionModel().clearSelection()
+                self.view.selectionModel().clearCurrentIndex()  # Optional: also clears the focus anchor
 
 
 

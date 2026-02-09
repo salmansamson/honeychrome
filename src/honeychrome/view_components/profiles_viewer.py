@@ -180,6 +180,7 @@ class ProfilesViewer(QFrame):
         if self.bus:
             self.bus.showSelectedProfiles.connect(self.plot_profiles)
             self.bus.spectralControlAdded.connect(self.plot_latest_profile)
+            self.bus.showSelectedProfiles.connect(lambda x: self.bus.spilloverSelectedCellChanged.emit(None, None))
 
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(0, 0, 0, 0)

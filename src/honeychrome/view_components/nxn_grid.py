@@ -1,8 +1,8 @@
 import numpy as np
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QObject, QEvent, Slot, QSize, QTimer, QSettings
-from PySide6.QtWidgets import QTableView, QStyledItemDelegate, QFrame, QVBoxLayout, QLabel, QApplication, QComboBox, QHBoxLayout
-from PySide6.QtGui import QColor, QPalette, QImage, QPixmap
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QObject, QEvent, Slot, QSize, QTimer, QSettings, QItemSelectionModel, QSignalBlocker
+from PySide6.QtWidgets import QTableView, QStyledItemDelegate, QFrame, QVBoxLayout, QLabel, QApplication, QComboBox, QHBoxLayout, QStyle, QAbstractItemView
+from PySide6.QtGui import QColor, QPalette, QImage, QPixmap, QPen
 
 import colorcet as cc
 
@@ -168,9 +168,30 @@ class HeatmapDelegate(QStyledItemDelegate):
             painter.fillRect(option.rect, option.palette.window())  # blank area
             return  # skip default painting
 
+        # 1. Clear the "Selected" state so the default renderer
+        # doesn't paint the blue background fill.
+        custom_option = option
+        is_selected = option.state & QStyle.State_Selected
+        if is_selected:
+            custom_option.state &= ~QStyle.State_Selected
+
+        # 2. Draw the standard cell content (text, etc.)
         # Normal painting for all other cells
         super().paint(painter, option, index)
 
+        # 3. Manually draw the border if the cell is selected
+        if is_selected:
+            painter.save()
+
+            # Setup the pen (color and thickness)
+            pen = QPen(QColor("#3498db"), 2)  # Modern Blue
+            painter.setPen(pen)
+
+            # Adjust the rect slightly so the border isn't clipped
+            rect = option.rect.adjusted(1, 1, -1, -1)
+            painter.drawRect(rect)
+
+            painter.restore()
 
 class ResizingTable(QTableView):
     def __init__(self, *args, **kwargs):
@@ -184,6 +205,12 @@ class ResizingTable(QTableView):
         self.horizontalHeader().setDefaultSectionSize(settings.tile_size_nxn_grid_retrieved)
         self.verticalHeader().setDefaultSectionSize(settings.tile_size_nxn_grid_retrieved)
         self.setWordWrap(True)
+
+        #single selection
+        # 1. Allow only one item to be selected at a time
+        self.setSelectionMode(QAbstractItemView.SingleSelection)
+        # 2. Ensure selection happens at the cell level (not the whole row)
+        self.setSelectionBehavior(QAbstractItemView.SelectItems)
 
     def setModel(self, model):
         super().setModel(model)
@@ -271,6 +298,7 @@ class NxNGrid(QFrame):
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._process_spillover_change)
         self.view.viewport().installEventFilter(self)
+        self.view.selectionModel().currentChanged.connect(self.selected_cell_changed)
 
         if self.bus is not None: # nxn grid is in the gui - connect signals and initialise in the normal way
             self.source_gate_combo.currentTextChanged.connect(self.request_update_process_plots)
@@ -278,6 +306,8 @@ class NxNGrid(QFrame):
             self.bus.histsStatsRecalculated.connect(self.refresh_heatmaps)
             self.bus.spectralProcessRefreshed.connect(self.refresh_source_combo)
             self.bus.changedGatingHierarchy.connect(self.refresh_source_combo)
+            self.bus.spilloverSelectedCellChanged.connect(self.set_selected_cell)
+
         else: # nxn grid is in the exporter - just update the plots, histograms and generate the model and view
             # refresh list of plots with preferred source gate
             source_gate = 'root'
@@ -352,7 +382,7 @@ class NxNGrid(QFrame):
         else:
             self.set_headers_to_all_labels()
 
-        #only emit if selection changed
+        # only emit if selection changed
         if self.vertical_headers != old_vertical_headers:
             source_gate = self.source_gate_combo.currentText()
             self.request_update_process_plots(source_gate)
@@ -403,7 +433,17 @@ class NxNGrid(QFrame):
                             self.heatmaps.append(row)
 
                         # self.view.setModel(self.model)
+
+                        # if there is a current selection, look it up and set it after the model is reset
+                        index = self.view.selectionModel().currentIndex()
+                        if index.isValid() and self.vertical_headers and self.horizontal_headers:
+                            selected_row_chan = self.vertical_headers[index.row()]
+                            selected_col_chan = self.horizontal_headers[index.column()]
+
                         self.model.update_data(self.heatmaps, self.horizontal_headers, self.vertical_headers)
+
+                        if index.isValid():
+                            QTimer.singleShot(0, lambda : self.set_selected_cell(selected_row_chan, selected_col_chan))
 
                     else:
                         self.setVisible(False)
@@ -422,11 +462,19 @@ class NxNGrid(QFrame):
 
             # note that row number is not the same as the index of the fluorescence pnn if profiles have been selected. convert to the right row rr
             r = index.row()
+            if not self.vertical_headers:
+                return False
+
             rr = self.horizontal_headers.index(self.vertical_headers[r])
             c = index.column()
             # ignore diagonal cells
             if rr == c:
-                return True
+                return super().eventFilter(obj, event)
+
+            # ignore if not selected
+            selection_model = self.view.selectionModel()
+            if not selection_model.isSelected(index):
+                return super().eventFilter(obj, event)
 
             old = self.controller.experiment.process['spillover'][rr][c]
             step = -settings.wheel_speed if event.angleDelta().y() > 0 else settings.wheel_speed
@@ -439,8 +487,24 @@ class NxNGrid(QFrame):
 
         return super().eventFilter(self.view.viewport(), event)
 
+    @Slot(QModelIndex, QModelIndex)
+    def selected_cell_changed(self, current, previous):
+        if current.isValid():
+            row_chan = self.vertical_headers[current.row()]
+            col_chan = self.horizontal_headers[current.column()]
+            self.bus.spilloverSelectedCellChanged.emit(row_chan, col_chan)
 
-
+    @Slot(str, str)
+    def set_selected_cell(self, row_chan, col_chan):#
+        if row_chan in self.vertical_headers and col_chan in self.horizontal_headers:
+            self.view.selectionModel().setCurrentIndex(
+                self.model.index(self.vertical_headers.index(row_chan),
+                                 self.horizontal_headers.index(col_chan)
+                                 ), QItemSelectionModel.ClearAndSelect)
+        else:
+            with QSignalBlocker(self.view.selectionModel()):
+                self.view.selectionModel().clearSelection()
+                self.view.selectionModel().clearCurrentIndex()  # Optional: also clears the focus anchor
 
 if __name__ == '__main__':
     import sys

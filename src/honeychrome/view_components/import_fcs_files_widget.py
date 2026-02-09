@@ -37,8 +37,8 @@ class ImportFCSFilesWidget(QDialog):
             self.setGeometry(200, 200, 500, 500)
             part_one_label = QLabel('''
             <h3>1. Copy or Move FCS Files</h3>
-            <p>First, copy or move FCS files into the experiment's <tt>Raw</tt> folder using your file browser.</p>
-            <p>Tip: you can organise your FCS files into further subfolders.</p>
+            <p>Copy or move FCS files into the experiment's <tt>Raw</tt> folder using your file browser.</p>
+            <p>Tip: you can organise your FCS files into further subfolders, which can be processed as batches.</p>
             ''')
             part_one_label.setTextFormat(Qt.RichText)
             part_one_label.setWordWrap(True)
@@ -49,7 +49,8 @@ class ImportFCSFilesWidget(QDialog):
 
             part_two_label = QLabel('''
             <h3>2. Update Experiment Configuration</h3>
-            <p>Second, update the experiment configuration to match your FCS files (setting channel names and ranges, and checking for consistency between the FCS files). 
+            <p>Update the experiment configuration to match your FCS files 
+            (automatically setting channel names and ranges, and checking for consistency between the FCS files). 
             Note that all plots, transforms, gating and spectral process in the experiment will be reset.</p>
             ''')
             part_two_label.setTextFormat(Qt.RichText)

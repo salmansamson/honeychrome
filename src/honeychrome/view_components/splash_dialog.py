@@ -76,6 +76,7 @@ class HoverListView(QListView):
 class SplashScreen(QDialog):
     def __init__(self, view):
         super().__init__()
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowMinimizeButtonHint | Qt.WindowType.WindowMaximizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
         self.view = view
         self.setWindowTitle("Honeychrome by Cytkit")
 

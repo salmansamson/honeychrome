@@ -1,6 +1,7 @@
 import sys
 import time
 
+from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, QRunnable, QThreadPool
 
@@ -60,6 +61,8 @@ def with_busy_cursor(func):
         finally:
             # 4. Clean up
             QApplication.restoreOverrideCursor()
+            current_pos = QCursor.pos()
+            QCursor.setPos(current_pos)
             app.processEvents()  # Force Windows to update cursor icon
 
         if thread.error:
