@@ -160,6 +160,7 @@ process_default = {
     'profiles': {},
     'negative_type': 'internal', # or unstained
     'similarity_matrix': None,
+    'hotspot_matrix': None,
     'unmixing_matrix': None,
     'spillover': None
 }

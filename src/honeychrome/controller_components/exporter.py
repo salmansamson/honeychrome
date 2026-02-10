@@ -274,6 +274,15 @@ class ReportGenerator(QObject):
             png_buffer = pm_to_png_buffer(get_widget_pixmap(similarity_viewer, scale_factor=scale_factor))
             doc.add_picture(png_buffer, width=Mm(min([170, 14*len(self.controller.experiment.process['spectral_model'])])))
 
+            self.bus.statusMessage.emit(f'ReportGenerator: adding hotspot matrix')
+            doc.add_heading('Hotspot Matrix', 3)
+            hotspot_viewer = HeatmapViewEditor(None, self.controller, 'hotspot_matrix', False, parent=container)
+            hotspot_viewer.title.setVisible(False)
+            set_widget_light_palette(hotspot_viewer)
+            resize_tableview(hotspot_viewer)
+            png_buffer = pm_to_png_buffer(get_widget_pixmap(hotspot_viewer, scale_factor=scale_factor))
+            doc.add_picture(png_buffer, width=Mm(min([170, 14*len(self.controller.experiment.process['spectral_model'])])))
+
             self.bus.statusMessage.emit(f'ReportGenerator: adding unmixing matrix')
             doc.add_heading('Unmixing Matrix', 3)
             unmixing_viewer = HeatmapViewEditor(None, self.controller, 'unmixing_matrix', False, parent=container)
@@ -305,6 +314,7 @@ class ReportGenerator(QObject):
 
             profiles_viewer.deleteLater()
             similarity_viewer.deleteLater()
+            hotspot_viewer.deleteLater()
             unmixing_viewer.deleteLater()
             compensation_editor.deleteLater()
             nxn_viewer.deleteLater()

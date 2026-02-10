@@ -251,6 +251,7 @@ class View(QObject):
             self.main_window.cytometry_grid_unmixed.init_plots(self.controller.data_for_cytometry_plots_unmixed)
             self.main_window.gating_tree_unmixed.init_data(self.controller.data_for_cytometry_plots_unmixed)
             self.main_window.similarity_viewer.refresh_heatmap()
+            self.main_window.hotspot_viewer.refresh_heatmap()
             self.main_window.unmixing_viewer.refresh_heatmap()
             self.main_window.compensation_editor.refresh_heatmap()
             self.main_window.nxn_viewer.initialise()

@@ -61,9 +61,9 @@ Exact matches from previously processed data will be returned under <i>sample na
 </li>
 </ol>
 
-<h4>Profiles Viewer, Similarity Matrix, Unmixing Matrix</h4>
+<h4>Profiles Viewer, Similarity Matrix, Hotspot Matrix, Unmixing Matrix</h4>
 <p>
-The spectral profiles are displayed in the profiles viewer; the similarity matrix and unmixing matrix are also calculated and displayed. 
+The spectral profiles are displayed in the profiles viewer; the similarity matrix, hotspot matrix and unmixing matrix are also calculated and displayed. 
 Selecting one or more labels shows only the relevant profiles and rows of the similarity matrix, unmixing matrix, spillover matrix and NxN plots.
 </p>
 
@@ -93,11 +93,13 @@ negatives, and sanity checking of the profiles, similarity matrix, unmixing matr
 Spectral unmixing is an area of active development, with much more sophisticated algorithms now available that take proper account of errors in the controls and 
 sources of autofluorescence [2]. 
 Highly recommended is the Colibri Cytometry blog <a href="https://www.colibri-cytometry.com/post/what-s-an-unmixing-matrix">What's an Unmixing Matrix?</a>.
+The similarity and hotspot matrices are defined according to [3].
 </p>
 <p>
 References:<br/>
 [1]<a href="https://onlinelibrary.wiley.com/doi/full/10.1002/cyto.a.22272">Novo et al. 2013</a><br/>
 [2]<a href="https://www.biorxiv.org/content/10.1101/2025.10.27.684855v1.full">Burton et al. 2025</a><br/>
+[3]<a href="https://www.biorxiv.org/content/10.1101/2025.04.17.649396v2.full">Mage et al. 2025</a><br/>
 </p>
 '''
 

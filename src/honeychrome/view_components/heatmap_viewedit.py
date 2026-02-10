@@ -294,7 +294,10 @@ class HeatmapViewEditor(QFrame):
         self.title = None
         delegate = None
         if process_key == 'similarity_matrix':
-            self.title = QLabel('Similarity')
+            self.title = QLabel('Similarity Matrix')
+            delegate = HeatmapDelegate(disable_diagonal=True)
+        elif process_key == 'hotspot_matrix':
+            self.title = QLabel('Hotspot Matrix')
             delegate = HeatmapDelegate(disable_diagonal=True)
         elif process_key == 'unmixing_matrix':
             self.title = QLabel('Unmixing Matrix')
@@ -356,7 +359,7 @@ class HeatmapViewEditor(QFrame):
         self.matrix = self.controller.experiment.process[self.process_key]
 
         if self.matrix:
-            if self.process_key == 'similarity_matrix':
+            if self.process_key == 'similarity_matrix' or self.process_key == 'hotspot_matrix':
                 pnn = self.controller.experiment.settings['unmixed']['event_channels_pnn']
                 fl_ids = self.controller.experiment.settings['unmixed']['fluorescence_channel_ids']
                 fl_pnn = [pnn[n] for n in fl_ids]

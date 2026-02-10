@@ -96,11 +96,15 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles):
     from pandas import DataFrame
 
     profiles_df = DataFrame(profiles)
-    similarity_matrix = cosine_similarity(np.array(profiles_df).T)
-
-    # calculate unmixing matrix
     M = np.array(profiles_df).T
     raw_length = np.shape(M)[1]
+    unmixed_length = np.shape(M)[0]
+
+    Mnorm = M / np.tile(np.sqrt(np.sum(M**2, axis=0)), (unmixed_length,1))
+    similarity_matrix = cosine_similarity(Mnorm)
+    hotspot_matrix = np.sqrt(np.abs(np.linalg.inv(similarity_matrix)))
+
+    # calculate unmixing matrix
     variance_per_detector = np.ones(raw_length)  # trivial example... try something better like cv on each detector for brightest fluorophores?
     Omega_inv = np.diag(1 / variance_per_detector)  # This is our weight matrix
     unmixing_matrix = np.linalg.inv(M @ Omega_inv @ M.T) @ M @ Omega_inv  # "W" matrix in Novo paper
@@ -149,6 +153,7 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles):
     # populate process variables
     spectral_process = {
         'similarity_matrix': similarity_matrix.tolist(),
+        'hotspot_matrix': hotspot_matrix.tolist(),
         'unmixing_matrix': unmixing_matrix.tolist(),
         'spillover': spillover.tolist()
     }

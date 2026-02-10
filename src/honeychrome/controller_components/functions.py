@@ -484,11 +484,9 @@ def calc_hist2d(event_data, mask, id_channel_x, id_channel_y, transform_x, trans
         heatmap[1:-1,0] *= inside_max_value/global_max_value
         heatmap[1:-1,-1] *= inside_max_value/global_max_value
 
-    print(heatmap.sum())
     if density_cutoff > 0:
         mask_1 = (heatmap >= density_cutoff)
         heatmap[mask_1] += inside_max_value//255+1  # Maps to LUT[1]
-        print(heatmap.sum())
 
     return heatmap
 

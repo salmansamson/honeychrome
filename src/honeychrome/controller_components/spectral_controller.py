@@ -116,7 +116,8 @@ class ProfileUpdater:
                             negative_profile = self.unstained_negative
                         else:
                             if 'unstained' in control['label'].lower():
-                                negative_gate_label = f'Neg Unstained'
+                                # negative_gate_label = f'Neg Unstained'
+                                negative_gate_label = positive_gate_label # if using internal negatives, take negative gate as the same as positive gate, resulting in ignoring negative gate
                             else:
                                 negative_gate_label = f'Neg {control['label']}'
 
