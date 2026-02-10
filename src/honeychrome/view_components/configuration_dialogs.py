@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, 
 from PySide6.QtCore import Qt, QSettings
 
 from honeychrome.settings import (colourmap_choice, graphics_export_formats, colormap_name, graphics_export_format, cytometry_plot_width_target,
-                      tile_size_nxn_grid, subsample, hist_bins, trigger_channel, adc_channels, width_channels, height_channels,
+                      tile_size_nxn_grid, subsample, hist_bins, density_cutoff, trigger_channel, adc_channels, width_channels, height_channels,
                       use_dummy_instrument, magnitude_ceilings, magnitude_ceiling, raw_settings, unmixed_settings, experiments_folder,
                       magnitude_ceilings_int, spectral_positive_gate_percent, spectral_negative_gate_percent, report_include_raw, report_include_unmixed, report_include_process)
 import honeychrome.settings as settings
@@ -96,6 +96,12 @@ class AppConfigDialog(QDialog):
         self.histogram_resolution_spin.setSingleStep(50)
         form.addRow("Histogram resolution (bin count):", self.histogram_resolution_spin)
 
+        self.density_cutoff_spin = QSpinBox()
+        self.density_cutoff_spin.setRange(0, 1000)
+        self.density_cutoff_spin.setSingleStep(10)
+        form.addRow("Density cutoff (bin value):", self.density_cutoff_spin)
+        self.density_cutoff_spin.setToolTip('Bin value threshold for first level of colourmap (below this level is transparent). Set to 0 for 1/255 of maximum value.')
+
         self.spectral_positive_gate_percent_spin = QSpinBox()
         self.spectral_positive_gate_percent_spin.setRange(0, 50)
         self.spectral_positive_gate_percent_spin.setSingleStep(1)
@@ -154,6 +160,7 @@ class AppConfigDialog(QDialog):
         self.nxn_tile_size_spin.setValue(self.settings.value("nxn_tile_size", tile_size_nxn_grid, type=int))
         self.subsample_number_spin.setValue(self.settings.value("subsample_number", subsample, type=int))
         self.histogram_resolution_spin.setValue(self.settings.value("histogram_resolution", hist_bins, type=int))
+        self.density_cutoff_spin.setValue(self.settings.value("density_cutoff", density_cutoff, type=int))
         self.spectral_positive_gate_percent_spin.setValue(self.settings.value("spectral_positive_gate_percent", spectral_positive_gate_percent, type=int))
         self.spectral_negative_gate_percent_spin.setValue(self.settings.value("spectral_negative_gate_percent", spectral_negative_gate_percent, type=int))
 
@@ -167,6 +174,8 @@ class AppConfigDialog(QDialog):
         self.settings.setValue("cytometry_plot_size", self.cytometry_plot_size_spin.value())
         self.settings.setValue("nxn_tile_size", self.nxn_tile_size_spin.value())
         self.settings.setValue("subsample_number", self.subsample_number_spin.value())
+        self.settings.setValue("histogram_resolution", self.histogram_resolution_spin.value())
+        self.settings.setValue("density_cutoff", self.density_cutoff_spin.value())
         self.settings.setValue("spectral_positive_gate_percent", self.spectral_positive_gate_percent_spin.value())
         self.settings.setValue("spectral_negative_gate_percent", self.spectral_negative_gate_percent_spin.value())
         self.settings.setValue("report_include_raw", self.report_include_raw_cb.isChecked())
@@ -190,6 +199,7 @@ class AppConfigDialog(QDialog):
         self.nxn_tile_size_spin.setValue(tile_size_nxn_grid)
         self.subsample_number_spin.setValue(subsample)
         self.histogram_resolution_spin.setValue(hist_bins)
+        self.density_cutoff_spin.setValue(density_cutoff)
         self.spectral_positive_gate_percent_spin.setValue(spectral_positive_gate_percent)
         self.spectral_negative_gate_percent_spin.setValue(spectral_negative_gate_percent)
         self.report_include_raw_cb.setChecked(report_include_raw)

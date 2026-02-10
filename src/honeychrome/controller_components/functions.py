@@ -349,7 +349,7 @@ def initialise_stats(gating):
     return statistics
 
 
-def calc_hists(data_for_cytometry_plots, indices_plots_to_calculate=None, status_message_signal=None):
+def calc_hists(data_for_cytometry_plots, indices_plots_to_calculate=None, status_message_signal=None, density_cutoff=None):
     plots = data_for_cytometry_plots['plots']
     gate_membership = data_for_cytometry_plots['gate_membership']
 
@@ -376,9 +376,9 @@ def calc_hists(data_for_cytometry_plots, indices_plots_to_calculate=None, status
             id_channel_y = pnn.index(plot['channel_y'])
             transform_x = transformations[plot['channel_x']]
             transform_y = transformations[plot['channel_y']]
-            histogram = calc_hist2d(event_data, mask, id_channel_x, id_channel_y, transform_x, transform_y)
+            histogram = calc_hist2d(event_data, mask, id_channel_x, id_channel_y, transform_x, transform_y, density_cutoff)
         else: # 'ribbon'
-            histogram = calc_ribbon_plot(event_data, mask, fluoro_indices, transformations['ribbon'])
+            histogram = calc_ribbon_plot(event_data, mask, fluoro_indices, transformations['ribbon'], density_cutoff)
 
         # add to existing array
         hists.append(histogram)
@@ -448,18 +448,19 @@ def calc_stats(data_for_cytometry_plots, initialise=True):
 
     return statistics
 
-def calc_ribbon_plot(event_data, mask, fluoro_indices, transform):
+def calc_ribbon_plot(event_data, mask, fluoro_indices, transform, density_cutoff):
     heatmap = np.apply_along_axis(lambda x: np.histogram(x, bins=transform.scale)[0], axis=0, arr=event_data[mask][:, fluoro_indices])
 
     # make sure all unit bins get lowest LUT
-    max_value = heatmap.max()
-    mask_1 = (heatmap > 1)
-    heatmap[mask_1] += max_value//255+1  # Maps to LUT[1]
+    if density_cutoff > 0:
+        max_value = heatmap.max()
+        mask_1 = (heatmap > 1)
+        heatmap[mask_1] += max_value//255+1  # Maps to LUT[1]
 
     return heatmap
 
 
-def calc_hist2d(event_data, mask, id_channel_x, id_channel_y, transform_x, transform_y):
+def calc_hist2d(event_data, mask, id_channel_x, id_channel_y, transform_x, transform_y, density_cutoff):
     x = event_data[mask, id_channel_x]
     y = event_data[mask, id_channel_y]
 
@@ -470,17 +471,24 @@ def calc_hist2d(event_data, mask, id_channel_x, id_channel_y, transform_x, trans
     global_max_value = heatmap.max()
     inside_max_value = heatmap[1:-1,1:-1].max()
     if inside_max_value < global_max_value:
-        heatmap[0,:] *= inside_max_value
-        heatmap[-1,:] *= inside_max_value
-        heatmap[1:-1,0] *= inside_max_value
-        heatmap[1:-1,-1] *= inside_max_value
-        heatmap[0,:] /= global_max_value
-        heatmap[-1,:] /= global_max_value
-        heatmap[1:-1,0] /= global_max_value
-        heatmap[1:-1,-1] /= global_max_value
+        # heatmap[0,:] *= inside_max_value
+        # heatmap[-1,:] *= inside_max_value
+        # heatmap[1:-1,0] *= inside_max_value
+        # heatmap[1:-1,-1] *= inside_max_value
+        # heatmap[0,:] /= global_max_value
+        # heatmap[-1,:] /= global_max_value
+        # heatmap[1:-1,0] /= global_max_value
+        # heatmap[1:-1,-1] /= global_max_value
+        heatmap[0,:] *= inside_max_value/global_max_value
+        heatmap[-1,:] *= inside_max_value/global_max_value
+        heatmap[1:-1,0] *= inside_max_value/global_max_value
+        heatmap[1:-1,-1] *= inside_max_value/global_max_value
 
-    mask_1 = (heatmap > 1)
-    heatmap[mask_1] += inside_max_value//255+1  # Maps to LUT[1]
+    print(heatmap.sum())
+    if density_cutoff > 0:
+        mask_1 = (heatmap >= density_cutoff)
+        heatmap[mask_1] += inside_max_value//255+1  # Maps to LUT[1]
+        print(heatmap.sum())
 
     return heatmap
 

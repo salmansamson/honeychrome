@@ -50,6 +50,7 @@ live_data_process_repeat_time = 0.5 #s
 hist_bins = 200 # for displaying histograms
 label_offset_default = (0, -0.03) # for gate labels
 subsample = 10_000 # for exporting FCS files
+density_cutoff = 1 # bin count to set to first level of colourmap in 2d histograms (below this level is transparent)
 
 line_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
           '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5', '#c49c94', '#f7b6d2', '#c7c7c7', '#dbdb8d', '#9edae5',
@@ -180,6 +181,7 @@ cytometry_plot_width_target_retrieved = q_settings.value("cytometry_plot_size", 
 tile_size_nxn_grid_retrieved = q_settings.value("nxn_tile_size", tile_size_nxn_grid, type=int)
 subsample_retrieved = q_settings.value("subsample_number", subsample, type=int)
 hist_bins_retrieved = q_settings.value("histogram_resolution", hist_bins, type=int)
+density_cutoff_retrieved = q_settings.value("density_cutoff", density_cutoff, type=int)
 
 trigger_channel_retrieved = str(q_settings.value("trigger_channel", trigger_channel))  # there can only be one trigger channel
 width_channel_retrieved = str(q_settings.value("width_channel", width_channels[0]))  # there can be more than one width channel, but currently only allowing one
