@@ -97,6 +97,9 @@ class HeatmapModel(QAbstractTableModel):
         return Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
+        if orientation == Qt.Horizontal and role == Qt.ToolTipRole:
+            return self.horizontal_headers[section]
+
         if role == Qt.DisplayRole:
             if orientation == Qt.Horizontal:
                 return self.horizontal_headers[section]

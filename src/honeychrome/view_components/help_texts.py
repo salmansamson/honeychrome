@@ -87,7 +87,7 @@ and can be used to inspect the unmixing process and look for issues.
 <h4>Further Reading and Background</h4>
 
 <p>
-Honeychrome currently generates an unmixing matrix using only the ordinary least squares (OLS) method, which is the mathematically simplest and least sophisticated spectral 
+Honeychrome currently generates an unmixing matrix using only the ordinary least squares (OLS) method, which is the mathematically simplest spectral 
 unmixing algorithm [1]. Nevertheless, good results can be obtained with careful selection of clean single stained controls, one or more representative unstained
 negatives, and sanity checking of the profiles, similarity matrix, unmixing matrix and NxN plots [2]. 
 Spectral unmixing is an area of active development, with much more sophisticated algorithms now available that take proper account of errors in the controls and 
@@ -102,10 +102,11 @@ References:<br/>
 '''
 
 nxn_help_text = '''
+<h3>Select any sample from the sample browser to view it in the NxN plots below. (The sample browser on the left; NOT the spectral controls above.)</h3>
 <ul>
 <li>If your panel is large, select one or more rows in the editor above, so that the corresponding rows of the NxN array are plotted below. This makes the plots easier to find, quicker to plot, and quicker to fine-tune.</li>
 <li>If no labels are selected above, the full array of NxN plots will be calculated. <b>Warning: this is slow if N is large!</b> If you are using a 60-colour panel, that means calculating 1800 2D histograms at once.</li>
-<li>Roll scroll wheel to adjust spillover (fine tuning) (row label spills into column labels)</li>
+<li>Click to select a cell and roll scroll wheel to adjust spillover (fine tuning) (row label spills into column labels)</li>
 <li>Hover to inspect spillover of each cell in the array</li>
 </ul>
 '''
