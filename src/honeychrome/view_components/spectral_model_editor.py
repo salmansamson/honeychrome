@@ -75,10 +75,16 @@ class ResizingTable(QTableView):
         self.setMinimumHeight(total_height)
         # self.setMaximumHeight(total_height)
 
+    # def wheelEvent(self, event):
+    #     # We tell Qt we didn't handle this.
+    #     # It will then look at the parent widget to handle it.
+    #     event.ignore()
+
 
 class WheelBlocker(QObject):
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Wheel:
+            event.ignore()
             return True    # Block wheel event
         return super().eventFilter(obj, event)
 
@@ -379,6 +385,7 @@ class SpectralControlsEditor(QFrame):
         if should_have_combobox:
             cb = QComboBox()
             cb.installEventFilter(WheelBlocker(cb))
+            cb.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
             cb.addItems(items)
             self.view.setIndexWidget(proxy_index, cb)
 
