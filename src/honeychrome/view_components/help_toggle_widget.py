@@ -25,7 +25,7 @@ class HelpToggleWidget(QWidget):
         self.help_label.setTextFormat(Qt.RichText)
         self.help_label.setWordWrap(True)
         self.help_label.setVisible(False)  # start hidden
-        self.help_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        # self.help_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         font = self.help_label.font()
         font.setPointSize(14)  # Set your desired font size
         self.help_label.setFont(font)
