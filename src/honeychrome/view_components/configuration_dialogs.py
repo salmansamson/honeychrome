@@ -1,8 +1,9 @@
 import importlib
+import os
 import sys
 from pathlib import Path
 
-from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QDialog, QScrollArea, QFormLayout, QLineEdit, QCheckBox, QSpinBox, QDoubleSpinBox, QDialogButtonBox, QComboBox, QLabel, QButtonGroup)
+from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QDialog, QScrollArea, QFormLayout, QLineEdit, QCheckBox, QSpinBox, QDoubleSpinBox, QDialogButtonBox, QComboBox, QLabel, QButtonGroup, QFileDialog)
 from PySide6.QtCore import Qt, QSettings
 
 from honeychrome.settings import (colourmap_choice, graphics_export_formats, colormap_name, graphics_export_format, cytometry_plot_width_target,
@@ -302,6 +303,24 @@ class InstrumentConfigDialog(QDialog):
         self.use_dummy_instrument.setChecked(use_dummy_instrument)
 
 
+class FolderSelectorLineEdit(QLineEdit):
+    def __init__(self, parent=None, experiment_path=None, current_path=None):
+        super().__init__(parent)
+        self.setPlaceholderText("Click to select a folder...")
+        self.setReadOnly(True)  # Prevents manual typing
+        self.current_path = current_path
+        self.experiment_path = experiment_path
+
+    def mousePressEvent(self, event):
+        # Trigger the dialog on click
+        folder_path = QFileDialog.getExistingDirectory(self, "Select Directory", self.current_path)
+
+        if folder_path:
+            # Convert to relative path based on Current Working Directory
+            relative_path = os.path.relpath(folder_path, self.experiment_path)
+            self.setText(relative_path)
+
+        super().mousePressEvent(event)
 
 class ExperimentSettings(QDialog):
     def __init__(self, experiment, bus, parent=None):
@@ -322,13 +341,16 @@ class ExperimentSettings(QDialog):
         form.setSpacing(10)
 
         # --- Settings Widgets ---
-        self.raw_samples_subdirectory_lineedit = QLineEdit()
+        experiment_path = Path(experiment.experiment_path)
+        experiment_path = experiment_path.parent / experiment_path.stem
+
+        self.raw_samples_subdirectory_lineedit = FolderSelectorLineEdit(experiment_path=str(experiment_path), current_path=str(experiment_path / self.settings['raw']['raw_samples_subdirectory']))
         form.addRow("Raw Samples Subfolder (relative to experiment folder):", self.raw_samples_subdirectory_lineedit)
 
-        self.single_stain_controls_subdirectory_lineedit = QLineEdit()
+        self.single_stain_controls_subdirectory_lineedit = FolderSelectorLineEdit(experiment_path=str(experiment_path), current_path=str(experiment_path / self.settings['raw']['single_stain_controls_subdirectory']))
         form.addRow("Single Stain Controls Subfolder (relative to experiment folder):", self.single_stain_controls_subdirectory_lineedit)
 
-        self.unmixed_samples_subdirectory_lineedit = QLineEdit()
+        self.unmixed_samples_subdirectory_lineedit = FolderSelectorLineEdit(experiment_path=str(experiment_path), current_path=str(experiment_path / self.settings['unmixed']['unmixed_samples_subdirectory']))
         form.addRow("Unmixed Samples Subfolder (relative to experiment folder):", self.unmixed_samples_subdirectory_lineedit)
 
         self.magnitude_ceiling_combo = QComboBox()

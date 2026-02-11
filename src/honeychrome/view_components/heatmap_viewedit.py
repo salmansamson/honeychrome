@@ -356,6 +356,10 @@ class HeatmapViewEditor(QFrame):
         pass
 
     def refresh_heatmap(self):
+        # insert key in case of backward compatibility problems
+        if self.process_key not in self.controller.experiment.process:
+            self.controller.experiment.process[self.process_key] = None
+
         self.matrix = self.controller.experiment.process[self.process_key]
 
         if self.matrix:
