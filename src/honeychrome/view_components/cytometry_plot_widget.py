@@ -27,13 +27,7 @@ from PySide6.QtCore import QPoint
 from PySide6.QtGui import QPixmap, Qt, QPainter
 import pyqtgraph as pg
 
-# initialise image and histogram curve
-colors = cc.palette[settings.colourmap_name_retrieved]  # Get the colormap from Colorcet
-# cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, len(colors)), color=colors)  # Convert Colorcet colormap to PyQtGraph's format
-cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, len(colors)) ** 2, color=colors)  # Convert Colorcet colormap to PyQtGraph's format
-# cmap = pg.ColorMap(pos=(np.exp(np.linspace(0.0, 1.0, len(colors)))-1)/(np.exp(1)-1), color=colors)  # Convert Colorcet colormap to PyQtGraph's format
-rgba_lut = cmap.getLookupTable(alpha=True)
-rgba_lut[0, 3] = 0  # Fully transparent for 0
+
 
 def get_widget_pixmap(widget, scale_factor=2):
     pm = QPixmap(widget.size() * scale_factor)
@@ -170,6 +164,15 @@ class CytometryPlotWidget(QFrame):
         self.transformations = self.data_for_cytometry_plots['transformations']
         self.statistics = self.data_for_cytometry_plots['statistics']
         self.gating = self.data_for_cytometry_plots['gating']
+
+        # initialise image and histogram curve
+        # note: this has to be done in initialisation, otherwise new colourmap won't be loaded if changed in app config
+        colors = cc.palette[settings.colourmap_name_retrieved]  # Get the colormap from Colorcet
+        # cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, len(colors)), color=colors)  # Convert Colorcet colormap to PyQtGraph's format
+        cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, len(colors)) ** 2, color=colors)  # Convert Colorcet colormap to PyQtGraph's format
+        # cmap = pg.ColorMap(pos=(np.exp(np.linspace(0.0, 1.0, len(colors)))-1)/(np.exp(1)-1), color=colors)  # Convert Colorcet colormap to PyQtGraph's format
+        rgba_lut = cmap.getLookupTable(alpha=True)
+        rgba_lut[0, 3] = 0  # Fully transparent for 0
 
         self.img = pg.ImageItem(parent=self)
         self.img.setLookupTable(rgba_lut)
