@@ -6,6 +6,7 @@ import sys
 
 from honeychrome.controller_components.functions import get_all_subfolders_recursive
 from honeychrome.controller_components.import_fcs_controller import ImportFCSController
+from honeychrome.view_components.configuration_dialogs import ExperimentSettings
 from honeychrome.view_components.icon_loader import icon
 
 
@@ -24,7 +25,7 @@ class ImportFCSFilesWidget(QDialog):
         if failed_to_load_sample_warning:
             self.setGeometry(200, 200, 450, 200)
             label = QLabel('''
-            <p><b>Failed to load sample: sample channels (names and ranges) do not match the experiment configuration.</b></p>
+            <p><b>Warning: sample channels (names and ranges) do not match the experiment configuration.</b></p>
             <p>Does this sample belong with the others? If so, update the experiment configuration below. If not, delete this sample.</p>
             ''')
             label.setTextFormat(Qt.RichText)
@@ -34,34 +35,56 @@ class ImportFCSFilesWidget(QDialog):
             layout.addStretch()
 
         else:
-            self.setGeometry(200, 200, 500, 500)
-            part_one_label = QLabel('''
-            <h3>1. Copy or Move FCS Files</h3>
-            <p>Copy or move FCS files into the experiment's <tt>Raw</tt> folder using your file browser.</p>
-            <p>Tip: you can organise your FCS files into further subfolders, which can be processed as batches.</p>
+            self.setGeometry(200, 200, 900, 700)
+            part_oneA_label = QLabel('''
+            <h2>To import FCS files, you have two options.</h2>
+            <h4>Option A: Copy/Move FCS Files</h4>
+            <p>Copy or move FCS files into the experiment's "Raw" and "Single stain controls" folders using your file browser.</p>
             ''')
-            part_one_label.setTextFormat(Qt.RichText)
-            part_one_label.setWordWrap(True)
+            part_oneA_label.setTextFormat(Qt.RichText)
+            part_oneA_label.setWordWrap(True)
 
-            part_one_button = QPushButton(icon('folder-search'), "Open Raw Subfolder")
-            part_one_button.clicked.connect(self.open_samples_folder)
-            part_one_button_layout = QHBoxLayout()
+            part_oneA_button = QPushButton(icon('folder-search'), "Open Raw Subfolder")
+            part_oneA_button.clicked.connect(self.open_samples_folder)
+            part_oneA_button_layout = QHBoxLayout()
+
+            part_oneB_label = QLabel('''
+            <h4>Option B: Change the Folders in Experiment Settings</h4>
+            <p>Set the "Raw" and "Single stain controls" folders to find your FCS files.</p>
+            ''')
+            part_oneB_label.setTextFormat(Qt.RichText)
+            part_oneB_label.setWordWrap(True)
+
+            part_oneB_button = QPushButton(icon('settings'), "Open Experiment Settings")
+            part_oneB_button.clicked.connect(self.open_experiment_settings)
+            part_oneB_button_layout = QHBoxLayout()
+
 
             part_two_label = QLabel('''
-            <h3>2. Update Experiment Configuration</h3>
-            <p>Update the experiment configuration to match your FCS files 
-            (automatically setting channel names and ranges, and checking for consistency between the FCS files). 
+            <p>Tip: you can organise your FCS files into a set of subfolders, which Honeychrome will treat as groups or categories for statistical comparisons.</p>
+            <h4>Final Step: Automatically Update Experiment Configuration</h4>
+            <p>The experiment configuration must match your FCS files 
+            (set channel names and ranges, and check for consistency between the FCS files). 
             Note that all plots, transforms, gating and spectral process in the experiment will be reset.</p>
             ''')
             part_two_label.setTextFormat(Qt.RichText)
             part_two_label.setWordWrap(True)
 
-            layout.addWidget(part_one_label)
+            layout.addWidget(part_oneA_label)
             layout.addStretch()
-            layout.addLayout(part_one_button_layout)
-            part_one_button_layout.addStretch()
-            part_one_button_layout.addWidget(part_one_button)
-            part_one_button_layout.addStretch()
+            layout.addLayout(part_oneA_button_layout)
+            part_oneA_button_layout.addStretch()
+            part_oneA_button_layout.addWidget(part_oneA_button)
+            part_oneA_button_layout.addStretch()
+
+            layout.addStretch()
+            layout.addWidget(part_oneB_label)
+            layout.addStretch()
+            layout.addLayout(part_oneB_button_layout)
+            part_oneB_button_layout.addStretch()
+            part_oneB_button_layout.addWidget(part_oneB_button)
+            part_oneB_button_layout.addStretch()
+
             layout.addStretch()
             layout.addWidget(part_two_label)
             layout.addStretch()
@@ -89,9 +112,12 @@ class ImportFCSFilesWidget(QDialog):
     def _on_thread_finished(self):
         self.accept()
 
-
     def open_samples_folder(self):
         QDesktopServices.openUrl(QUrl.fromLocalFile(self.controller.experiment_dir / self.controller.experiment.settings['raw']['raw_samples_subdirectory']))
+
+    def open_experiment_settings(self):
+        dialog = ExperimentSettings(self.controller.experiment, self.bus, self)
+        dialog.exec()
 
 
 if __name__ == "__main__":
@@ -110,6 +136,6 @@ if __name__ == "__main__":
     experiment_path = experiment_name.with_suffix('.kit')
     kc.load_experiment(experiment_path) # note this loads first sample too and runs calculate all histograms and statistics
 
-    dialog = ImportFCSFilesWidget(bus, kc)
+    dialog = ImportFCSFilesWidget(None, bus, kc)
     dialog.exec()
     sys.exit(0)
