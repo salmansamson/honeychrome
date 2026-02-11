@@ -5,7 +5,8 @@
 #define MyAppName "honeychrome"
 #define MyAppVersion "0.6.0"
 #define MyAppPublisher "Cytkit"
-#define MyAppURL "https://cytkit.com/"
+#define MyAppURL "https://cytkit.com"
+#define MyAppURLSupport "https://github.com/salmansamson/honeychrome"
 #define MyAppExeName "honeychrome.exe"
 #define MyAppAssocName MyAppName + " Experiment"
 #define MyAppAssocExt ".kit"
@@ -20,8 +21,8 @@ AppVersion={#MyAppVersion}
 ;AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
-AppSupportURL={#MyAppURL}
-AppUpdatesURL={#MyAppURL}
+AppSupportURL={#MyAppURLSupport}
+AppUpdatesURL={#MyAppURLSupport}
 DefaultDirName={autopf}\{#MyAppName}
 DisableDirPage=yes
 UninstallDisplayIcon={app}\{#MyAppExeName}
@@ -46,6 +47,10 @@ WizardStyle=modern dynamic
 OutputDir=C:\Users\Samson.Rogers\PycharmProjects\honeychrome\dist
 OutputBaseFilename=Honeychrome-v{#MyAppVersion}-windows-x64
 SetupIconFile=C:\Users\Samson.Rogers\PycharmProjects\honeychrome\dist\honeychrome\_internal\honeychrome\view_components\assets\cytkit_web_logo.ico
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription=Honeychrome Cytometry Software
+VersionInfoTextVersion={#MyAppPublisher}
+VersionInfoCopyright=Copyright (C) 2026 onwards {#MyAppPublisher}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
