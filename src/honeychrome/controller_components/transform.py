@@ -150,7 +150,7 @@ class Transform:
         return [minor_ticks, major_ticks]
 
     def log_ticks(self):
-        top_tick = int(np.log10(self.xform.inverse(np.array([self.limits[1]])))) + 1
+        top_tick = int(np.log10(self.xform.inverse(np.array([self.limits[1]])))[0]) + 1
         major_values = np.logspace(0, top_tick, top_tick+1)
         minor_values = np.hstack([m * np.arange(0.1, 1, 0.1) if m != 0 else None for m in major_values])
 

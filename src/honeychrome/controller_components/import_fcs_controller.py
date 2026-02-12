@@ -1,4 +1,6 @@
 import warnings
+from copy import deepcopy
+
 import numpy as np
 from PySide6.QtCore import QObject, Signal, QTimer
 from flowkit import GatingStrategy, Dimension, gates
@@ -61,9 +63,9 @@ class ImportFCSController(QObject):
                         #     self.bus.warningMessage.emit(text)
 
                     # other bits of experiment reset to default
-                    self.experiment.settings['unmixed'] = settings_default['unmixed'].copy()
-                    self.experiment.process = process_default.copy()
-                    self.experiment.cytometry = cytometry_default.copy()
+                    self.experiment.settings['unmixed'] = deepcopy(settings_default['unmixed'])
+                    self.experiment.process = deepcopy(process_default)
+                    self.experiment.cytometry = deepcopy(cytometry_default)
 
                     # set up all raw settings
                     time_channel_id = sample_metadata.time_index
@@ -144,8 +146,10 @@ class ImportFCSController(QObject):
                         else:
                             sing_y = None
 
+                    time_plot = None
                     morph_plot = None
                     singlet_plot = None
+                    label = 'root'
                     if (morph_x is not None) and (morph_y is not None):
                         label = 'Cells'
                         # range_max_x = raw_transformations[morph_x].xform.inverse(1)
@@ -176,16 +180,20 @@ class ImportFCSController(QObject):
                     # ---hist1d: channel_x, source_gate, child_gates
                     # ---hist2d: channel_x, channel_y, source_gate, child_gates
                     # ---ribbon: source_gate, child_gates
-                    time_plot = [{'type': 'hist1d', 'channel_x': event_channels_pnn[time_channel_id], 'source_gate': 'root', 'child_gates': []}]
-                    ribbon_plot = [{'type': 'ribbon', 'source_gate': 'Singlets', 'child_gates': []}]
-                    fluorescence_plots = [{'type': 'hist1d', 'channel_x': event_channels_pnn[i], 'source_gate': 'Singlets', 'child_gates': []} for i in fluorescence_channel_ids]
+                    if time_channel_id:
+                        time_plot = [{'type': 'hist1d', 'channel_x': event_channels_pnn[time_channel_id], 'source_gate': 'root', 'child_gates': []}]
+                    ribbon_plot = [{'type': 'ribbon', 'source_gate': label, 'child_gates': []}]
+                    fluorescence_plots = [{'type': 'hist1d', 'channel_x': event_channels_pnn[i], 'source_gate': label, 'child_gates': []} for i in fluorescence_channel_ids]
 
-                    if singlet_plot is not None:
-                        raw_plots = time_plot + morph_plot + singlet_plot + ribbon_plot + fluorescence_plots
-                    elif morph_plot is not None:
-                        raw_plots = time_plot + morph_plot + ribbon_plot + fluorescence_plots
-                    else:
-                        raw_plots = time_plot + ribbon_plot + fluorescence_plots
+                    raw_plots = []
+                    if time_plot:
+                        raw_plots += time_plot
+                    if morph_plot:
+                        raw_plots += morph_plot
+                    if singlet_plot:
+                        raw_plots += singlet_plot
+                    raw_plots += ribbon_plot
+                    raw_plots += fluorescence_plots
 
                     self.experiment.cytometry['raw_gating'] = to_gml(raw_gating)
                     self.experiment.cytometry['raw_plots'] = raw_plots

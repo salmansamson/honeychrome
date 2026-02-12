@@ -1,4 +1,5 @@
 import numpy as np
+from flowio.exceptions import FCSParsingError
 from flowkit import Sample, QuadrantDivider, Dimension, gates
 from PySide6.QtCore import QSettings
 from queue import Empty
@@ -21,6 +22,10 @@ def sample_from_fcs(path, bus=None):
         sample = Sample(path)
     except KeyError as e:
         logging.warning(f'Controller: FlowIO reports FCS file does not conform to standards. Missing {e}. Attempting to load with use_header_offsets and ignore_offset_error set')
+        sample = Sample(path, use_header_offsets=True, ignore_offset_error=True)
+
+    except FCSParsingError as e:
+        logging.warning(f'Controller: FlowIO reports FCS file reports a data offset that is off by 1. {e}. Attempting to load with `ignore_offset_error=True` to force reading in this file')
         sample = Sample(path, use_header_offsets=True, ignore_offset_error=True)
 
     return sample
