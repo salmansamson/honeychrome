@@ -32,6 +32,7 @@ methods:
 '''
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from flowkit import GatingStrategy, Dimension, gates
 import numpy as np
@@ -87,10 +88,10 @@ class ExperimentModel:
     def create(self, experiment_path):
         self.experiment_path = str(experiment_path)
         ### copy defaults from experiment settings ###
-        self.settings = settings_default.copy()
-        self.samples = samples_default.copy()
-        self.process = process_default.copy()
-        self.cytometry = cytometry_default.copy()
+        self.settings = deepcopy(settings_default)
+        self.samples = deepcopy(samples_default)
+        self.process = deepcopy(process_default)
+        self.cytometry = deepcopy(cytometry_default)
         self.statistics = []
 
         ### set up default raw gating, raw transforms, raw plots ---- check that this corresponds with default channels

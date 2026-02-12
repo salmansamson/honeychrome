@@ -340,6 +340,27 @@ class Controller(QObject):
         else:
             self.filtered_raw_fluorescence_channel_ids = self.experiment.settings['raw']['fluorescence_channel_ids']
 
+    def flush_ephemeral_data(self):
+        ###### reinitialise everything, just like in __init__
+        self.current_sample = None
+        self.current_sample_path = None
+        self.live_sample_path = None
+        self.raw_event_data = None
+        self.unmixed_event_data = None
+
+        # ephemeral data on top of experiment
+        self.raw_lookup_tables = {}
+        self.unmixed_lookup_tables = {}
+        self.transfer_matrix = None
+        self.raw_transformations = None
+        self.unmixed_transformations = None
+        self.raw_gating = None
+        self.unmixed_gating = None
+        self.data_for_cytometry_plots = {'pnn': None, 'fluoro_indices': None, 'lookup_tables': None, 'event_data': None, 'transformations': None, 'statistics': {}, 'gating': GatingStrategy(), 'plots': [], 'histograms': [], 'gate_membership': {}}
+        self.data_for_cytometry_plots_raw = deepcopy(self.data_for_cytometry_plots)
+        self.data_for_cytometry_plots_process = deepcopy(self.data_for_cytometry_plots)
+        self.data_for_cytometry_plots_unmixed = deepcopy(self.data_for_cytometry_plots)
+
     def initialise_ephemeral_data(self, scope=None):
         # called when an experiment is created or loaded (or spectral process is refreshed)
         self.experiment_compatible_with_acquisition = channel_dict['event_channels_pnn'] == self.experiment.settings['raw']['event_channels_pnn'] #todo should refer to instrument/analyst/acq config rather than defaults
@@ -347,26 +368,7 @@ class Controller(QObject):
 
         if scope is None:
             scope = ['raw', 'unmixed']
-
-            ###### reinitialise everything, just like in __init__
-            self.current_sample = None
-            self.current_sample_path = None
-            self.live_sample_path = None
-            self.raw_event_data = None
-            self.unmixed_event_data = None
-
-            # ephemeral data on top of experiment
-            self.raw_lookup_tables = {}
-            self.unmixed_lookup_tables = {}
-            self.transfer_matrix = None
-            self.raw_transformations = None
-            self.unmixed_transformations = None
-            self.raw_gating = None
-            self.unmixed_gating = None
-            self.data_for_cytometry_plots = {'pnn': None, 'fluoro_indices': None, 'lookup_tables': None, 'event_data': None, 'transformations': None, 'statistics': {}, 'gating': GatingStrategy(), 'plots': [], 'histograms': [], 'gate_membership': {}}
-            self.data_for_cytometry_plots_raw = deepcopy(self.data_for_cytometry_plots)
-            self.data_for_cytometry_plots_process = deepcopy(self.data_for_cytometry_plots)
-            self.data_for_cytometry_plots_unmixed = deepcopy(self.data_for_cytometry_plots)
+            self.flush_ephemeral_data()
 
         # plots is list of dicts
         # type:
@@ -438,7 +440,14 @@ class Controller(QObject):
                 }
             )
 
-        self.calculate_lookup_tables() # (re)create all lookup tables
+        # extra lines here for debugging that horrible error caused by raw_transformations not being updated
+        try:
+            self.calculate_lookup_tables() # (re)create all lookup tables
+        except:
+            logger.warning(self.raw_transformations)
+            logger.warning(self.raw_gating)
+            logger.warning(self.data_for_cytometry_plots_raw['transformations'] is self.raw_transformations)
+            logger.warning(self.data_for_cytometry_plots_raw['gating'] is self.raw_gating)
 
     def initialise_transfer_matrix(self):
         # run in intitialisation of ephemeral data or if spillover changed
