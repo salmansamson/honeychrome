@@ -213,6 +213,12 @@ class View(QObject):
             self.current_window = self.main_window
 
             self.bus.setMainWindowTitle.emit(str(self.controller.experiment_dir))
+            if self.controller.experiment.samples['all_samples']:
+                status = 'Experiment loaded. Select a sample to view plots.'
+            else:
+                status = 'Experiment ready.'
+            self.bus.statusMessage.emit(status)
+            # QTimer.singleShot(0, lambda: self.bus.statusMessage.emit(f'Failed to load sample.'))
 
         except FileNotFoundError as e:
             warnings.warn(f'{e}')
