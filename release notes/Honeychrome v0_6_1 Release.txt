@@ -1,0 +1,27 @@
+Honeychrome v0.6.1 Release Notes
+
+This release contains several new features and improvements, usability improvements and many bug fixes.
+
+Features and improvements
+* Cytometry plots now make better use of colourmap range: firstly, there is less blue, more of the higher colours. Secondly, the inside and edges of the 2D histograms are scaled independently.
+* There is now a hotspot matrix viewer added to the Spectral Process tab, following Mage et al.
+* A "density cutoff" setting has been added to App Configuration, which is the lowest number of events per bin to show a colour in the 2D histograms. Set to 0 to ignore the cutoff.
+* There is a new statistical comparison: samples can be compared by histogram overlays.
+
+Usability
+* Now user must click to select cell of spillover matrix / nxn plots before rolling scroll wheel. Stops the accidental changing of spillover by using the scroll wheel.
+* There is a new status message on window reload to invite user to load sample.
+* Improved scrolling - cytometry plots now ignore mouse wheel.
+* Improved import flow: user can either place FCS files in experiment folder or link to existing folder.
+* Click to open file dialogs in experiment settings.
+* Tooltips on heatmap horizontal headers to avoid problem with clipped names.
+* Scrolling on spectral model editor no longer messes up selection.
+
+Bug fixes
+* fixed issues with import of bigfoot and fcmpass files. 
+* fixed log ticks bug
+* fix to the ephemeral data (raw_transforms) bug
+* fixed app config load colormap bug
+* numerous further bug fixes
+
+

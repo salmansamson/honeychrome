@@ -104,7 +104,8 @@ References:<br/>
 '''
 
 nxn_help_text = '''
-<h3>Select any sample from the sample browser to view it in the NxN plots below. (The sample browser on the left; NOT the spectral controls above.)</h3>
+<h3>Select any sample from the sample browser to view it in the NxN plots below.</h3>
+<h5>Select from the sample browser on the left, not the spectral model above.</h5>
 <ul>
 <li>If your panel is large, select one or more rows in the editor above, so that the corresponding rows of the NxN array are plotted below. This makes the plots easier to find, quicker to plot, and quicker to fine-tune.</li>
 <li>If no labels are selected above, the full array of NxN plots will be calculated. <b>Warning: this is slow if N is large!</b> If you are using a 60-colour panel, that means calculating 1800 2D histograms at once.</li>
