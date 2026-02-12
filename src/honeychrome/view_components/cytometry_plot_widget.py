@@ -16,7 +16,7 @@ import honeychrome.settings as settings
 
 import warnings
 
-from honeychrome.view_components.cytometry_plot_components import InteractiveLabel, NoPanViewBox, ZoomAxis, WheelEventFilter
+from honeychrome.view_components.cytometry_plot_components import InteractiveLabel, NoPanViewBox, ZoomAxis, TransparentGraphicsLayoutWidget
 from honeychrome.view_components.regions_of_interest import RangeROI, EllipseROI, RectangleROI, QuadROI, PolygonROI, PolygonROIConstructor
 
 warnings.filterwarnings("ignore", message="t.core.qobject.connect: QObject::connect(QStyleHints, QStyleHints): unique connections require a pointer to member function of a QObject subclass")
@@ -121,7 +121,7 @@ class CytometryPlotWidget(QFrame):
         # control_layout = QtWidgets.QHBoxLayout()
 
         # Access the internal layout (QGraphicsGridLayout)
-        self.graphics_widget = pg.GraphicsLayoutWidget(parent=self)
+        self.graphics_widget = TransparentGraphicsLayoutWidget(parent=self)
         layout = self.graphics_widget.ci.layout
 
         # Set spacing between items (in pixels)
@@ -191,10 +191,6 @@ class CytometryPlotWidget(QFrame):
         self.label_y.leftClickMenuFunction = self.set_up_plot
         self.label_x.rightClickMenuFunction = self.set_axis_transform
         self.label_y.rightClickMenuFunction = self.set_axis_transform
-
-        # Install wheel event filter #todo install on axes too
-        self.wheel_event_filter = WheelEventFilter()
-        self.graphics_widget.installEventFilter(self.wheel_event_filter)
 
         self.setFrameShape(QFrame.NoFrame)
         self.setLineWidth(1)

@@ -133,28 +133,9 @@ class ZoomAxis(pg.AxisItem):
 
         QApplication.restoreOverrideCursor()
 
-class WheelEventFilter(QObject):
-    def eventFilter(self, obj, event):
-        if event.type() == QEvent.Wheel:
-            # Find the scroll area
-            scroll_area = self.find_parent_scroll_area(obj)
-            if scroll_area and scroll_area.isVisible():
-                # Create a new wheel event for the scroll area
-                pos = scroll_area.mapFromGlobal(QCursor.pos())
-                wheel_event = QWheelEvent(pos, QCursor.pos(), QPoint(),
-                    QPoint(0, event.angleDelta().y()), event.buttons(), event.modifiers(), event.phase(),
-                    event.inverted())
-                QApplication.sendEvent(scroll_area.viewport(), wheel_event)
-                return True
-        return False
-
-    def find_parent_scroll_area(self, widget):
-        parent = widget.parent()
-        while parent:
-            if isinstance(parent, QScrollArea):
-                return parent
-            parent = parent.parent()
-        return None
+class TransparentGraphicsLayoutWidget(pg.GraphicsLayoutWidget):
+    def wheelEvent(self, ev):
+        ev.ignore()
 
 class NoPanViewBox(pg.ViewBox):
     def __init__(self, *args, **kwargs):
