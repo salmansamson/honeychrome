@@ -232,14 +232,14 @@ class SpectralControlsEditor(QFrame):
         # Column 1, 2, 3...: control_type particle_type gate_channel gate_label
         # Column 4: sample_name
         header = self.view.horizontalHeader()
-        header.setStretchLastSection(False)
+        header.setMinimumSectionSize(100)
+        header.setStretchLastSection(True)
         header.setSectionResizeMode(0, QHeaderView.Interactive)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.Stretch)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        self.view.setColumnWidth(0, 400)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.Stretch)
 
         self.label_delegate = LabelDelegate()
         self.view.setItemDelegateForColumn(COLUMNS.index("label"), self.label_delegate)
