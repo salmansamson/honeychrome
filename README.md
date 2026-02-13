@@ -35,11 +35,11 @@ an executable for your platform (Windows/Linux/MacOS).
 ### For non-technical users: download and run executable
 A set of compressed binary packages are available in the releases section.
 #### Windows
-1. Download [Honeychrome for Windows x64](https://github.com/salmansamson/honeychrome/releases/download/v0.6.0-beta/Honeychrome-v0.6.0-windows-x64.exe)
+1. Download [Honeychrome for Windows x64](https://github.com/salmansamson/honeychrome/releases/download/v0.6.1-beta/Honeychrome-v0.6.1-windows-x64.exe)
 2. Double click to run the installer
 
 #### Linux
-1. Download [Honeychrome for Linux x64](https://github.com/salmansamson/honeychrome/releases/download/v0.6.0-beta/honeychrome-v0.6.0-linux-x64.tar.gz)
+1. Download [Honeychrome for Linux x64](https://github.com/salmansamson/honeychrome/releases/download/v0.6.1-beta/honeychrome-v0.6.1-linux-x64.tar.gz)
 2. Extract the honeychrome folder and put it somewhere appropriate for the single user or system
 3. Change to the honeychrome folder and run ./install_linux.sh
 
