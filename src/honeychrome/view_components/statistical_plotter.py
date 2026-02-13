@@ -325,7 +325,7 @@ class StatisticsPlotWidget(QWidget):
         self.controller = controller
 
         export_filename = self.statistics_comparison['plot_type']
-        export_filename += ' ' + '_'.join(self.statistics_comparison['sample_set'].split('/'))
+        export_filename += ' ' + '_'.join(Path(self.statistics_comparison['sample_set']).parts)
         export_filename += ' ' + self.statistics_comparison['gate']
         export_filename += ' ' + self.statistics_comparison['statistic']
         if self.statistics_comparison['statistic'] == 'Mean Intensity':
@@ -337,7 +337,7 @@ class StatisticsPlotWidget(QWidget):
             Plot type: {self.statistics_comparison['plot_type']}<br/>
             Sample set: {
                 'All Samples' if self.statistics_comparison['sample_set'] == self.controller.experiment.settings['raw']['raw_samples_subdirectory'] 
-                else str(Path(self.statistics_comparison['sample_set']).relative_to(Path(self.controller.experiment.settings['raw']['raw_samples_subdirectory'])))
+                else str(Path(self.statistics_comparison['sample_set']).relative_to(Path(self.controller.experiment.settings['raw']['raw_samples_subdirectory']), walk_up=True))
             }<br/>
             Gate: {self.statistics_comparison['gate']}<br/>
             Statistic: {self.statistics_comparison['statistic']}<br/>

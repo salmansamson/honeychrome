@@ -49,6 +49,7 @@ class EventBus(QObject):
 
     # update instrument configuration
     # update experiment preferences
+    resetAxisReloadSample = Signal()
 
     ### cytometry plots
     modeChangeRequested = Signal(str)

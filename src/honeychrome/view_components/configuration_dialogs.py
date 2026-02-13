@@ -402,10 +402,11 @@ class ExperimentSettings(QDialog):
         self.save_settings()
         if self.bus:
             self.bus.sampleTreeUpdated.emit()
-            self.bus.axesReset.emit([self.settings['raw']['event_channels_pnn'][index] for index in self.settings['raw']['fluorescence_channel_ids']])
-            self.bus.axesReset.emit([self.settings['raw']['event_channels_pnn'][index] for index in self.settings['raw']['scatter_channel_ids']])
-            # self.bus.axesReset.emit([self.settings['unmixed']['event_channels_pnn'][index] for index in self.settings['unmixed']['fluorescence_channel_ids']])
-            # self.bus.axesReset.emit([self.settings['unmixed']['event_channels_pnn'][index] for index in self.settings['unmixed']['scatter_channel_ids']])
+            self.bus.resetAxisReloadSample.emit()
+
+            # don't do the following any more... too slow
+            # self.bus.axesReset.emit([self.settings['raw']['event_channels_pnn'][index] for index in self.settings['raw']['fluorescence_channel_ids']])
+            # self.bus.axesReset.emit([self.settings['raw']['event_channels_pnn'][index] for index in self.settings['raw']['scatter_channel_ids']])
         self.accept()
 
     def reset_to_defaults(self):

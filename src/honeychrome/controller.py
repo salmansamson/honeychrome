@@ -565,6 +565,23 @@ class Controller(QObject):
                 self.bus.openImportFCSWidget.emit(True)
                 QTimer.singleShot(500, lambda: self.bus.statusMessage.emit(f'Failed to load sample.'))
 
+    @Slot()
+    def reset_axes_reload_sample(self):
+        logger.info(f"Controller: reloading sample")
+        self.reset_axes_transforms_all()
+        if self.current_sample_path:
+            self.load_sample(self.current_sample_path)
+            if self.bus:
+                self.bus.statusMessage.emit(f'Axes reset, reloaded sample {self.current_sample_path}')
+
+    def unload_sample(self):
+        self.current_sample_path = None
+        self.current_sample = None
+        self.raw_event_data = None
+        self.unmixed_event_data = None
+        self.clear_data_for_cytometry_plots()
+        self.initialise_data_for_cytometry_plots()
+        logger.info(f"Controller: unloaded sample")
 
     def reapply_fine_tuning(self):
         self.initialise_transfer_matrix()
@@ -885,7 +902,7 @@ class Controller(QObject):
         logger.info(f'Controller: channels reset {channels}')
 
     def reset_axes_transforms_all(self):
-        # currently not used
+        # currently used only for changing default range in experiment settings
         settings = self.experiment.settings['raw']
         transforms = assign_default_transforms(settings)
         transformations = generate_transformations(transforms)
@@ -897,7 +914,7 @@ class Controller(QObject):
             transformations = generate_transformations(transforms)
             self.unmixed_transformations.update(transformations)
 
-        self.initialise_data_for_cytometry_plots(force_recalc_histograms=True) #todo why doesn't this reset all axes in all plots?
+        self.initialise_data_for_cytometry_plots(force_recalc_histograms=True) #todo check: does this reset all axes in all plots?
 
     def update_hists_and_stats(self):
         # update thread, calculate hists and stats

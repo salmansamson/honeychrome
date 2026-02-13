@@ -135,6 +135,7 @@ class View(QObject):
 
         # update instrument configuration
         # update experiment preferences
+        self.bus.resetAxisReloadSample.connect(self.controller.reset_axes_reload_sample)
 
         self.bus.modeChangeRequested.connect(self.controller.set_mode)
         # self.bus.tab_change_requested.connect(self.controller.on_tab_change, Qt.DirectConnection) # consider this if plots are refreshed before data is available

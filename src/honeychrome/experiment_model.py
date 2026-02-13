@@ -189,6 +189,11 @@ class ExperimentModel:
         raw_samples = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_raw_samples).glob('**/*.fcs'))]
         # unmixed_samples = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_unmixed_samples).glob('**/*.fcs'))] #### not currently used
 
+        # add all single stain controls to raw samples if not already present
+        for sample_path in single_stain_controls:
+            if sample_path not in raw_samples:
+                raw_samples.append(sample_path)
+
         # load samples one by one, print name, datetime, number of events, file location
         all_sample_nevents = {}
         all_samples = {}
