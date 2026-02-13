@@ -5,7 +5,7 @@ Open Source GUI App for Cytometry Acquisition and Analysis. Now in beta.
   <img src="other/honeychrome screenshot animation.webp" alt="Animated Demo" width="800">
 </div>
 
-Our aim is to make Honeychrome so intuitive that you don't need instructions. But just in case, we have prepared this instructional video [Introduction to Honeychrome in 30 Minutes](https://youtu.be/PF78J3f5zsg).
+Our aim is to make Honeychrome so intuitive that you don't need instructions. But just in case, we have prepared this instructional video [Introduction to Honeychrome in 30 Minutes](https://youtu.be/RQ4-RQkDCm4).
 
 ## Mission statement
 
