@@ -50,12 +50,40 @@ We intend to release a MacOS executable very soon; in the meantime, please follo
 For all other systems, please follow the Python instructions below.
 
 ### For Python users: clone and run Python source
-1. Clone or download the repository, navigate to the project folder. 
-2. Install Python (or make sure you have already installed) version >= 3.12
-3. Install a venv: python3 -m venv .venv
-4. Upgrade pip: python3 -m pip install --upgrade pip
-5. Install requirements: python3 -m pip install -r requirements.txt
-6. Run the app: python3 src/honeychrome/main.py
+Follow these steps to clone the repository and run the application from source:
+
+1.  **Clone the repository:**
+    ```bash
+    git clone [https://github.com/salmansamson/honeychrome.git](https://github.com/salmansamson/honeychrome.git)
+    cd honeychrome
+    ```
+
+2.  **Create a virtual environment:**
+    *Requires Python 3.12 or higher.*
+    ```bash
+    python3 -m venv .venv
+    ```
+
+3.  **Activate the virtual environment:**
+    * **Linux/macOS:** `source .venv/bin/activate`
+    * **Windows:** `.venv\Scripts\activate`
+
+4.  **Upgrade pip and install dependencies:**
+    ```bash
+    pip install --upgrade pip
+    pip install -r requirements.txt
+    ```
+
+5.  **Install the package in editable mode:**
+    *This ensures all internal modules (like `honeychrome.dummy_loader`) are correctly mapped to your path.*
+    ```bash
+    pip install -e .
+    ```
+
+6.  **Run the application:**
+    ```bash
+    python3 -m honeychrome.main
+    ```
 
 ## Contributions
 We have many ideas for Honeychrome and welcome new ones. 
