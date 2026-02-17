@@ -54,7 +54,7 @@ Follow these steps to clone the repository and run the application from source:
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/salmansamson/honeychrome.git](https://github.com/salmansamson/honeychrome.git)
+    git clone https://github.com/salmansamson/honeychrome.git
     cd honeychrome
     ```
 
@@ -75,7 +75,7 @@ Follow these steps to clone the repository and run the application from source:
     ```
 
 5.  **Install the package in editable mode:**
-    *This ensures all internal modules (like `honeychrome.dummy_loader`) are correctly mapped to your path.*
+    *This ensures all internal modules are correctly mapped to your path.*
     ```bash
     pip install -e .
     ```
