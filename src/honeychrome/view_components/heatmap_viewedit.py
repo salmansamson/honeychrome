@@ -14,11 +14,12 @@ from honeychrome.settings import heading_style, wheel_speed
 # Model
 # ---------------------------
 class HeatmapModel(QAbstractTableModel):
-    def __init__(self, is_dark):
+    def __init__(self, is_dark, heatmap_range):
         super().__init__()
         self._data = None
         self.horizontal_headers = None
         self.vertical_headers = None
+        self.heatmap_range = heatmap_range
 
         if is_dark:
             heatmap_colormap_name = 'bkr'
@@ -28,11 +29,9 @@ class HeatmapModel(QAbstractTableModel):
         colors = cc.palette[heatmap_colormap_name]  # Get the colormap from Colorcet
         self.cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, len(colors)), color=colors)  # Convert Colorcet colormap to PyQtGraph's format
 
-    def value_to_cet_color(self, value, vmin, vmax):
-        if vmax == vmin:
-            t = 0.5
-        else:
-            t = (value - vmin) / (vmax - vmin)
+    def value_to_cet_color(self, value):
+        vmin, vmax = self.heatmap_range
+        t = (value - vmin) / (vmax - vmin)
         r, g, b, _ = self.cmap.map(np.array([t]))[0]
         return QColor(int(r), int(g), int(b))
 
@@ -68,11 +67,7 @@ class HeatmapModel(QAbstractTableModel):
             return value
 
         if role == Qt.BackgroundRole:
-            # vmin = float(self._data.min())
-            # vmax = float(self._data.max())
-            vmin = -1
-            vmax = 1
-            return self.value_to_cet_color(value, vmin, vmax)
+            return self.value_to_cet_color(value)
 
         return None
 
@@ -296,19 +291,23 @@ class HeatmapViewEditor(QFrame):
         if process_key == 'similarity_matrix':
             self.title = QLabel('Similarity Matrix')
             delegate = HeatmapDelegate(disable_diagonal=True)
+            heatmap_range = (-1,1)
         elif process_key == 'hotspot_matrix':
             self.title = QLabel('Hotspot Matrix')
             delegate = HeatmapDelegate(disable_diagonal=True)
+            heatmap_range = (-10,10)
         elif process_key == 'unmixing_matrix':
             self.title = QLabel('Unmixing Matrix')
             delegate = HeatmapDelegate()
+            heatmap_range = (-1,1)
         elif self.process_key == 'spillover':
             self.title = QLabel('Spillover (Fine Tuning) Matrix: double click to edit, or click to select then roll scroll wheel')
             delegate = HeatmapDelegate(enable_editor=True, disable_diagonal=True)
+            heatmap_range = (-0.5,0.5)
 
         self.layout.addWidget(self.title)
         self.title.setStyleSheet(heading_style)
-        self.model = HeatmapModel(is_dark)
+        self.model = HeatmapModel(is_dark, heatmap_range)
         self.view.setModel(self.model)
         self.view.setItemDelegate(delegate)
 
