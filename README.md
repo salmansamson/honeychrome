@@ -32,8 +32,10 @@ You have the following options, depending on whether you want to use the Python 
 code or just download an executable. For most users, it is sufficient to download
 an executable for your platform (Windows/Linux/MacOS).
 
-### For non-technical users: download and run executable
+### For non-programmers: download and run executable
 A set of compressed binary packages are available in the releases section.
+> **Note:** Since Honeychrome is very new, you may get warnings on Windows/Mac that the application is unrecognised. If so, please post the warning on the Github issues page, or contact Samson (go to [cytkit.com](https://cytkit.com)). You can normally click through any warnings; starting the app should function normally after that.
+
 #### Windows
 1. Download [Honeychrome for Windows x64](https://github.com/salmansamson/honeychrome/releases/download/v0.6.1-beta/Honeychrome-v0.6.1-windows-x64.exe)
 2. Double click to run the installer
@@ -44,7 +46,9 @@ A set of compressed binary packages are available in the releases section.
 3. Change to the honeychrome folder and run ./install_linux.sh
 
 #### MacOs
-We intend to release a MacOS executable very soon; in the meantime, please follow the Python instructions below. 
+1. Download [Honeychrome for MacOS](https://github.com/salmansamson/honeychrome/releases/download/v0.6.1-beta/honeychrome-v0.6.1-macos.dmg)
+2. Open the disk image and drag honeychrome.app to your Applications folder.
+3. Double click the app in your Applications folder to run 
 
 #### Other systems
 For all other systems, please follow the Python instructions below.
