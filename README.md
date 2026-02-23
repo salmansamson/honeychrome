@@ -1,12 +1,12 @@
 # <img src="src/honeychrome/view_components/assets/cytkit_web_logo.png" width="60"> Honeychrome
 
-Open Source GUI App for Cytometry Acquisition and Analysis. Now in beta.
+Open Source GUI App for Cytometry Acquisition and Analysis. Now in beta. Built in Python and [hosted on GitHub](https://github.com/salmansamson/honeychrome).
 
 <div>
-  <img src="other/honeychrome screenshot animation.webp" alt="Animated Demo" width="800">
+  <a href="https://youtu.be/RQ4-RQkDCm4"><img src="other/honeychrome screenshot animation.webp" alt="Animated Demo" width="800"></a>
 </div>
 
-Our aim is to make Honeychrome so intuitive that you don't need instructions. But just in case, we have prepared this instructional video [Introduction to Honeychrome in 30 Minutes](https://youtu.be/RQ4-RQkDCm4).
+Our aim is to make Honeychrome so intuitive that you don't need instructions. But just in case, we have prepared this instructional video on YouTube: [Introduction to Honeychrome in 30 Minutes](https://youtu.be/RQ4-RQkDCm4). 
 
 ## Mission statement
 
@@ -25,6 +25,8 @@ The app is lightweight but provides all the features one expects:
 
 Honeychrome is fully open source to provide a platform that innovators can exploit, 
 for developing both new instrumentation and new methods in data analysis/visualisation.
+
+Honeychrome does not collect or process any personal information.
 
 See the blog https://cytkit.com/blog/
 
@@ -94,7 +96,7 @@ Follow these steps to clone the repository and run the application from source:
 We have many ideas for Honeychrome and welcome new ones. 
 We also welcome anyone wishing to contribute to and improve the software!
 
-We will shortly release documentation for programmers wishing to build on Honeychrome in
+We will shortly release fuller instructions and documentation for programmers wishing to build on Honeychrome in
 new open source cytometry projects. In the meantime, please contact us if you require assistance.
 
 Honeychrome builds on several great open source Python packages:
