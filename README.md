@@ -22,13 +22,12 @@ The app is lightweight but provides all the features one expects:
 - give simple statistical comparisons between samples, publication-quality graphs and exports
 - provide intuitive usability with minimal instructions
 - support the major operating systems (Windows, MacOS, Linux...)
+- no collection or processing of personal information
 
 Honeychrome is fully open source to provide a platform that innovators can exploit, 
 for developing both new instrumentation and new methods in data analysis/visualisation.
 
-Honeychrome does not collect or process any personal information.
-
-See the blog https://cytkit.com/blog/
+See the blog https://cytkit.com/blog/ or join the mailing list https://cytkit.com/
 
 ## Installation
 You have the following options, depending on whether you want to use the Python source 
