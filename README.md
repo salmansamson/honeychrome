@@ -1,4 +1,4 @@
-# Honeychrome
+# <img src="src/honeychrome/view_components/assets/cytkit_web_logo.png> Honeychrome
 Open Source GUI App for Cytometry Acquisition and Analysis. Now in beta.
 
 <div>
