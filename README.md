@@ -53,7 +53,7 @@ A set of compressed binary packages are available in the releases section.
 #### Other systems
 For all other systems, please follow the Python instructions below.
 
-### For Python users: clone and run Python source
+### For programmers: clone and run Python source
 Follow these steps to clone the repository and run the application from source:
 
 1.  **Clone the repository:**
