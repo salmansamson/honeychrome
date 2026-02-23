@@ -35,7 +35,7 @@ an executable for your platform (Windows/Linux/MacOS).
 
 ### For non-programmers: download and run executable
 A set of compressed binary packages are available in the releases section.
-> **Note:** Since Honeychrome is very new, you may get warnings on Windows/Mac that the application is unrecognised. If so, please post the warning on the Github issues page, or contact Samson (go to [cytkit.com](https://cytkit.com)). You can normally click through any warnings; starting the app should function normally after that.
+> **Note:** Since Honeychrome is very new, you may get warnings on Windows/Mac that the application is unrecognised. If so, please post the warning on the Github issues page, or contact Samson ( [cytkit.com/contact](https://cytkit.com/contact)). You can normally click through any warnings; starting the app should function normally after that.
 
 #### Windows
 1. Download [Honeychrome for Windows x64](https://github.com/salmansamson/honeychrome/releases/download/v0.6.1-beta/Honeychrome-v0.6.1-windows-x64.exe)
