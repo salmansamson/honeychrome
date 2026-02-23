@@ -27,7 +27,7 @@ The app is lightweight but provides all the features one expects:
 Honeychrome is fully open source to provide a platform that innovators can exploit, 
 for developing both new instrumentation and new methods in data analysis/visualisation.
 
-More about Honeychrome and the Cytkit project here: [cytkit.com](https://cytkit.com/)
+See more about Honeychrome and the Cytkit project here: [cytkit.com](https://cytkit.com/)
 
 ## Installation
 You have the following options, depending on whether you want to use the Python source 
