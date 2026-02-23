@@ -1,6 +1,6 @@
 # <img src="src/honeychrome/view_components/assets/cytkit_web_logo.png" width="60"> Honeychrome
 
-Open Source GUI App for Cytometry Acquisition and Analysis. Now in beta. Built in Python and [hosted on GitHub](https://github.com/salmansamson/honeychrome).
+Open Source GUI App for Cytometry Acquisition and Analysis. Now in beta. Built in Python. [Code and installers hosted on GitHub.](https://github.com/salmansamson/honeychrome)
 
 <div>
   <a href="https://youtu.be/RQ4-RQkDCm4"><img src="other/honeychrome screenshot animation.webp" alt="Animated Demo" width="800"></a>
