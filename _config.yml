@@ -1,6 +1,7 @@
 title: Honeychrome
 description: Open-source cross-platform spectral flow cytometry acquisition and data analysis, from the Cytkit project
-theme: jekyll-theme-cayman
-
-# Google Analytics
+remote_theme: pages-themes/slate@v0.2.0
+plugins:
+- jekyll-remote-theme # add this line to the plugins list if you already have one
+show_downloads: True
 google_analytics: G-NLDH8KTTSG
