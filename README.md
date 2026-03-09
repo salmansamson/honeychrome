@@ -1,11 +1,14 @@
-# Honeychrome
-Open Source GUI App for Cytometry Acquisition and Analysis. Now in beta.
+# <img src="src/honeychrome/view_components/assets/cytkit_web_logo.png" width="60"> Honeychrome
+
+Open-Source Cross-Platform GUI App for Cytometry Acquisition and Analysis. Built in Python. [Source code on GitHub.](https://github.com/salmansamson/honeychrome) Part of the [Cytkit](https://cytkit.com) project to provide a complete open-source spectral cytometer. 
+
+Now in beta
 
 <div>
-  <img src="other/honeychrome screenshot animation.webp" alt="Animated Demo" width="800">
+  <a href="https://youtu.be/RQ4-RQkDCm4"><img src="other/honeychrome screenshot animation.webp" alt="Animated Demo" width="800"></a>
 </div>
 
-Our aim is to make Honeychrome so intuitive that you don't need instructions. But just in case, we have prepared this instructional video [Introduction to Honeychrome in 30 Minutes](https://youtu.be/RQ4-RQkDCm4).
+Our aim is to make Honeychrome so intuitive that you don't need instructions. But just in case, we have prepared this instructional video on YouTube: [Introduction to Honeychrome in 30 Minutes](https://youtu.be/RQ4-RQkDCm4). 
 
 ## Mission statement
 
@@ -21,19 +24,22 @@ The app is lightweight but provides all the features one expects:
 - give simple statistical comparisons between samples, publication-quality graphs and exports
 - provide intuitive usability with minimal instructions
 - support the major operating systems (Windows, MacOS, Linux...)
+- no collection or processing of personal information
 
 Honeychrome is fully open source to provide a platform that innovators can exploit, 
 for developing both new instrumentation and new methods in data analysis/visualisation.
 
-See the blog https://cytkit.com/blog/
+See more about Honeychrome and the Cytkit project here: [cytkit.com](https://cytkit.com/)
 
 ## Installation
 You have the following options, depending on whether you want to use the Python source 
 code or just download an executable. For most users, it is sufficient to download
 an executable for your platform (Windows/Linux/MacOS).
 
-### For non-technical users: download and run executable
+### For non-programmers: download and run executable
 A set of compressed binary packages are available in the releases section.
+> **Note:** Since Honeychrome is very new, you may get warnings on Windows/Mac that the application is unrecognised. If so, please post the warning on the Github issues page, or contact Samson ([cytkit.com/contact](https://cytkit.com/contact)). You can normally click through any warnings; starting the app should function normally after that.
+
 #### Windows
 1. Download [Honeychrome for Windows x64](https://github.com/salmansamson/honeychrome/releases/download/v0.6.1-beta/Honeychrome-v0.6.1-windows-x64.exe)
 2. Double click to run the installer
@@ -44,12 +50,14 @@ A set of compressed binary packages are available in the releases section.
 3. Change to the honeychrome folder and run ./install_linux.sh
 
 #### MacOs
-We intend to release a MacOS executable very soon; in the meantime, please follow the Python instructions below. 
+1. Download [Honeychrome for MacOS](https://github.com/salmansamson/honeychrome/releases/download/v0.6.1-beta/honeychrome-v0.6.1-macos.dmg)
+2. Open the disk image and drag honeychrome.app to your Applications folder.
+3. Double click the app in your Applications folder to run 
 
 #### Other systems
 For all other systems, please follow the Python instructions below.
 
-### For Python users: clone and run Python source
+### For programmers: clone and run Python source
 Follow these steps to clone the repository and run the application from source:
 
 1.  **Clone the repository:**
@@ -89,7 +97,7 @@ Follow these steps to clone the repository and run the application from source:
 We have many ideas for Honeychrome and welcome new ones. 
 We also welcome anyone wishing to contribute to and improve the software!
 
-We will shortly release documentation for programmers wishing to build on Honeychrome in
+We will shortly release fuller instructions and documentation for programmers wishing to build on Honeychrome in
 new open source cytometry projects. In the meantime, please contact us if you require assistance.
 
 Honeychrome builds on several great open source Python packages:
