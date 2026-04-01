@@ -409,32 +409,34 @@ class StatisticsPlotWidget(QWidget):
             ax.set_title(self.statistics_comparison['gate'])
             if self.statistics_comparison['plot_type'] == '1D Histogram Overlay':
                 import matplotlib.ticker as ticker
-                transformation = self.controller.data_for_cytometry_plots_unmixed['transformations'][self.statistics_comparison['channel']]
-                x = transformation.step_scale[:-1]
-                for n, sample in enumerate(self.statistics_comparison['data']['Sample']):
-                    y = self.statistics_comparison['data'][self.statistics_comparison['statistic']][n]
-                    colour = settings.line_colors[n % len(settings.line_colors)]
-                    ax.plot(x, y, color=colour, linewidth=2, label=sample)
-                    ax.fill_between(x, y, color=colour, alpha=0.3)
+                if self.controller.data_for_cytometry_plots_unmixed['transformations'] and self.statistics_comparison['channel'] in self.controller.data_for_cytometry_plots_unmixed['transformations']:
+                    transformation = self.controller.data_for_cytometry_plots_unmixed['transformations'][self.statistics_comparison['channel']]
+                    x = transformation.step_scale[:-1]
+                    for n, sample in enumerate(self.statistics_comparison['data']['Sample']):
+                        y = self.statistics_comparison['data'][self.statistics_comparison['statistic']][n]
+                        colour = settings.line_colors[n % len(settings.line_colors)]
+                        ax.plot(x, y, color=colour, linewidth=2, label=sample)
+                        ax.fill_between(x, y, color=colour, alpha=0.3)
 
-                [minor_ticks, major_ticks] = transformation.ticks()
-                major_tick_values = [val for (val, name) in major_ticks]
-                major_tick_labels = [name for (val, name) in major_ticks]
-                minor_tick_values = [val for (val, name) in minor_ticks]
-                ax.xaxis.set_major_locator(ticker.FixedLocator(major_tick_values))
-                ax.xaxis.set_major_formatter(ticker.FixedFormatter(major_tick_labels))
-                ax.xaxis.set_minor_locator(ticker.FixedLocator(minor_tick_values))
+                    [minor_ticks, major_ticks] = transformation.ticks()
+                    major_tick_values = [val for (val, name) in major_ticks]
+                    major_tick_labels = [name for (val, name) in major_ticks]
+                    minor_tick_values = [val for (val, name) in minor_ticks]
+                    ax.xaxis.set_major_locator(ticker.FixedLocator(major_tick_values))
+                    ax.xaxis.set_major_formatter(ticker.FixedFormatter(major_tick_labels))
+                    ax.xaxis.set_minor_locator(ticker.FixedLocator(minor_tick_values))
 
-                ax.tick_params(axis='x', which='major', length=10, width=2, color='black')
-                ax.tick_params(axis='x', which='minor', length=5, width=1, color='gray')
+                    ax.tick_params(axis='x', which='major', length=10, width=2, color='black')
+                    ax.tick_params(axis='x', which='minor', length=5, width=1, color='gray')
 
-                ax.grid(which='major', linestyle='-', alpha=0.8)
-                ax.grid(which='minor', linestyle='-', alpha=0.4)
-                ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
-                ax.set_xlabel(self.statistics_comparison['statistic'])
-                ax.set_ylabel('Count')
-                ax.set_xlim([transformation.step_scale[0], transformation.step_scale[-1]])
-
+                    ax.grid(which='major', linestyle='-', alpha=0.8)
+                    ax.grid(which='minor', linestyle='-', alpha=0.4)
+                    ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+                    ax.set_xlabel(self.statistics_comparison['statistic'])
+                    ax.set_ylabel('Count')
+                    ax.set_xlim([transformation.step_scale[0], transformation.step_scale[-1]])
+                else:
+                    ax.text(0,0, f"Error: transform missing for {self.statistics_comparison['channel']}. Has it been deleted from spectral model?")
             else:
                 if self.statistics_comparison['depth'] == 3:
                     x = 'Category'

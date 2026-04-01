@@ -133,9 +133,14 @@ class ProfileUpdater:
                         if profile.sum() > 0:
                             profile = profile / profile.max()  # max normalisation
                         else:
-                            raise Exception(f'Failed to create label: {control['label']}. '
+                            if profile.sum() == 0:
+                                raise Exception(f'Failed to create label: {control['label']}. '
                                     f'{sample_path} has no events within the positive gate. '
                                     f'Go back to the raw data and adjust your gates. ')
+                            else:
+                                raise Exception(f'Profile {control['label']} is negative: this will yield nonsense results. '
+                                    f'Make sure the unstained negative has lower fluorescence than tha positive. '
+                                    f'Go back to the raw data and adjust your gates (or use internal negatives).')
 
                         control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
                         profile = profile.tolist()
@@ -425,9 +430,14 @@ class SpectralAutoGenerator(QObject):
                     if profile.sum() > 0:
                         profile = profile / profile.max()  # max normalisation
                     else:
-                        text = (f'Failed to create label: {control['label']}. '
-                                f'{sample_path} has no events within the positive gate. '
-                                f'Go back to the raw data and adjust your gates.')
+                        if profile.sum() == 0:
+                            text = (f'Failed to create label: {control['label']}. '
+                                    f'{sample_path} has no events within the positive gate. '
+                                    f'Go back to the raw data and adjust your gates.')
+                        else:
+                            text = (f'Profile {control['label']} is negative: this will yield nonsense results. '
+                                    f'Make sure the unstained negative has lower fluorescence than tha positive. '
+                                    f'Go back to the raw data and adjust your gates (or use internal negatives).')
                         warnings.warn(text)
                         if self.bus:
                             self.bus.warningMessage.emit(text)
