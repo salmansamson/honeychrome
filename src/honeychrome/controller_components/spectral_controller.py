@@ -416,7 +416,6 @@ class SpectralAutoGenerator(QObject):
                     control = {'label': label, 'control_type': 'Single Stained Spectral Control', 'particle_type': particle_type,
                                'gate_channel': gate_channel, 'sample_name': tubename,
                                'sample_path': full_sample_path, 'gate_label': positive_gate_label}
-                    self.spectral_model.append(control)
 
                     positive_profile = get_profile(sample, control['gate_label'], self.raw_gating, self.fluorescence_channel_ids)
                     if self.controller.experiment.process['negative_type'] == 'unstained':
@@ -442,6 +441,9 @@ class SpectralAutoGenerator(QObject):
                         if self.bus:
                             self.bus.warningMessage.emit(text)
                             return False
+
+                    # add control and profile if there wasn't a warning / exception above
+                    self.spectral_model.append(control)
 
                     profile = profile.tolist()
                     self.profiles[control['label']] = profile

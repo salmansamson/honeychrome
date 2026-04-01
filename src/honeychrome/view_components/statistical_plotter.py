@@ -436,7 +436,7 @@ class StatisticsPlotWidget(QWidget):
                     ax.set_ylabel('Count')
                     ax.set_xlim([transformation.step_scale[0], transformation.step_scale[-1]])
                 else:
-                    ax.text(0,0, f"Error: transform missing for {self.statistics_comparison['channel']}. Has it been deleted from spectral model?")
+                    ax.text(0,0, f"Error: transform missing for {self.statistics_comparison['channel']}. \nHas it been deleted from the spectral model?")
             else:
                 if self.statistics_comparison['depth'] == 3:
                     x = 'Category'
