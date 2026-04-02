@@ -1,20 +1,30 @@
+"""
+Honeychrome Plugin Template
+---------------------------
+This module defines the interface for a Honeychrome tabbed plugin.
+
+Required Attributes:
+    plugin_name (str): The display name used for the tab in the main window.
+    plugin_enabled (bool): Toggle to True to load the plugin into the UI.
+    PluginWidget (class): the widget to be displayed in the tab
+
+Technical Requirements:
+    - Framework: PySide6 (Qt for Python)
+"""
+
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QPushButton, QLabel
 from PySide6.QtCore import Qt
-
-# Example honeychrome tabbed plugin
-# Required objects:
-# - plugin_name (string): sets the name of the tab in the honeychrome main window
-# - plugin_enabled (boolean): True to show the plugin tab, False otherwise
-# - PluginWidget (QWidget): the Pyside6 widget to be displayed in the tab
-# - register(bus, controller) (function): a function to initialise PluginWidget and return the instance
-# to be displayed in the tab. Bus is the set of Pyside4 Signals for communication with different parts of
-# the Honeychrome app. Controller is the object containing the current data loaded in the app, including
-# the experiment model and the ephemeral data.
 
 plugin_name = 'Example Tabbed Plugin'
 plugin_enabled = True
 
 class PluginWidget(QWidget):
+    """
+    The main UI container for the plugin.
+    
+    This widget is instantiated via the register() function and 
+    inserted into the Honeychrome tabbed interface.
+    """
     def __init__(self, bus=None, controller=None, parent=None):
         super().__init__(parent)
         self.bus = bus
@@ -37,20 +47,35 @@ class PluginWidget(QWidget):
 
         # --- Add some GUI elements to show functionality ---
         self.label = QLabel('')
+        self.label.setTextFormat(Qt.RichText)
+        self.label.setWordWrap(True)
+
         self.refresh_button = QPushButton('Refresh')
-        self.refresh_button.setToolTip('Refresh data')
-        self.refresh_button.clicked.connect(self.initialise)
-        self.buttons = QWidget()
-        main_layout.addWidget(self.label)
+        self.refresh_button.setToolTip('Runs a method "refresh"')
+        self.refresh_button.clicked.connect(self.refresh)
+
+        self.popup_button = QPushButton('Send signal to make popup')
+        self.popup_button.setToolTip('Uses the signal bus to communicate with a function elsewhere in Honeychrome')
+        self.popup_button.clicked.connect(lambda: self.bus.popupMessage.emit('Hello World!'))
+
+        main_layout.addWidget(self.popup_button)
         main_layout.addWidget(self.refresh_button)
+        main_layout.addWidget(self.label)
 
-        self.initialise()
+        self.refresh()
 
-    def initialise(self):
-        # initialise plots (if statistics already defined) and initialise menu
-        self.label.setText('hello world')
+    def refresh(self):
+        # put some data from the controller into the label
+        import json
 
-
-def register(bus=None, controller=None):
-    widget = PluginWidget(bus=bus, controller=controller)
-    return widget
+        self.label.setText(f'''
+        <h1>Hello world!</h1>
+        
+        <p>Cytometry data can be accessed from the controller object (and the experiment object from controller.experiment):</p>
+        
+        <ul>
+            <li> controller.experiment_dir: <pre>{self.controller.experiment_dir}</pre> </li>
+            <li> controller.current_sample_path: <pre>{self.controller.current_sample_path}</pre> </li>
+            <li> controller.expreriment.samples: <pre>{json.dumps(self.controller.experiment.samples, indent=2)}</pre> </li>
+        </ul>
+        ''')

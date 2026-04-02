@@ -31,8 +31,8 @@ def load_tabbed_plugins(bus, controller):
             spec.loader.exec_module(module)
 
             if module.plugin_enabled:
-                # 6. Call a setup function if your plugins follow a pattern, return a widget to be put in the tab
-                widget = module.register(bus=bus, controller=controller)
+                # 6. initialise widget to be put in the tab
+                widget = module.PluginWidget(bus=bus, controller=controller)
 
                 print(f"Successfully loaded plugin: {module_name}")
                 tab_plugins[module_name] = {'module':module, 'widget':widget}
