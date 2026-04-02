@@ -11,11 +11,14 @@ Required Attributes:
 Technical Requirements:
     - Framework: PySide6 (Qt for Python)
 """
+from pathlib import Path
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QPushButton, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QPushButton, QLabel, QComboBox
 from PySide6.QtCore import Qt
+from honeychrome.controller_components.functions import get_all_subfolders_recursive
+from honeychrome.view_components.ordered_multi_sample_picker import OrderedMultiSamplePicker
 
-plugin_name = 'Example Tabbed Plugin'
+plugin_name = 'Data Processing Example Plugin'
 plugin_enabled = True
 
 class PluginWidget(QWidget):
@@ -47,38 +50,28 @@ class PluginWidget(QWidget):
         overall_layout = QVBoxLayout(self)
         overall_layout.addWidget(scroll)
 
+        # --- Add objects for a data processing workflow ---
+        # Add sample picker
+        self.picker = OrderedMultiSamplePicker(title="Choose Source Samples for Processing")
 
-        # --- Add some GUI elements to show functionality ---
-        self.label = QLabel('')
-        self.label.setTextFormat(Qt.RichText)
-        self.label.setWordWrap(True)
+        # --- Add gui elements ---
+        self.label = QLabel('Data Processing Example')
 
-        self.refresh_button = QPushButton('Refresh')
-        self.refresh_button.setToolTip('Runs a method "refresh"')
-        self.refresh_button.clicked.connect(self.refresh)
+        self.build_button = QPushButton('Build model')
+        self.build_button.setToolTip('Runs the process on selected samples')
+        self.build_button.clicked.connect(self.build)
 
-        self.popup_button = QPushButton('Send signal to make popup')
-        self.popup_button.setToolTip('Uses the signal bus to communicate with a function elsewhere in Honeychrome')
-        self.popup_button.clicked.connect(lambda: self.bus.popupMessage.emit('Hello World!'))
-
-        main_layout.addWidget(self.popup_button)
-        main_layout.addWidget(self.refresh_button)
         main_layout.addWidget(self.label)
+        main_layout.addWidget(self.picker)
+        main_layout.addStretch()
 
-        self.refresh()
+        self.initialise_sample_list()
 
-    def refresh(self):
-        # put some data from the controller into the label
-        import json
+    def initialise_sample_list(self):
+        all_samples = self.controller.experiment.samples['all_samples']
+        source_samples_relative_to_raw = [str(Path(sample).relative_to(self.controller.experiment.settings['raw']['raw_samples_subdirectory']))
+                                          for sample in all_samples]
+        self.picker.set_items(source_samples_relative_to_raw)
 
-        self.label.setText(f'''
-        <h1>Hello world!</h1>
-        
-        <p>Cytometry data can be accessed from the controller object (and the experiment object from controller.experiment):</p>
-        
-        <ul>
-            <li> controller.experiment_dir: <pre>{self.controller.experiment_dir}</pre> </li>
-            <li> controller.current_sample_path: <pre>{self.controller.current_sample_path}</pre> </li>
-            <li> controller.expreriment.samples: <pre>{json.dumps(self.controller.experiment.samples, indent=2)}</pre> </li>
-        </ul>
-        ''')
+    def build(self):
+        print('Build!')
