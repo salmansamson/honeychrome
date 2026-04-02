@@ -32,6 +32,8 @@ class PluginWidget(QWidget):
         self.controller = controller
 
         # --- Create widget, scroll area and layouts to hold the plugin content ---
+
+        # the content widget goes in a scroll widget, which goes in the PluginWidget
         content_widget = QWidget()
         main_layout = QVBoxLayout(content_widget)
 
