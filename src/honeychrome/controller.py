@@ -744,6 +744,12 @@ class Controller(QObject):
         elif tab_name == 'Statistics':
             self.current_mode = 'statistics'
             self.data_for_cytometry_plots = self.data_for_cytometry_plots_unmixed
+        else:
+            # catch all for plugin tabs
+            self.current_mode = tab_name
+            self.data_for_cytometry_plots = None
+            return
+
 
         self.initialise_data_for_cytometry_plots()
 

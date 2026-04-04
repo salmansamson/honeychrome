@@ -53,5 +53,5 @@ class ExportablePlotWidget(QWidget):
 
     def export_graphic(self):
         self.figure.savefig(f"{self.experiment_dir /self.export_filename}.{settings.graphics_export_format_retrieved}", bbox_inches="tight")
-        QMessageBox.information(self, "Exported", f"Exported {settings.graphics_export_format_retrieved} graphic file: \n{self.export_filename}.{settings.graphics_export_format_retrieved}\nto {self.controller.experiment_dir}")
+        QMessageBox.information(self, "Exported", f"Exported {settings.graphics_export_format_retrieved} graphic file: \n{self.export_filename}.{settings.graphics_export_format_retrieved}\nto {self.experiment_dir}")
 

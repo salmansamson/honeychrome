@@ -27,6 +27,8 @@ from honeychrome.view_components.copyable_table_widget import CopyableTableWidge
 
 plugin_name = 'Data Processing Example Plugin'
 plugin_enabled = True
+table_headers = ['Index', 'Colour', 'Count']
+
 
 class PluginWidget(QWidget):
     """
@@ -70,20 +72,32 @@ class PluginWidget(QWidget):
         output_widget = QWidget()
         self.output_layout = QVBoxLayout(output_widget)
 
-
         # --- Add gui elements ---
         self.build_button = QPushButton('Build model')
         self.build_button.setToolTip('Runs the process on selected samples')
         self.build_button.clicked.connect(self.build_model)
 
+        training_widget = QWidget()
+        self.training_layout = QVBoxLayout(training_widget)
+
+        prediction_widget = QWidget()
+        self.prediction_layout = QVBoxLayout(prediction_widget)
+
         main_layout.addWidget(self.label)
         main_layout.addWidget(self.gate_combo)
         main_layout.addWidget(self.picker)
         main_layout.addWidget(self.build_button)
+        main_layout.addWidget(training_widget)
+        main_layout.addWidget(prediction_widget)
         main_layout.addWidget(output_widget)
         main_layout.addStretch()
 
         self.bus.modeChangeRequested.connect(self.initialise_gui)
+        self.bus.loadSampleRequested.connect(self.predict_sample)
+
+        self.reducer = None
+        self.clusterer = None
+        self.label_to_color = None
 
     def initialise_gui(self, mode):
         # re-iniitialise if user selects this tab
@@ -128,12 +142,25 @@ class PluginWidget(QWidget):
     @with_busy_cursor
     def umap_fit_transform(self, data):
         import umap
-        reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, transform_queue_size=1.0, n_components=2).fit(data)
-        embedding = reducer.transform(data)
-        return reducer, embedding
+        self.reducer = umap.UMAP(n_neighbors=15, min_dist=0.1, transform_queue_size=1.0, n_components=2).fit(data)
+        embedding = self.reducer.transform(data)
+        return embedding
+
+    @with_busy_cursor
+    def generate_clusterer(self, embedding):
+        # Cluster the UMAP output with HDBSCAN
+        import hdbscan
+        self.clusterer = hdbscan.HDBSCAN(min_cluster_size=50, prediction_data=True).fit(embedding)
+
+    def predict_new_data(self, data):
+        import hdbscan
+        new_embedding = self.reducer.transform(data)
+        new_labels, strengths = hdbscan.approximate_predict(self.clusterer, new_embedding)
+        return new_embedding, new_labels, strengths
 
     def build_model(self):
-        clear_layout(self.output_layout)
+        clear_layout(self.training_layout)
+
         self.progress_message(f'{datetime.now():%H:%M:%S} Started model building...')
 
         gate_name = self.gate_combo.currentText()
@@ -184,48 +211,115 @@ class PluginWidget(QWidget):
             data = gated_sample_data_all
             # data = gated_sample_data_all[np.random.choice(np.arange(len(gated_sample_data_all)), 5000)]
             self.progress_message(f'{datetime.now():%H:%M:%S} Calculating UMAP reducer and embedding')
-            reducer, embedding = self.umap_fit_transform(data)
-
-            # Cluster the UMAP output with HDBSCAN
-            import hdbscan
-            clusterer = hdbscan.HDBSCAN(min_cluster_size=50, prediction_data=True).fit(embedding)
+            embedding = self.umap_fit_transform(data)
+            self.generate_clusterer(embedding)
             self.progress_message(f'{datetime.now():%H:%M:%S} Clustering with HDBSCAN')
-            labels = clusterer.labels_
+            labels = self.clusterer.labels_
 
             # ---- prepare plot and table output-----
             self.progress_message(f'{datetime.now():%H:%M:%S} Preparing UMAP plot')
-            unique_labels = np.unique(labels).astype(int)
+            # unique_labels = np.unique(labels).astype(int)
+            unique_labels = np.arange(-1, max(labels)+1)
             palette = cc.glasbey
 
-            headers = ['Index', 'Colour', 'Count']
-            label_to_color = {}
+            self.label_to_color = {}
             table_data = []
             for i, unique_label in enumerate(unique_labels):
                 l = int(unique_label)
                 if l == -1:
-                    label_to_color[l] = "#7f7f7f"  # Standard Gray for noise
+                    self.label_to_color[l] = "#7f7f7f"  # Standard Gray for noise
                 else:
                     # Use modulo to wrap around if there are > 256 clusters
-                    label_to_color[l] = palette[i % len(palette)]
+                    self.label_to_color[l] = palette[i % len(palette)]
 
-                table_data.append({'Index': l, 'Colour': label_to_color[l], 'Count': int(np.sum(labels == l))})
+                table_data.append({'Index': l, 'Colour': self.label_to_color[l], 'Count': int(np.sum(labels == l))})
 
-            plot_colors = [label_to_color[l] for l in labels]
+            plot_colors = [self.label_to_color[l] for l in labels]
             from matplotlib import pyplot as plt
             figure, ax = plt.subplots(1)
             ax.axis('equal')
             ax.scatter(embedding[:, 0], embedding[:, 1], c=plot_colors, s=5)
 
             # put plot in a widget and add to the layout
+            self.training_layout.addWidget(QLabel("Training UMAP and clusters"))
+
             plot_widget = ExportablePlotWidget(figure, title="UMAP training data and clustering", experiment_dir=self.controller.experiment_dir)
-            self.output_layout.addWidget(plot_widget)
+            self.training_layout.addWidget(plot_widget)
 
             # generate and add table widget
-            self.output_layout.addWidget(QLabel('Clusters'))
-            table_widget = CopyableTableWidget(table_data, headers)
-            self.output_layout.addWidget(table_widget)
+            table_widget = CopyableTableWidget(table_data, table_headers)
+            self.training_layout.addWidget(table_widget)
 
-            self.progress_message('Finished model building. Click on a sample (in the sample browser) to view in the UMAP representation.')
+            self.progress_message(f'{datetime.now():%H:%M:%S} Finished model building.')
+            self.progress_message('Click on a sample (in the sample browser) to view it in the same UMAP embedding and clusters.')
 
         except Exception as e:
             self.progress_message(f'Exception: {e}')
+
+
+    def predict_sample(self, sample_path):
+        if self.controller.current_mode == plugin_name:
+            if self.reducer and self.clusterer:
+                clear_layout(self.prediction_layout)
+
+                gate_name = self.gate_combo.currentText()
+                if gate_name == "Select Gate:":
+                    self.progress_message('Please select a gate.')
+                    return
+
+                cytometry_data = self.controller.data_for_cytometry_plots_unmixed.copy()
+
+                full_sample_path = str(self.controller.experiment_dir / sample_path)
+                sample = sample_from_fcs(full_sample_path)
+                raw_event_data = sample.get_events(source='raw')
+                n_events = sample.event_count
+
+                if n_events > 0:
+                    unmixed_event_data = apply_transfer_matrix(self.controller.transfer_matrix, raw_event_data)
+                    cytometry_data.update({'event_data': unmixed_event_data})
+
+                    gate_membership = {'root': np.ones(len(cytometry_data['event_data']), dtype=np.bool_)}
+                    cytometry_data.update({'gate_membership': gate_membership})
+                    gates_to_calculate = [g[0] for g in cytometry_data['gating'].get_gate_ids()]
+                    apply_gates_in_place(cytometry_data, gates_to_calculate=gates_to_calculate)
+                    gate_membership = cytometry_data['gate_membership'][gate_name]
+                    gated_sample_data = cytometry_data['event_data'][gate_membership]
+                    self.progress_message(f'{datetime.now():%H:%M:%S} Loaded {sample_path}: {len(gated_sample_data)}/{n_events} events within {gate_name}')
+                else:
+                    self.progress_message(f'Cannot process sample: 0 events in {sample_path}.')
+                    return
+
+            try:
+                self.progress_message(f'{datetime.now():%H:%M:%S} Calculating UMAP embedding for {sample_path}')
+                embedding, labels, strengths = self.predict_new_data(gated_sample_data)
+
+                # ---- prepare plot and table output-----
+                self.progress_message(f'{datetime.now():%H:%M:%S} Preparing UMAP plot')
+                table_data = []
+                unique_labels = self.label_to_color.keys()
+                for i, l in enumerate(unique_labels):
+                    table_data.append({'Index': l, 'Colour': self.label_to_color[l], 'Count': int(np.sum(labels == l))})
+
+                plot_colors = [self.label_to_color[l] for l in labels]
+                from matplotlib import pyplot as plt
+                figure, ax = plt.subplots(1)
+                ax.axis('equal')
+                ax.scatter(embedding[:, 0], embedding[:, 1], c=plot_colors, s=5)
+
+                # put plot in a widget and add to the layout
+                self.prediction_layout.addWidget(QLabel("Prediction UMAP and clusters"))
+                plot_widget = ExportablePlotWidget(figure, title=f"{str(Path(sample_path).stem)} UMAP prediction data and clustering", experiment_dir=self.controller.experiment_dir)
+                self.prediction_layout.addWidget(plot_widget)
+
+                # generate and add table widget
+                table_widget = CopyableTableWidget(table_data, table_headers)
+                self.prediction_layout.addWidget(table_widget)
+
+                self.progress_message(f'{datetime.now():%H:%M:%S} Finished prediction of {sample_path}.')
+
+            except Exception as e:
+                self.progress_message(f'Exception: {e}')
+
+
+
+
