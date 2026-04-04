@@ -37,6 +37,15 @@ class PluginWidget(QWidget):
     Required arguments:
         bus: the signals to communicate with the rest of the honeychrome app
         controller: the honeychrome controller including all ephemeral data and the experiment model
+
+    This plugin processes a selection of sample FCS files according to a gate in the unmixed data. It trains a UMAP reducer model on the selection,
+    and a clusterer model on top of the UMAP embedding. Then embedding and clusters can be predicted for any selected sample.
+
+    Methods:
+        initialise_gui: runs when tab is selected, updates gate combobox and sample picker
+        train_model: runs umap on training data, plots results as scatter plot and table
+        predict_sample: runs umap on selected sample, plots results as scatter plot and table
+
     """
     def __init__(self, bus=None, controller=None, parent=None):
         super().__init__(parent)
