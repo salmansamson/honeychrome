@@ -4,11 +4,12 @@ from PySide6.QtCore import Qt
 
 
 class ExportablePlotWidget(QWidget):
-    def __init__(self, figure, export_filename='figure', parent=None):
+    def __init__(self, figure, title='figure', experiment_dir='', parent=None):
         super().__init__(parent)
 
-        self.export_filename = export_filename
-        self.plot_label = QLabel(export_filename)
+        self.experiment_dir = experiment_dir
+        self.export_filename = title
+        self.plot_label = QLabel(title)
         self.plot_label.setTextFormat(Qt.RichText)
         self.plot_label.setWordWrap(True)
         self.plot_label.setMinimumWidth(200)
@@ -27,13 +28,10 @@ class ExportablePlotWidget(QWidget):
         self.delete_button.clicked.connect(self.delete_plot)
         self.export_graphic_button = QPushButton('Export Graphic')
         self.export_graphic_button.clicked.connect(self.export_graphic)
-        self.export_csv_button = QPushButton('Export CSV')
-        self.export_csv_button.clicked.connect(self.export_csv)
         buttons_layout = QVBoxLayout()
         buttons_layout.addWidget(self.plot_label)
         buttons_layout.addWidget(self.delete_button)
         buttons_layout.addWidget(self.export_graphic_button)
-        buttons_layout.addWidget(self.export_csv_button)
         buttons_layout.addStretch()
 
         # Layout to hold the canvas
@@ -54,11 +52,6 @@ class ExportablePlotWidget(QWidget):
             self.deleteLater()
 
     def export_graphic(self):
-        self.figure.savefig(f"{self.controller.experiment_dir /self.export_filename}.{settings.graphics_export_format_retrieved}", bbox_inches="tight")
+        self.figure.savefig(f"{self.experiment_dir /self.export_filename}.{settings.graphics_export_format_retrieved}", bbox_inches="tight")
         QMessageBox.information(self, "Exported", f"Exported {settings.graphics_export_format_retrieved} graphic file: \n{self.export_filename}.{settings.graphics_export_format_retrieved}\nto {self.controller.experiment_dir}")
-
-    def export_csv(self):
-        from pandas import DataFrame
-        DataFrame(self.statistics_comparison['data']).to_csv(f"{self.controller.experiment_dir /self.export_filename}.csv")
-        QMessageBox.information(self, "Exported", f"Exported CSV file: \n{self.export_filename}.csv\nto {self.controller.experiment_dir}")
 

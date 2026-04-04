@@ -35,16 +35,6 @@ base_directory = Path.home() / experiments_folder
 import logging
 logger = logging.getLogger(__name__)
 
-def clear_layout(widget):
-    """Safely clear all widgets from current layout"""
-    if widget.layout():
-        # Remove all widgets from the layout
-        while widget.layout().count():
-            child = widget.layout().takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()  # The layout itself will be garbage collected when replaced
-
-
 class MainWindow(QMainWindow):
     def __init__(self, bus=None, controller=None, parent=None, is_dark=False):
         super().__init__(parent)
