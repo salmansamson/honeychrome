@@ -1,6 +1,8 @@
 '''
 Honeychrome - open source cytometry data acquisition and analysis software
 '''
+import shutil
+
 # from honeychrome.tools import DepthFinder # debug module imports here
 import honeychrome.dummy_loader
 
@@ -15,6 +17,7 @@ from multiprocessing import shared_memory, Lock
 import numpy as np
 
 from honeychrome.settings import experiments_folder
+current_file_path = Path(__file__).resolve()
 
 '''
 Instrument Communicator:
@@ -110,8 +113,19 @@ def setup_logging(log_file):
 
 
 def main():
-    # Usage
-    (Path.home() / experiments_folder).mkdir(parents=True, exist_ok=True)
+    # create experiments directory and plugins directory
+    experiment_path = Path.home() / experiments_folder
+    experiment_path.mkdir(parents=True, exist_ok=True)
+    plugins_path = experiment_path / 'plugins'
+    plugins_path.mkdir(parents=True, exist_ok=True)
+
+    # copy plugin templates if they do not already exist in experiments/plugins folder
+    template_plugins_path = current_file_path.parent.parent.parent / "plugin_templates"
+    for template in template_plugins_path.glob("*_tab.py"):
+        destination = plugins_path / template.name
+        if not destination.exists():
+            shutil.copy2(template, destination)
+
     logger = setup_logging(Path.home() / experiments_folder / 'honeychrome.log')
 
     # # Log messages at different levels

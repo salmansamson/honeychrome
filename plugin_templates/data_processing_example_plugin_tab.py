@@ -5,7 +5,6 @@ This module defines the interface for a Honeychrome tabbed plugin.
 
 Required Attributes:
     plugin_name (str): The display name used for the tab in the main window.
-    plugin_enabled (bool): Toggle to True to load the plugin into the UI.
     PluginWidget (class): the widget to be displayed in the tab
 
 Technical Requirements:
@@ -26,7 +25,6 @@ from honeychrome.view_components.ordered_multi_sample_picker import OrderedMulti
 from honeychrome.view_components.copyable_table_widget import CopyableTableWidget
 
 plugin_name = 'Data Processing Example Plugin'
-plugin_enabled = True
 table_headers = ['Index', 'Colour', 'Count']
 
 

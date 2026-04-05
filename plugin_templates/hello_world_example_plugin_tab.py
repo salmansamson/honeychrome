@@ -5,7 +5,6 @@ This module defines the interface for a Honeychrome tabbed plugin.
 
 Required Attributes:
     plugin_name (str): The display name used for the tab in the main window.
-    plugin_enabled (bool): Toggle to True to load the plugin into the UI.
     PluginWidget (class): the widget to be displayed in the tab
 
 Technical Requirements:
@@ -16,7 +15,6 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QPushButton, QL
 from PySide6.QtCore import Qt
 
 plugin_name = 'Hello World Plugin'
-plugin_enabled = True
 
 class PluginWidget(QWidget):
     """

@@ -21,6 +21,9 @@ from PySide6.QtWidgets import QApplication, QLabel
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtCore import Qt
 
+PLUGIN_DIR = Path.home() / experiments_folder / "plugins"
+plugins_path = Path(PLUGIN_DIR)
+
 def colormap_to_qimage(cmap_name, width=256, height=20):
     """
     Convert a colorcet colormap to a horizontal swatch QImage.
@@ -50,7 +53,7 @@ class AppConfigDialog(QDialog):
     def __init__(self, parent=None, bus=None):
         super().__init__(parent)
         self.setWindowTitle("Application Configuration")
-        self.resize(700, 700)
+        self.resize(1000, 700)
         self.settings = QSettings("honeychrome", "app_configuration")
         self.bus = bus
 
@@ -120,6 +123,11 @@ class AppConfigDialog(QDialog):
         form.addRow("Include unmixed data in sample report", self.report_include_unmixed_cb)
         form.addRow("Include spectral process in sample report", self.report_include_process_cb)
 
+        self.enable_plugin = {}
+        for file_path in plugins_path.glob("*_tab.py"):
+            self.enable_plugin[file_path] = QCheckBox(f"Enable {file_path.stem}")
+            form.addRow(f"Tabbed plugin", self.enable_plugin[file_path])
+
         scroll.setWidget(container)
         main_layout.addWidget(scroll)
 
@@ -169,6 +177,9 @@ class AppConfigDialog(QDialog):
         self.report_include_unmixed_cb.setChecked(self.settings.value("report_include_unmixed", report_include_unmixed, type=bool))
         self.report_include_process_cb.setChecked(self.settings.value("report_include_process", report_include_process, type=bool))
 
+        for file_path in plugins_path.glob("*_tab.py"):
+            self.enable_plugin[file_path].setChecked(self.settings.value(f"Enable Plugin {file_path}", False, type=bool))\
+
     def save_settings(self):
         self.settings.setValue("colourmap", self.colourmap_combo.currentText())
         self.settings.setValue("graphics_export_format", self.graphics_export_format_combo.currentText())
@@ -182,6 +193,9 @@ class AppConfigDialog(QDialog):
         self.settings.setValue("report_include_raw", self.report_include_raw_cb.isChecked())
         self.settings.setValue("report_include_unmixed", self.report_include_unmixed_cb.isChecked())
         self.settings.setValue("report_include_process", self.report_include_process_cb.isChecked())
+
+        for file_path in plugins_path.glob("*_tab.py"):
+            self.settings.setValue(f"Enable Plugin {file_path}", self.enable_plugin[file_path].isChecked())
 
     def handle_accept(self):
         self.save_settings()
@@ -206,6 +220,9 @@ class AppConfigDialog(QDialog):
         self.report_include_raw_cb.setChecked(report_include_raw)
         self.report_include_unmixed_cb.setChecked(report_include_unmixed)
         self.report_include_process_cb.setChecked(report_include_process)
+
+        for file_path in plugins_path.glob("*_tab.py"):
+            self.enable_plugin[file_path].setChecked(False)
 
 
 class InstrumentConfigDialog(QDialog):
