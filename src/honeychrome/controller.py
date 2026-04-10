@@ -973,7 +973,11 @@ class Controller(QObject):
             statistics = calc_stats(self.data_for_cytometry_plots)
             self.data_for_cytometry_plots['statistics'] = statistics
 
-            hists = calc_hists(self.data_for_cytometry_plots, indices_plots_to_calculate=indices_plots_to_calculate, status_message_signal=status_message_signal, density_cutoff=settings.density_cutoff_retrieved)
+            hists = calc_hists(self.data_for_cytometry_plots,
+                               indices_plots_to_calculate=indices_plots_to_calculate,
+                               status_message_signal=status_message_signal,
+                               density_cutoff=settings.density_cutoff_retrieved,
+                               dot_plot_by_gate=settings.hist2dtype_retrieved=='Dot plot coloured by gate')
             if indices_plots_to_calculate is None:
                 indices_plots_to_calculate = list(range(len(self.data_for_cytometry_plots['plots'])))
 

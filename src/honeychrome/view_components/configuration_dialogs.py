@@ -8,7 +8,7 @@ import re
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QDialog, QScrollArea, QFormLayout, QLineEdit, QCheckBox, QSpinBox, QDoubleSpinBox, QDialogButtonBox, QComboBox, QLabel, QButtonGroup, QFileDialog)
 from PySide6.QtCore import Qt, QSettings
 
-from honeychrome.settings import (colourmap_choice, graphics_export_formats, colormap_name, graphics_export_format, cytometry_plot_width_target,
+from honeychrome.settings import (colourmap_choice, graphics_export_formats, hist2dtype, colormap_name, graphics_export_format, cytometry_plot_width_target,
                       tile_size_nxn_grid, subsample, hist_bins, density_cutoff, trigger_channel, adc_channels, width_channels, height_channels,
                       use_dummy_instrument, magnitude_ceilings, magnitude_ceiling, raw_settings, unmixed_settings, experiments_folder,
                       magnitude_ceilings_int, spectral_positive_gate_percent, spectral_negative_gate_percent, report_include_raw, report_include_unmixed, report_include_process)
@@ -128,6 +128,11 @@ class AppConfigDialog(QDialog):
         form.setSpacing(10)
 
         # --- Settings Widgets ---
+
+        self.hist2dtype_combo = QComboBox()
+        self.hist2dtype_combo.addItems(settings.hist2dtypes)
+        form.addRow("2D plot type:", self.hist2dtype_combo)
+
         self.colourmap_combo = QComboBox()
         self.colourmap_combo.addItems(colourmap_choice)
         form.addRow("Colourmap (visit colorcet.com for definitions):", self.colourmap_combo)
@@ -215,6 +220,11 @@ class AppConfigDialog(QDialog):
         self.swatch.setPixmap(qpixmap)
 
     def load_settings(self):
+        hist2dtype_retrieved = str(self.settings.value("hist2dtype", hist2dtype))
+        index = self.hist2dtype_combo.findText(hist2dtype_retrieved)
+        if index >= 0:
+            self.hist2dtype_combo.setCurrentIndex(index)
+
         colourmap_retrieved = str(self.settings.value("colourmap", colormap_name))
         index = self.colourmap_combo.findText(colourmap_retrieved)
         if index >= 0:
@@ -241,6 +251,7 @@ class AppConfigDialog(QDialog):
             self.enable_plugin[file_path].setChecked(self.settings.value(f"EnablePlugin_{file_path}", False, type=bool))\
 
     def save_settings(self):
+        self.settings.setValue("hist2dtype", self.hist2dtype_combo.currentText())
         self.settings.setValue("colourmap", self.colourmap_combo.currentText())
         self.settings.setValue("graphics_export_format", self.graphics_export_format_combo.currentText())
         self.settings.setValue("cytometry_plot_size", self.cytometry_plot_size_spin.value())
@@ -264,6 +275,9 @@ class AppConfigDialog(QDialog):
         self.bus.reloadExpRequested.emit()
 
     def reset_to_defaults(self):
+        index = self.hist2dtype_combo.findText(hist2dtype)
+        if index >= 0:
+            self.hist2dtype_combo.setCurrentIndex(index)
         index = self.colourmap_combo.findText(colormap_name)
         if index >= 0:
             self.colourmap_combo.setCurrentIndex(index)

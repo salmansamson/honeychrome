@@ -353,7 +353,7 @@ def initialise_stats(gating):
     return statistics
 
 
-def calc_hists(data_for_cytometry_plots, indices_plots_to_calculate=None, status_message_signal=None, density_cutoff=None):
+def calc_hists(data_for_cytometry_plots, indices_plots_to_calculate=None, status_message_signal=None, density_cutoff=None, dot_plot_by_gate=False):
     plots = data_for_cytometry_plots['plots']
     gate_membership = data_for_cytometry_plots['gate_membership']
 
@@ -380,7 +380,13 @@ def calc_hists(data_for_cytometry_plots, indices_plots_to_calculate=None, status
             id_channel_y = pnn.index(plot['channel_y'])
             transform_x = transformations[plot['channel_x']]
             transform_y = transformations[plot['channel_y']]
-            histogram = calc_hist2d(event_data, mask, id_channel_x, id_channel_y, transform_x, transform_y, density_cutoff)
+            if dot_plot_by_gate:
+                gating = data_for_cytometry_plots['gating']
+                gate_ids = [g for g in gating.get_gate_ids() if gating._get_gate_node(g[0], g[1]).gate_type != 'QuadrantGate']
+                source_and_child_gates = [source_gate] + [g[0] for g in gate_ids if source_gate in g[1]]
+                histogram = calc_dotplot2d(event_data, source_and_child_gates, gate_membership, id_channel_x, id_channel_y, transform_x, transform_y, density_cutoff)
+            else:
+                histogram = calc_hist2d(event_data, mask, id_channel_x, id_channel_y, transform_x, transform_y, density_cutoff)
         else: # 'ribbon'
             histogram = calc_ribbon_plot(event_data, mask, fluoro_indices, transformations['ribbon'], density_cutoff)
 
@@ -462,6 +468,25 @@ def calc_ribbon_plot(event_data, mask, fluoro_indices, transform, density_cutoff
         heatmap[mask_1] += max_value//255+1  # Maps to LUT[1]
 
     return heatmap
+
+
+def calc_dotplot2d(event_data, source_and_child_gates, gate_membership, id_channel_x, id_channel_y, transform_x, transform_y, density_cutoff):
+    dotmap = np.zeros([len(transform_x.scale)-1, len(transform_y.scale)-1])
+    gate_list_ordered = list(gate_membership.keys())
+    for gate in source_and_child_gates:
+        mask = gate_membership[gate]
+        gate_key = gate_list_ordered.index(gate)
+
+        x = event_data[mask, id_channel_x]
+        y = event_data[mask, id_channel_y]
+
+        # Calculate 2D histogram (density)
+        heatmap, xedges, yedges = np.histogram2d(x, y, bins=[transform_x.scale, transform_y.scale])
+
+        mask_1 = (heatmap > density_cutoff)
+        dotmap[mask_1] = gate_key
+
+    return dotmap
 
 
 def calc_hist2d(event_data, mask, id_channel_x, id_channel_y, transform_x, transform_y, density_cutoff):

@@ -36,6 +36,8 @@ tile_size_nxn_grid = 100 # pixels
 roi_handle_size = 12 # pixels
 colormap_name = 'rainbow4' # Choose a Colorcet colormap (e.g., 'fire', 'bgy', 'rainbow')
 colourmap_choice = ['bjy', 'kbc', 'bgy', 'bmy', 'CET_CBD2', 'rainbow', 'rainbow4', 'fire'] # use linear or rainbow colourmaps
+hist2dtype = '2D Histogram'
+hist2dtypes = ['2D Histogram', 'Dot plot coloured by gate']
 report_include_raw = False
 report_include_unmixed = True
 report_include_process = True
@@ -176,6 +178,7 @@ cytometry_default = {
 
 # retrieve from QSettings
 q_settings = QSettings("honeychrome", "app_configuration")
+hist2dtype_retrieved = str(q_settings.value("hist2dtype", hist2dtype))
 colourmap_name_retrieved = str(q_settings.value("colourmap", colormap_name))
 graphics_export_format_retrieved = str(q_settings.value("graphics_export_format", graphics_export_format))
 cytometry_plot_width_target_retrieved = q_settings.value("cytometry_plot_size", cytometry_plot_width_target, type=int)
