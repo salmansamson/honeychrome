@@ -173,7 +173,6 @@ def apply_transfer_matrix(transfer_matrix, raw_event_data):
         live data updated
         calculate stats
         export unmixed FCS
-    todo update this for WLS unmixing
     '''
     return raw_event_data @ transfer_matrix
 
@@ -475,6 +474,7 @@ def calc_hist2d(event_data, mask, id_channel_x, id_channel_y, transform_x, trans
     # make sure all unit bins get lowest LUT
     global_max_value = heatmap.max()
     inside_max_value = heatmap[1:-1,1:-1].max()
+
     if inside_max_value < global_max_value:
         # heatmap[0,:] *= inside_max_value
         # heatmap[-1,:] *= inside_max_value
@@ -492,6 +492,9 @@ def calc_hist2d(event_data, mask, id_channel_x, id_channel_y, transform_x, trans
     if density_cutoff > 0:
         mask_1 = (heatmap >= density_cutoff)
         heatmap[mask_1] += inside_max_value//255+1  # Maps to LUT[1]
+
+        global_max_value = np.percentile(heatmap[mask_1], 99.9)
+        np.clip(heatmap, 0, global_max_value, out=heatmap)
 
     return heatmap
 

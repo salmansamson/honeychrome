@@ -133,9 +133,14 @@ class ProfileUpdater:
                         if profile.sum() > 0:
                             profile = profile / profile.max()  # max normalisation
                         else:
-                            raise Exception(f'Failed to create label: {control['label']}. '
+                            if profile.sum() == 0:
+                                raise Exception(f'Failed to create label: {control['label']}. '
                                     f'{sample_path} has no events within the positive gate. '
                                     f'Go back to the raw data and adjust your gates. ')
+                            else:
+                                raise Exception(f'Profile {control['label']} is negative: this will yield nonsense results. '
+                                    f'Make sure the unstained negative has lower fluorescence than tha positive. '
+                                    f'Go back to the raw data and adjust your gates (or use internal negatives).')
 
                         control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
                         profile = profile.tolist()
@@ -411,7 +416,6 @@ class SpectralAutoGenerator(QObject):
                     control = {'label': label, 'control_type': 'Single Stained Spectral Control', 'particle_type': particle_type,
                                'gate_channel': gate_channel, 'sample_name': tubename,
                                'sample_path': full_sample_path, 'gate_label': positive_gate_label}
-                    self.spectral_model.append(control)
 
                     positive_profile = get_profile(sample, control['gate_label'], self.raw_gating, self.fluorescence_channel_ids)
                     if self.controller.experiment.process['negative_type'] == 'unstained':
@@ -425,13 +429,21 @@ class SpectralAutoGenerator(QObject):
                     if profile.sum() > 0:
                         profile = profile / profile.max()  # max normalisation
                     else:
-                        text = (f'Failed to create label: {control['label']}. '
-                                f'{sample_path} has no events within the positive gate. '
-                                f'Go back to the raw data and adjust your gates.')
+                        if profile.sum() == 0:
+                            text = (f'Failed to create label: {control['label']}. '
+                                    f'{sample_path} has no events within the positive gate. '
+                                    f'Go back to the raw data and adjust your gates.')
+                        else:
+                            text = (f'Profile {control['label']} is negative: this will yield nonsense results. '
+                                    f'Make sure the unstained negative has lower fluorescence than tha positive. '
+                                    f'Go back to the raw data and adjust your gates (or use internal negatives).')
                         warnings.warn(text)
                         if self.bus:
                             self.bus.warningMessage.emit(text)
                             return False
+
+                    # add control and profile if there wasn't a warning / exception above
+                    self.spectral_model.append(control)
 
                     profile = profile.tolist()
                     self.profiles[control['label']] = profile

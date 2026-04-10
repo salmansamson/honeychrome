@@ -50,7 +50,7 @@ class ImportFCSFilesWidget(QDialog):
 
             part_oneB_label = QLabel('''
             <h4>Option B: Link to Existing Data Folders</h4>
-            <p>Set the "Raw" and "Single stain controls" folders in Experiment Settings to find your FCS files. (Warning: these are relative paths; the link will be broken if you subsequently move the experiment file or the FCS files!)</p>
+            <p>Set the "Raw" and "Single stain controls" folders in Experiment Settings to find your FCS files. (This creates a symbolic link if the target folder is outside the experiments folder.)</p>
             ''')
             part_oneB_label.setTextFormat(Qt.RichText)
             part_oneB_label.setWordWrap(True)

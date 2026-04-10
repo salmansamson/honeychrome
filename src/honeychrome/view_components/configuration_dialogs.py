@@ -2,6 +2,8 @@ import importlib
 import os
 import sys
 from pathlib import Path
+import subprocess
+import re
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QDialog, QScrollArea, QFormLayout, QLineEdit, QCheckBox, QSpinBox, QDoubleSpinBox, QDialogButtonBox, QComboBox, QLabel, QButtonGroup, QFileDialog)
 from PySide6.QtCore import Qt, QSettings
@@ -13,13 +15,74 @@ from honeychrome.settings import (colourmap_choice, graphics_export_formats, col
 import honeychrome.settings as settings
 
 
-import sys
 import numpy as np
 import colorcet as cc
 
 from PySide6.QtWidgets import QApplication, QLabel
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtCore import Qt
+
+PLUGIN_DIR = Path.home() / experiments_folder / "plugins"
+plugins_path = Path(PLUGIN_DIR)
+
+
+def path_to_folder_name_readable(original_path):
+    # 1. Convert to string and resolve
+    path_str = str(Path(original_path).resolve())
+
+    # 2. Replace common illegal characters with underscores
+    # This handles :, /, \, *, ?, ", <, >, |
+    sanitized = re.sub(r'[\\/:*?"<>|]', '_', path_str)
+
+    # 3. Clean up leading/trailing dots or spaces (Windows hates these)
+    return sanitized.strip('. ')
+
+def is_subfolder(child, parent):
+    child = Path(child).resolve()
+    parent = Path(parent).resolve()
+
+    # Returns True if child is a subfolder (or the folder itself)
+    return child.is_relative_to(parent)
+
+def create_folder_link(experiment_path, link_name, target_path):
+    """
+    Creates a symbolic link to a directory.
+    On Windows, if symlink creation fails (usually due to permissions),
+    it attempts to create a Directory Junction instead.
+    """
+    target = Path(target_path).resolve()
+    link = Path(experiment_path) / link_name
+
+    # 1. Validation
+    if not target.is_dir():
+        raise ValueError(f"Target is not a directory: {target}")
+
+    if link.exists():
+        print(f"Link path already exists: {link}. Skipping.")
+        return
+
+    # 2. Try Standard Symlink (Works on Linux, macOS, and Windows with Dev Mode/Admin)
+    try:
+        link.symlink_to(target, target_is_directory=True)
+        print(f"Symbolic link created: {link} -> {target}")
+        return
+    except OSError as e:
+        # If not on Windows, or error isn't permission related, re-raise
+        if sys.platform != "win32" or e.winerror != 1314:
+            raise e
+
+        print("Standard symlink failed (Privilege Error). Attempting Windows Junction...")
+
+    # 3. Windows Fallback: Create a Junction (/J)
+    # Junctions don't require Admin privileges.
+    try:
+        # mklink is a shell built-in, so shell=True is required
+        cmd = f'mklink /J "{link}" "{target}"'
+        subprocess.run(cmd, shell=True, check=True, capture_output=True)
+        print(f"Junction created: {link} -> {target}")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to create junction: {e.stderr.decode().strip()}")
+        raise
 
 def colormap_to_qimage(cmap_name, width=256, height=20):
     """
@@ -50,7 +113,7 @@ class AppConfigDialog(QDialog):
     def __init__(self, parent=None, bus=None):
         super().__init__(parent)
         self.setWindowTitle("Application Configuration")
-        self.resize(700, 700)
+        self.resize(1000, 700)
         self.settings = QSettings("honeychrome", "app_configuration")
         self.bus = bus
 
@@ -120,6 +183,11 @@ class AppConfigDialog(QDialog):
         form.addRow("Include unmixed data in sample report", self.report_include_unmixed_cb)
         form.addRow("Include spectral process in sample report", self.report_include_process_cb)
 
+        self.enable_plugin = {}
+        for file_path in plugins_path.glob("*_tab.py"):
+            self.enable_plugin[file_path] = QCheckBox(f"Enable {file_path.stem}")
+            form.addRow(f"Tabbed plugin", self.enable_plugin[file_path])
+
         scroll.setWidget(container)
         main_layout.addWidget(scroll)
 
@@ -169,6 +237,9 @@ class AppConfigDialog(QDialog):
         self.report_include_unmixed_cb.setChecked(self.settings.value("report_include_unmixed", report_include_unmixed, type=bool))
         self.report_include_process_cb.setChecked(self.settings.value("report_include_process", report_include_process, type=bool))
 
+        for file_path in plugins_path.glob("*_tab.py"):
+            self.enable_plugin[file_path].setChecked(self.settings.value(f"EnablePlugin_{file_path}", False, type=bool))\
+
     def save_settings(self):
         self.settings.setValue("colourmap", self.colourmap_combo.currentText())
         self.settings.setValue("graphics_export_format", self.graphics_export_format_combo.currentText())
@@ -182,6 +253,9 @@ class AppConfigDialog(QDialog):
         self.settings.setValue("report_include_raw", self.report_include_raw_cb.isChecked())
         self.settings.setValue("report_include_unmixed", self.report_include_unmixed_cb.isChecked())
         self.settings.setValue("report_include_process", self.report_include_process_cb.isChecked())
+
+        for file_path in plugins_path.glob("*_tab.py"):
+            self.settings.setValue(f"EnablePlugin_{file_path}", self.enable_plugin[file_path].isChecked())
 
     def handle_accept(self):
         self.save_settings()
@@ -206,6 +280,9 @@ class AppConfigDialog(QDialog):
         self.report_include_raw_cb.setChecked(report_include_raw)
         self.report_include_unmixed_cb.setChecked(report_include_unmixed)
         self.report_include_process_cb.setChecked(report_include_process)
+
+        for file_path in plugins_path.glob("*_tab.py"):
+            self.enable_plugin[file_path].setChecked(False)
 
 
 class InstrumentConfigDialog(QDialog):
@@ -316,8 +393,14 @@ class FolderSelectorLineEdit(QLineEdit):
         folder_path = QFileDialog.getExistingDirectory(self, "Select Directory", self.current_path)
 
         if folder_path:
-            # Convert to relative path based on Current Working Directory
-            relative_path = os.path.relpath(folder_path, self.experiment_path)
+            # if folder path is within experiment path, convert to relative path based on Current Working Directory
+            # else create symlink and insert that
+            if is_subfolder(folder_path, self.experiment_path):
+                relative_path = os.path.relpath(folder_path, self.experiment_path)
+            else:
+                relative_path = 'Link_to_'+path_to_folder_name_readable(folder_path)
+                create_folder_link(self.experiment_path, relative_path, folder_path)
+
             self.setText(relative_path)
 
         super().mousePressEvent(event)
@@ -345,13 +428,13 @@ class ExperimentSettings(QDialog):
         experiment_path = experiment_path.parent / experiment_path.stem
 
         self.raw_samples_subdirectory_lineedit = FolderSelectorLineEdit(experiment_path=str(experiment_path), current_path=str(experiment_path / self.settings['raw']['raw_samples_subdirectory']))
-        form.addRow("Raw Samples Folder (relative to experiment folder):", self.raw_samples_subdirectory_lineedit)
+        form.addRow("Raw Samples Folder", self.raw_samples_subdirectory_lineedit)
 
         self.single_stain_controls_subdirectory_lineedit = FolderSelectorLineEdit(experiment_path=str(experiment_path), current_path=str(experiment_path / self.settings['raw']['single_stain_controls_subdirectory']))
-        form.addRow("Single Stain Controls Folder (relative to experiment folder):", self.single_stain_controls_subdirectory_lineedit)
+        form.addRow("Single Stain Controls Folder:", self.single_stain_controls_subdirectory_lineedit)
 
         self.unmixed_samples_subdirectory_lineedit = FolderSelectorLineEdit(experiment_path=str(experiment_path), current_path=str(experiment_path / self.settings['unmixed']['unmixed_samples_subdirectory']))
-        form.addRow("Unmixed Samples Folder (relative to experiment folder):", self.unmixed_samples_subdirectory_lineedit)
+        form.addRow("Unmixed Samples Folder:", self.unmixed_samples_subdirectory_lineedit)
 
         self.magnitude_ceiling_combo = QComboBox()
         self.magnitude_ceiling_combo.addItems(magnitude_ceilings)

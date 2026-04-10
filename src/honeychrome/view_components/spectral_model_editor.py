@@ -570,6 +570,7 @@ class SpectralControlsEditor(QFrame):
         #         self.bus.showSelectedProfiles.emit([control])
 
     def refresh_table_and_enable(self):
+        # self.model.layoutChanged.emit() # consider refreshing at this point... but it may cause crash
         self.refresh_comboboxes()
         self.setEnabled(True)
         QTimer.singleShot(300, lambda: self.bus.showSelectedProfiles.emit([]))
