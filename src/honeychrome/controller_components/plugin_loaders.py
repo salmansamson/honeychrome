@@ -17,7 +17,7 @@ def load_tabbed_plugins(bus, controller):
 
     # Iterate over all *_tab.py files in the directory
     for file_path in plugins_path.glob("*_tab.py"):
-        if settings.value(f"Enable Plugin {file_path}", False):
+        if settings.value(f"EnablePlugin_{file_path}", False, type=bool):
 
             # 1. Create a module name
             module_name = f"{plugins_path.name}.{file_path.stem}"

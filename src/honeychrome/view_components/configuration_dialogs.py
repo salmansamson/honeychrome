@@ -238,7 +238,7 @@ class AppConfigDialog(QDialog):
         self.report_include_process_cb.setChecked(self.settings.value("report_include_process", report_include_process, type=bool))
 
         for file_path in plugins_path.glob("*_tab.py"):
-            self.enable_plugin[file_path].setChecked(self.settings.value(f"Enable Plugin {file_path}", False, type=bool))\
+            self.enable_plugin[file_path].setChecked(self.settings.value(f"EnablePlugin_{file_path}", False, type=bool))\
 
     def save_settings(self):
         self.settings.setValue("colourmap", self.colourmap_combo.currentText())
@@ -255,7 +255,7 @@ class AppConfigDialog(QDialog):
         self.settings.setValue("report_include_process", self.report_include_process_cb.isChecked())
 
         for file_path in plugins_path.glob("*_tab.py"):
-            self.settings.setValue(f"Enable Plugin {file_path}", self.enable_plugin[file_path].isChecked())
+            self.settings.setValue(f"EnablePlugin_{file_path}", self.enable_plugin[file_path].isChecked())
 
     def handle_accept(self):
         self.save_settings()
