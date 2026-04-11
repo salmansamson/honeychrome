@@ -212,11 +212,16 @@ class Controller(QObject):
 
             # recalculate histograms and stats
             # which gates and plots have changed?
-            gates_to_recalculate = [top_gate]
+            # but recalculate everything if using dotplots coloured by gate
             gate_ids = self.data_for_cytometry_plots['gating'].get_gate_ids()
-            for gate_id in gate_ids:
-                if any([top_gate in ancestor for ancestor in gate_id[1]]):
-                    gates_to_recalculate.append(gate_id[0])
+            if settings.hist2dtype_retrieved == '2D Histogram':
+                gates_to_recalculate = [top_gate]
+                for gate_id in gate_ids:
+                    if any([top_gate in ancestor for ancestor in gate_id[1]]):
+                        gates_to_recalculate.append(gate_id[0])
+
+            else:
+                gates_to_recalculate = [g[0] for g in gate_ids]
 
             indices_plots_to_recalculate = []
             for n, plot in enumerate(self.data_for_cytometry_plots['plots']):
@@ -962,7 +967,7 @@ class Controller(QObject):
     def calc_hists_and_stats(self, gates_to_calculate=None, indices_plots_to_calculate=None, status_message_signal=None):
         if self.data_for_cytometry_plots['event_data'] is not None:
             # apply gates to event data
-            # if gates_to_calculate is none, then initialise gates_to_calculate dict, otherwise reference it from data_for_cytometry_plots
+            # if gates_to_calculate is none, then initialise gates_membership dict, otherwise reference it from data_for_cytometry_plots
             if not gates_to_calculate:
                 #todo hopefully verify bug has gone here?
                 gate_membership = {'root': np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)}
