@@ -28,7 +28,6 @@ create-dmg \
   --icon "$APP_BUNDLE" 140 250 \
   --hide-extension "$APP_BUNDLE" \
   --app-drop-link 620 250 \
-  --no-gui \
   --skip-jenkins \
   --eula "LICENSE.txt"\
   "$DMG_NAME" \

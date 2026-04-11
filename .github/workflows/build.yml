@@ -69,9 +69,10 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: build-${{ matrix.os }}
+          name: ${{ matrix.artifact_name }}
           path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.tar.gz
+            honeychrome-installer.dmg
             *.tar.gz
-            *.dmg
-            *.exe
-            # dist/honeychrome/
