@@ -4,7 +4,6 @@ Honeychrome - open source cytometry data acquisition and analysis software
 import shutil
 
 # from honeychrome.tools import DepthFinder # debug module imports here
-import honeychrome.dummy_loader
 
 import os
 import sys
@@ -26,7 +25,7 @@ Instrument Communicator:
 -Listens for start event
 -Listens for stop event
 '''
-from honeychrome.instrument_driver import Instrument
+from honeychrome.instrument_communicator import Instrument
 
 '''
 Trace Analyser:
@@ -137,8 +136,8 @@ def main():
     '''
     define objects for communication between processes
     '''
-    from honeychrome.instrument_configuration import traces_cache_size, dtype, max_events_in_traces_cache, trace_n_points, n_channels_trace, adc_rate
-    from honeychrome.settings import max_events_in_cache, n_channels_per_event, channel_dict, event_channels_pnn
+    from honeychrome.instrument_driver_components.cytkit_configuration import traces_cache_size, dtype
+    from honeychrome.settings import max_events_in_cache, n_channels_per_event
     import honeychrome.settings as settings
 
     # Allocate shared memory block, plus head and tail indices

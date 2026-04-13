@@ -1,15 +1,10 @@
 import multiprocessing as mp
-import time
 from pathlib import Path
-import numpy as np
 from deepdiff import DeepDiff
 
 from honeychrome.experiment_model import ExperimentModel
-from honeychrome.instrument_configuration import traces_cache_size, dtype
-from honeychrome.settings import max_events_in_cache, n_channels_per_event, experiments_folder
 
 mp.set_start_method("spawn")
-from multiprocessing import Lock, shared_memory
 from honeychrome.controller import Controller
 
 '''

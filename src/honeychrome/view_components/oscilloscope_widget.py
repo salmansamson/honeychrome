@@ -1,12 +1,10 @@
-import time
-
 import numpy as np
-from PySide6.QtCore import QThread, Signal, Slot, QObject, Qt, QTimer
+from PySide6.QtCore import Slot, QTimer
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from queue import Empty
 import pyqtgraph as pg
 
-from honeychrome.instrument_configuration import n_time_points_in_event, adc_rate
+from honeychrome.instrument_driver_components.cytkit_configuration import n_time_points_in_event, adc_rate
 from honeychrome.settings import analyser_target_repeat_time, line_colors, adc_channels, scatter_channels, fluorescence_channels
 from honeychrome.view_components.profiles_viewer import FlowLayout, LegendEntry
 

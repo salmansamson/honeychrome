@@ -2,15 +2,21 @@
 '''
 instrument communicator
 
-Connects to instrument
-Configures instrument
-Listens for start event
-Listens for stop event
-Applies cache condition
-Sets sample pump rate
-Sets sheath pump pressure
-Sets gains
-Sets laser
+Process to manage communications with instrument
+Can use various instrument drivers (Cytkit, Picoscope, Dummy Instrument)
+Method "run" is run as a process, listens for commands from controller: [connect, start, stop, set, quit]
+Method "transfer" is started as thread when start command is received, repeadedly transfers traces to traces_cache
+
+Example workflow:
+    Connects to instrument
+    Configures instrument
+    Listens for start event
+    Listens for stop event
+    Applies cache condition
+    Sets sample pump rate
+    Sets sheath pump pressure
+    Sets gains
+    Sets laser
 
 test instrument data generator
 
@@ -28,7 +34,7 @@ import numpy as np
 import time
 import warnings
 
-from honeychrome.instrument_configuration import traces_cache_size, dtype, max_events_in_traces_cache, trace_n_points, operation_register, operation_memory, dummy_bytes, memory_start_address, memory_end_address, transfer_target_repeat_time, registers_map
+from honeychrome.instrument_driver_components.cytkit_configuration import traces_cache_size, dtype, max_events_in_traces_cache, trace_n_points, operation_register, operation_memory, dummy_bytes, memory_start_address, memory_end_address, transfer_target_repeat_time, registers_map
 
 class Instrument(mp.Process):
     def __init__(self, use_dummy_instrument=False,
@@ -49,7 +55,7 @@ class Instrument(mp.Process):
         self.debug = debug
 
         self.devA = None
-        self.devB = None
+        # self.devB = None
 
         self.configuration = None
         self.pipe_connection = pipe_connection
@@ -65,7 +71,7 @@ class Instrument(mp.Process):
 
 
     def run(self):
-        from honeychrome.controller_components.dummy_instrument import DummyInstrument
+        from honeychrome.instrument_driver_components.dummy_instrument import DummyInstrument
         self.dummy_instrument = DummyInstrument()
 
         # initialise the things that can't be pickled

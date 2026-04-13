@@ -1,5 +1,6 @@
-[Cytkit](https://cytkit.com) | [Honeychrome](./) 
+[Cytkit](https://cytkit.com) | [Honeychrome](https://honeychrome.cytkit.com/) 
 ---
+
 
 # <img src="src/honeychrome/view_components/assets/cytkit_web_logo.png" width="60"> Honeychrome
 
