@@ -556,7 +556,7 @@ class Controller(QObject):
             self.current_sample = sample_from_fcs(self.experiment_dir / self.current_sample_path, self.bus)
 
             if self.current_sample_path == self.live_sample_path:
-                self.raw_event_data, n_events = self.copy_live_data(extent='all')
+                self.raw_event_data, n_events = self.copy_live_data(extent='update')
             else:
                 self.raw_event_data = self.current_sample.get_events(source='raw')
                 n_events = self.current_sample.event_count

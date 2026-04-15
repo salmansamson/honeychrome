@@ -515,11 +515,12 @@ def calc_hist2d(event_data, mask, id_channel_x, id_channel_y, transform_x, trans
         heatmap[1:-1,-1] *= inside_max_value/global_max_value
 
     if density_cutoff > 0:
-        mask_1 = (heatmap >= density_cutoff)
-        heatmap[mask_1] += inside_max_value//255+1  # Maps to LUT[1]
+        if inside_max_value > 0:
+            mask_1 = (heatmap >= density_cutoff)
+            heatmap[mask_1] += inside_max_value//255+1  # Maps to LUT[1]
 
-        global_max_value = np.percentile(heatmap[mask_1], 99.9)
-        np.clip(heatmap, 0, global_max_value, out=heatmap)
+            global_max_value = np.percentile(heatmap[mask_1], 99.9)
+            np.clip(heatmap, 0, global_max_value, out=heatmap)
 
     return heatmap
 

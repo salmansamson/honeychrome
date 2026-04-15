@@ -48,8 +48,6 @@ class DummyDevice:
         self.channel_indices = [area_channels.index(channel) for channel in adc_channels]
         self.fsc_area_index = fcs_file_channels.index('FSC-A')
         self.fsc_height_index = fcs_file_channels.index('FSC-H')
-        self.head = 0
-        self.tail = sample.event_count
         self.scale = magnitude_ceiling / int(sample.metadata['p2r'])
 
     def connect_to_device(self):
@@ -67,11 +65,11 @@ class DummyDevice:
     def generate_traces(self, n):
         # reads events, returns a blob_np
         # note blob_np is 1d numpy array of n * n_channels_trace * n_time_points_in_event
-        areas_to_process = self.events[self.head:self.head+n, self.channel_indices]
-        fsc_area = self.events[self.head:self.head+n, self.fsc_area_index]
-        fsc_height = self.events[self.head:self.head+n, self.fsc_height_index]
+        indices = np.random.choice(len(self.events), size=n, replace=False)
+        areas_to_process = self.events[indices][:,self.channel_indices]
+        fsc_area = self.events[indices, self.fsc_area_index]
+        fsc_height = self.events[indices, self.fsc_height_index]
         widths = fsc_area / fsc_height
-        self.head += n
         centres = [-np.random.randint(n_time_points_in_event//5) + n_time_points_in_event//2 for _ in range(len(widths))]
         traces = gaussian_rows_areas(trace_indices, areas_to_process, centres, widths)
         traces *= self.scale
