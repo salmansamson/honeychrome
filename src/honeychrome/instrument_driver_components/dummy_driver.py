@@ -25,7 +25,7 @@ def gaussian_rows_areas(x_grid, areas, mu, sigma):
     array_of_traces = np.empty((N*M, len(x_grid)))
     for n in range(N):
         gaussian = np.exp(-0.5 * ((x_grid - mu[n]) / sigma[n]) ** 2) / (sigma[n] * np.sqrt(2 * np.pi))
-        array_of_traces[n:n+M,:] = areas[n,:][:,None] * gaussian
+        array_of_traces[n*M:(n+1)*M,:] = areas[n,:][:,None] * gaussian
 
     return array_of_traces
 
@@ -69,25 +69,31 @@ class DummyDevice:
         areas_to_process = self.events[indices][:,self.channel_indices]
         fsc_area = self.events[indices, self.fsc_area_index]
         fsc_height = self.events[indices, self.fsc_height_index]
-        widths = fsc_area / fsc_height
+        widths = fsc_area / fsc_height / 3
         centres = [-np.random.randint(n_time_points_in_event//5) + n_time_points_in_event//2 for _ in range(len(widths))]
         traces = gaussian_rows_areas(trace_indices, areas_to_process, centres, widths)
         traces *= self.scale
         traces = traces.astype(traces_cache_dtype)
         traces = traces.reshape(-1)
-        return traces
+        return traces, indices
 
     def read_out_traces(self):
         n = dummy_event_rate * transfer_target_repeat_time
         n_events_in_memory = np.random.randint(n)
-        blob_of_traces_as_array = self.generate_traces(n_events_in_memory)
+        blob_of_traces_as_array, _ = self.generate_traces(n_events_in_memory)
         return blob_of_traces_as_array
 
 if __name__ == '__main__':
     dummy_instrument = DummyDevice()
-    blob_np = dummy_instrument.generate_traces(5)
+    blob_np, indices = dummy_instrument.generate_traces(5)
     print('blob_np:', blob_np)
 
     traces = blob_np.reshape(5, n_channels_trace, n_time_points_in_event)
     print('events:', dummy_instrument.events[0, dummy_instrument.channel_indices] * dummy_instrument.scale)
     print('sum of traces in each channel:', traces[0].sum(axis=1))
+
+    from matplotlib import pyplot as plt
+    print('FSC-A:', dummy_instrument.events[indices, dummy_instrument.fsc_area_index] * dummy_instrument.scale)
+    print('FSC-H:', dummy_instrument.events[indices, dummy_instrument.fsc_height_index] * dummy_instrument.scale)
+    plt.plot(traces[:,0,:].T)
+    plt.show()
