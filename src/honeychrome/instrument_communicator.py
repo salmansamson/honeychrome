@@ -25,39 +25,35 @@ Shared memory: cache, head, tail, instrument settings
 
 import multiprocessing as mp
 from multiprocessing import shared_memory, Lock
-import ft4222
-from ft4222.SPI import Cpha, Cpol
-from ft4222.SPIMaster import Mode, Clock, SlaveSelect
-from bitarray import bitarray
 import threading
 import numpy as np
 import time
 import warnings
 
-from honeychrome.instrument_driver_components.cytkit_configuration import traces_cache_size, dtype, max_events_in_traces_cache, trace_n_points, operation_register, operation_memory, dummy_bytes, memory_start_address, memory_end_address, transfer_target_repeat_time, registers_map
+from honeychrome.settings import devices_boot_order, traces_cache_size, traces_cache_dtype, max_events_in_traces_cache, trace_n_points, transfer_target_repeat_time
+
+debug = True
 
 class Instrument(mp.Process):
     def __init__(self, use_dummy_instrument=False,
-                 debug=False,
                  traces_cache_name=None,
                  traces_cache_lock=None,
                  index_head_traces_cache=None, index_tail_traces_cache=None,
                  pipe_connection=None):
         super().__init__()
+
+        # device will be a connected instrument or dummy if no instrument found
+        self.device = None
+
+        # dummy instrument
+        self.dummy_memory_head = 0
+        self.max_events_in_memory_per_pop = 500
+        self.dummy_instrument = None
         if use_dummy_instrument:
             self.use_dummy_instrument = True
-            self.dummy_memory_head = 0 #only use if dummy
-            self.max_events_in_memory_per_pop = 500
-            self.dummy_instrument = None
         else:
             self.use_dummy_instrument = False
 
-        self.debug = debug
-
-        self.devA = None
-        # self.devB = None
-
-        self.configuration = None
         self.pipe_connection = pipe_connection
         self.index_head_traces_cache = index_head_traces_cache
         self.index_tail_traces_cache = index_tail_traces_cache
@@ -71,8 +67,7 @@ class Instrument(mp.Process):
 
 
     def run(self):
-        from honeychrome.instrument_driver_components.dummy_instrument import DummyInstrument
-        self.dummy_instrument = DummyInstrument()
+        self.connect_to_instrument()
 
         # initialise the things that can't be pickled
         self.stop_transfer = threading.Event()
@@ -85,7 +80,7 @@ class Instrument(mp.Process):
         # Attach to existing shared memory
         shm = shared_memory.SharedMemory(name=self.traces_cache_name)
         with self.traces_cache_lock:
-            self.traces_cache = np.ndarray((self.max_events_in_traces_cache * self.trace_n_points), dtype=np.uint16, buffer=shm.buf)
+            self.traces_cache = np.ndarray((self.max_events_in_traces_cache * self.trace_n_points), dtype=traces_cache_dtype, buffer=shm.buf)
 
         # main loop waiting for commands from experiment control
         while True:
@@ -95,6 +90,7 @@ class Instrument(mp.Process):
                 print("Pipe closed by experiment control; shutting down gracefully.")
                 break
 
+            response_to_experiment_control = None
             if incoming_from_experiment_control['command'] == 'connect':
                 response_to_experiment_control = self.connect_to_instrument()
             elif incoming_from_experiment_control['command'] == 'start':
@@ -119,36 +115,33 @@ class Instrument(mp.Process):
 
 
     def connect_to_instrument(self):
-        self.devA = ft4222.openByDescription('FT4222 A')
-        # self.devB = ft4222.openByDescription('FT4222 B')
-        #self.devA.spiMaster_Init(Mode.QUAD, Clock.DIV_2, Cpol.IDLE_LOW, Cpha.CLK_LEADING, SlaveSelect.SS0) # for registers
-        # self.devA.spiMaster_Init(Mode.QUAD, Clock.DIV_2, Cpol.IDLE_LOW, Cpha.CLK_LEADING, SlaveSelect.SS1) # for memory
-        self.configure_instrument()
-        print('[Instrument driver] Connected')
-        return {'source':'[Instrument driver]', 'status':'OK', 'message':'Connected to instrument'}
+        for device_name in devices_boot_order:
+            try:
+                if device_name == 'cytkit':
+                    from honeychrome.instrument_driver_components.cytkit_driver import CytkitDevice
+                    device = CytkitDevice()
 
-    def register_select(self):
-        # call this every time to write to or read from registers
-        self.devA.spiMaster_Init(Mode.QUAD, Clock.DIV_2, Cpol.IDLE_LOW, Cpha.CLK_LEADING, SlaveSelect.SS0) # for registers
+                elif device_name == 'pico5000':
+                    from honeychrome.instrument_driver_components.pico5000_driver import Pico5000_Device
+                    device = Pico5000_Device()
 
-    def memory_select(self):
-        # call this every time to read from memory
-        self.devA.spiMaster_Init(Mode.QUAD, Clock.DIV_2, Cpol.IDLE_LOW, Cpha.CLK_LEADING, SlaveSelect.SS0) # for memory
-        # TODO why doesn't SS1 work?
+                else: # device_name == 'dummy_device':
+                    from honeychrome.instrument_driver_components.dummy_driver import DummyDevice
+                    device = DummyDevice()
 
-    def configure_instrument(self):
-        self.register_select()
+                device.connect_to_device()
+                self.device = device
+                print(f'[Instrument driver] {device_name} connected')
+                return {'source': '[Instrument driver]', 'status': 'OK', 'message': f'Connected to instrument {device_name}'}
 
-        fan_enable = True
-        pump_sheath_enable = True
-        pump_sample_enable = True
-        laser_enable = True
-        data_to_write = bitarray([False, False, False, False, fan_enable, pump_sheath_enable, pump_sample_enable, laser_enable]).tobytes()
-        byte_string = operation_register + registers_map['ENABLES'].to_bytes(2) + dummy_bytes + data_to_write
-        self.devA.spiMaster_MultiReadWrite(0, byte_string, 0)
+            except Exception as e:
+                print(f'[Instrument driver] {device_name} not connected: {e}')
+
+        return {'source': '[Instrument driver]', 'status': 'OK', 'message': 'No device connected'}
 
     def start_acquisition(self):
         # TODO send registers to start pumps etc, initialise data collection in FPGA
+        self.device.start_acquisition()
         """Start transfer in a separate thread"""
         self.thread = threading.Thread(
             target=self.transfer,
@@ -160,29 +153,22 @@ class Instrument(mp.Process):
 
     def stop_acquisition(self):
         # TODO send registers to stop pumps etc, stop data collection in FPGA
+        self.device.stop_acquisition()
         self.stop_transfer.set()
         return {'source':'[Instrument driver]', 'status':'OK', 'message':'Acquisition ended'}
 
     def change_instrument_settings(self, data):
         # TODO send registers to set pumps in FPGA etc
+        self.device.change_device_settings(data)
         print(data)
         return {'source':'[Instrument driver]', 'status':'OK', 'message':'Instrument configuration changed'}
 
     def transfer(self):
         while True:
             start_time = time.perf_counter()
-            memory_head, memory_tail, n_events_in_memory = self.get_memory_head_tail_n_events()
-            if n_events_in_memory > 0:
-                if self.use_dummy_instrument:
-                    blob_np = self.dummy_instrument.generate_traces(n_events_in_memory)
-                else:
-                    blob_np = self.pop_from_memory(memory_head, memory_tail)
-                if self.debug == True:
-                    print(f'[Instrument driver] transferred memory: (head: {memory_head}, tail: {memory_tail}), n_events_in_memory {n_events_in_memory}, blob retrieved {blob_np.shape}')
 
-                self.push_to_traces_cache(n_events_in_memory, blob_np)
-            else:
-                time.sleep(0.1)
+            blob_of_traces_as_array = self.device.read_out_traces()
+            self.push_to_traces_cache(blob_of_traces_as_array)
 
             if self.stop_transfer.is_set():
                 self.stop_transfer.clear()
@@ -193,70 +179,8 @@ class Instrument(mp.Process):
             sleep_time = max(0., transfer_target_repeat_time - elapsed)
             time.sleep(sleep_time)
 
-
-    def get_memory_head_tail_n_events(self):
-        if self.use_dummy_instrument:
-            # n = self.max_events_in_memory_per_pop
-            n = 1000 * transfer_target_repeat_time
-            n_events_in_memory = np.random.randint(n)
-            memory_head = self.dummy_memory_head
-            memory_tail = (memory_head + n_events_in_memory * self.trace_n_points) % memory_end_address
-        else:
-            self.register_select()
-
-            byte_string_to_write = operation_register + registers_map['MEMHEAD'].to_bytes(2) + dummy_bytes
-            byte_string_output = self.devA.spiMaster_MultiReadWrite(0, byte_string_to_write, 4)
-            memory_head = int.from_bytes(byte_string_output)
-
-            byte_string_to_write = operation_register + registers_map['MEMTAIL'].to_bytes(2) + dummy_bytes
-            byte_string_output = self.devA.spiMaster_MultiReadWrite(0, byte_string_to_write, 4)
-            memory_tail = int.from_bytes(byte_string_output)
-
-            byte_string_to_write = operation_register + registers_map['NEVENTS'].to_bytes(2) + dummy_bytes
-            byte_string_output = self.devA.spiMaster_MultiReadWrite(0, byte_string_to_write, 4)
-            n_events_in_memory = int.from_bytes(byte_string_output)
-
-        return memory_head, memory_tail, n_events_in_memory
-
-    def pop_from_memory(self, memory_head, memory_tail):
-        """
-        Read out memory starting at memory_head, keep going until memory_tail read, wrap if necessary
-        return numpy array blob
-        """
-        if memory_tail > memory_head:
-            blob_np = np.frombuffer(self.read_from_memory(memory_head, memory_tail - memory_head), dtype=np.uint16)
-        elif memory_tail < memory_head:
-            blob_np = np.concatenate((
-                np.frombuffer(self.read_from_memory(memory_head, memory_end_address - memory_head), dtype=np.uint16),
-                np.frombuffer(self.read_from_memory(memory_start_address, memory_tail), dtype=np.uint16)
-            ))
-        if self.use_dummy_instrument:
-            self.dummy_memory_head = memory_tail
-
-        return blob_np
-
-    def read_from_memory(self, start_address, total_bytes, chunk_size=65535):
-        self.memory_select()
-
-        # read out block of memory in chunks
-        data = bytearray(total_bytes)
-        bytes_read = 0
-        capture_address = start_address
-        while bytes_read < total_bytes:
-            # Calculate how many bytes to read in this chunk
-            remaining = total_bytes - bytes_read
-            current_chunk = min(chunk_size, remaining)
-            capture_address += current_chunk
-
-            # Write address and read the chunk
-            byte_string = operation_memory + capture_address.to_bytes(3) + dummy_bytes
-            chunk = self.devA.spiMaster_MultiReadWrite(0, byte_string, current_chunk)
-            data.extend(chunk)
-            bytes_read += len(chunk)
-
-        return bytes(data)
-
-    def push_to_traces_cache(self, n_traces_from_memory, blob_np):
+    def push_to_traces_cache(self, blob_np):
+        n_traces_from_memory = len(blob_np) // self.trace_n_points
         with self.index_tail_traces_cache.get_lock():
             tail = self.index_tail_traces_cache.value
         with self.index_head_traces_cache.get_lock():
@@ -284,7 +208,7 @@ class Instrument(mp.Process):
             with self.index_tail_traces_cache.get_lock():
                 self.index_tail_traces_cache.value = cache_new_tail
 
-            if self.debug == True:
+            if debug == True:
                 print(f'[Instrument driver] pushed data to traces cache (head:{head}, tail:{cache_new_tail})')
         else:
             warnings.warn("[Instrument driver] Traces cache is full, data dropped")
@@ -296,7 +220,7 @@ if __name__ == '__main__':
     mp.set_start_method("spawn")
 
     # Allocate shared memory block, plus head and tail indices
-    traces_cache_shm = shared_memory.SharedMemory(create=True, size=np.zeros(traces_cache_size, dtype=dtype).nbytes)
+    traces_cache_shm = shared_memory.SharedMemory(create=True, size=np.zeros(traces_cache_size, dtype=traces_cache_dtype).nbytes)
     traces_cache_lock = Lock()
     index_head_traces_cache = mp.Value('i', 0)
     index_tail_traces_cache = mp.Value('i', 0)
@@ -306,7 +230,6 @@ if __name__ == '__main__':
     # start instrument dummy
     instrument = Instrument(
         use_dummy_instrument=True,
-        debug=True,
         traces_cache_name=traces_cache_shm.name,
         traces_cache_lock=traces_cache_lock,
         index_head_traces_cache=index_head_traces_cache,

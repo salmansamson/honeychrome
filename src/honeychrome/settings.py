@@ -3,6 +3,21 @@ These are the default settings for the honeychrome software
 '''
 from PySide6.QtCore import QSettings
 
+### instrument settings
+devices_boot_order = ['cytkit', 'pico5000', 'dummy_device']
+transfer_target_repeat_time = 0.05 #s
+
+# define traces cache
+max_events_in_traces_cache = 100_000
+n_channels_trace = 16
+adc_rate = 2.5  # [MHz]
+max_event_time = 20  # [us]
+n_time_points_in_event = int(adc_rate * max_event_time)
+bytes_per_value = 2
+traces_cache_dtype = 'uint16'
+trace_n_points = n_channels_trace * n_time_points_in_event
+traces_cache_size = max_events_in_traces_cache * trace_n_points  # e.g. 160_000_000 for 100_000 events, 16 channels, 20 us --> 50 time points, 2 bytes per value
+
 ### folder in home directory where experiments will be stored
 experiments_folder = 'Experiments'
 file_extension = 'kit'

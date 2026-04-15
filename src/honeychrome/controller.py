@@ -42,7 +42,7 @@ import time
 from honeychrome.experiment_model import ExperimentModel, check_fcs_matches_experiment
 from honeychrome.controller_components.functions import apply_gates_in_place, apply_transfer_matrix, generate_transformations, update_transforms, initialise_hists, calc_hists, calc_stats, initialise_stats, assign_default_transforms, define_quad_gates, define_range_gate, define_polygon_gate, define_rectangle_gate, define_ellipse_gate, add_recent_file, empty_queue_nowait, define_process_plots, get_set_or_initialise_label_offset, sample_from_fcs
 from honeychrome.controller_components.gml_functions_mod_from_flowkit import from_gml, to_gml
-from honeychrome.instrument_driver_components.cytkit_configuration import traces_cache_size, dtype, adc_rate
+from honeychrome.settings import traces_cache_size, traces_cache_dtype, adc_rate
 import honeychrome.settings as settings
 from honeychrome.settings import max_events_in_cache, n_channels_per_event, experiments_folder, live_data_process_repeat_time, settings_default, samples_default, channel_dict
 from honeychrome.view_components.busy_cursor import with_busy_cursor
@@ -1303,7 +1303,7 @@ if __name__ == '__main__':
     '''
 
     # Allocate shared memory block, plus head and tail indices
-    traces_cache_shm = shared_memory.SharedMemory(create=True, size=np.zeros(traces_cache_size, dtype=dtype).nbytes)
+    traces_cache_shm = shared_memory.SharedMemory(create=True, size=np.zeros(traces_cache_size, dtype=traces_cache_dtype).nbytes)
     traces_cache_lock = Lock()
     index_head_traces_cache = mp.Value('i', 0)
     index_tail_traces_cache = mp.Value('i', 0)

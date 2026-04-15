@@ -2,24 +2,12 @@
 This is the default configuration for the instrument driver
 '''
 
-# define traces cache
-max_events_in_traces_cache = 100_000
-n_channels_trace = 16
-adc_rate = 2.5  # [MHz]
-max_event_time = 20  # [us]
-n_time_points_in_event = int(adc_rate * max_event_time)
-bytes_per_value = 2
-dtype = 'uint16'
-trace_n_points = n_channels_trace * n_time_points_in_event
-traces_cache_size = max_events_in_traces_cache * trace_n_points  # e.g. 160_000_000 for 100_000 events, 16 channels, 20 us --> 50 time points, 2 bytes per value
-
 # FGPA and communication settings
 operation_register = b'\x01'
 operation_memory = b'\x02'
 dummy_bytes = b'\x00\x00'
 memory_start_address = 0
 memory_end_address = 1_000_000
-transfer_target_repeat_time = 0.05 #s
 
 registers_map = {
     'ENABLES': 0x0010,

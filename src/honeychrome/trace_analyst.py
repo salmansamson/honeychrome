@@ -14,7 +14,7 @@ import numpy as np
 import time
 import warnings
 
-from honeychrome.instrument_driver_components.cytkit_configuration import traces_cache_size, dtype, max_events_in_traces_cache, trace_n_points, n_channels_trace, adc_rate
+from honeychrome.settings import traces_cache_size, traces_cache_size, max_events_in_traces_cache, trace_n_points, n_channels_trace, adc_rate
 from honeychrome.settings import max_events_in_cache, n_channels_per_event, channel_dict, event_channels_pnn, analyser_target_repeat_time
 
 class TraceAnalyser(mp.Process):
