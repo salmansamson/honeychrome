@@ -110,6 +110,7 @@ class Instrument(mp.Process):
             print('[Instrument driver] Waiting until transfer thread ends')
             time.sleep(0.25)
 
+        self.disconnect_instrument()
         shm.close()
         print('[Instrument driver] Quit')
 
@@ -138,6 +139,9 @@ class Instrument(mp.Process):
                 print(f'[Instrument driver] {device_name} not connected: {e}')
 
         return {'source': '[Instrument driver]', 'status': 'OK', 'message': 'No device connected'}
+
+    def disconnect_instrument(self):
+        self.device.disconnect()
 
     def start_acquisition(self):
         # TODO send registers to start pumps etc, initialise data collection in FPGA

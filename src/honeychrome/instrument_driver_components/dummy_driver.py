@@ -34,6 +34,7 @@ class DummyDevice:
     """
     Device driver must provide the following methods:
         connect_to_device
+        disconnect
         start_acquisition
         stop_acquisition
         change_device_settings
@@ -51,6 +52,9 @@ class DummyDevice:
         self.scale = magnitude_ceiling / int(sample.metadata['p2r'])
 
     def connect_to_device(self):
+        pass
+
+    def disconnect(self):
         pass
 
     def start_acquisition(self):

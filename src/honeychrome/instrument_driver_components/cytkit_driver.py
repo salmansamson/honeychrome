@@ -13,6 +13,7 @@ class CytkitDevice:
     """
     Device driver must provide the following methods:
         connect_to_device
+        disconnect
         start_acquisition
         stop_acquisition
         change_device_settings
@@ -31,6 +32,9 @@ class CytkitDevice:
         self._configure_instrument()
         print('[Instrument driver] Connected')
         return {'source':'[Instrument driver]', 'status':'OK', 'message':'Connected to instrument'}
+
+    def disconnect(self):
+        pass
 
     def start_acquisition(self):
         pass
