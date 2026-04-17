@@ -43,6 +43,8 @@ class OscilloscopeWidget(QWidget):
             self.plot_widget2.setLabel('bottom', 'Time', units='us')
             self.plot_widget2.showGrid(x=True, y=True, alpha=0.3)
 
+            self.plot_widget2.setXLink(self.plot_widget1)
+
             # ---- Flowing Legend ----
             self.legendContainer1 = QWidget()
             self.legendContainer2 = QWidget()
