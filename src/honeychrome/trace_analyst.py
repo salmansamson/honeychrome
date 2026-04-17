@@ -48,13 +48,13 @@ def peak_start_stop_baseline(tr):
                     in_peak = False
                     break
 
-    n_end = n - window_extension_length_pre + 1  # end of integration and restart of blc
+    n_end = n  # end of integration and restart of blc
 
     # if no peak, then n_start=0 and n_end=end index of trace
     return n_start, n_end, baseline
 
 def peak_measurements(tr, n_start, n_end, deltaT, area_indices, height_indices):
-    baselines = np.concatenate((tr[:,:n_start], tr[:,n_end:]), axis=1).mean(axis=1)
+    baselines = np.concatenate((tr[:,:n_start+1], tr[:,n_end-1:]), axis=1).mean(axis=1)
     traces_truncated_baseline_subtracted = tr[:,n_start:n_end] - baselines.reshape(-1,1)
     heights = np.max(traces_truncated_baseline_subtracted[height_indices,:], axis=1)
     areas = np.sum(traces_truncated_baseline_subtracted[area_indices,:], axis=1)
@@ -283,8 +283,7 @@ class TraceAnalyser(mp.Process):
                 with self.index_tail_events_cache.get_lock():
                     self.index_tail_events_cache.value = events_tail
 
-                last_event_traces = blob_reshaped[-1, :, :]
-                self.oscilloscope_traces_queue.put({'event_id':event_ids[-1], 'time':times[-1], 'traces':last_event_traces, 'n_start':n_start, 'n_end':n_end, 'peak':peak, 'baselines':baselines})
+                self.oscilloscope_traces_queue.put({'event_id':event_ids[-1], 'time':times[-1], 'traces':traces, 'n_start':n_start, 'n_end':n_end, 'peak':peak, 'baselines':baselines})
 
             else:
                 print(f'[Trace Analyser] awaiting traces (traces cache head:{traces_head}, tail:{traces_tail})')

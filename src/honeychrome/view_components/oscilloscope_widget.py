@@ -1,5 +1,5 @@
 import numpy as np
-from PySide6.QtCore import Slot, QTimer
+from PySide6.QtCore import Slot, QTimer, Qt
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from queue import Empty
 import pyqtgraph as pg
@@ -88,16 +88,32 @@ class OscilloscopeWidget(QWidget):
     def _update_plot(self):
         """Thread-safe method to update the plot"""
         try:
+            start = self.trace['n_start']
+            end = self.trace['n_end']
+            peak_span = np.array([self.x[start], self.x[end]])
+            peak_start = np.array([self.x[start], self.x[start]])
+            peak_end = np.array([self.x[end], self.x[end]])
             self.plot_widget1.clear()
             for i in self.scatter_channel_indices:
                 color = line_colors[i % len(line_colors)]
                 y = self.trace['traces'][i]
                 self.plot_widget1.plot(self.x, y, pen=color)
+
+                dotted_pen = pg.mkPen(color=color, width=2, style=Qt.DotLine)
+                self.plot_widget1.plot(peak_span, self.trace['baselines'][i] * np.ones(2), pen=dotted_pen)
+                self.plot_widget1.plot(peak_start, np.array([self.trace['baselines'][i], self.trace['traces'][i].max()]), pen=color)
+                self.plot_widget1.plot(peak_end, np.array([self.trace['baselines'][i], self.trace['traces'][i].max()]), pen=color)
+
             self.plot_widget2.clear()
             for i in self.fluorescence_channel_indices:
                 color = line_colors[i % len(line_colors)]
                 y = self.trace['traces'][i]
                 self.plot_widget2.plot(self.x, y, pen=color)
+
+                dotted_pen = pg.mkPen(color=color, width=2, style=Qt.DotLine)
+                self.plot_widget2.plot(peak_span, self.trace['baselines'][i] * np.ones(2), pen=dotted_pen)
+                self.plot_widget2.plot(peak_start, np.array([self.trace['baselines'][i], self.trace['traces'][i].max()]), pen=color)
+                self.plot_widget2.plot(peak_end, np.array([self.trace['baselines'][i], self.trace['traces'][i].max()]), pen=color)
 
             self.label.setText(f"event_id={self.trace['event_id']} time={self.trace['time']}")
 
