@@ -4,14 +4,33 @@ These are the default settings for the honeychrome software
 from PySide6.QtCore import QSettings
 
 ### instrument settings
-devices_boot_order = ['cytkit', 'pico5000', 'dummy_device']
+devices_boot_order = [
+  'cytkit',
+  'pico5000',
+  'dummy_device'
+]
 transfer_target_repeat_time = 0.05 #s
-
-# define traces cache
-max_events_in_traces_cache = 100_000
 n_channels_trace = 16
 adc_rate = 2.5  # [MHz]
 max_event_time = 20  # [us]
+deltaT = 1/adc_rate # [us]
+
+### peak detection settings
+trigger_channel = 'FSC'
+FSC_sense = -1
+threshold = 50 # mV
+baseline_time = 3e-6  # time in us, sets decay rate of exponentially moving average
+window_extension_time_pre = 3e-6  # time in us, sets time before threshold crossing to start integration and stop averaging signal
+window_extension_time_post = 3e-6  # time in us, sets time before threshold crossing to start integration and stop averaging signal
+
+baseline_length = int(baseline_time * adc_rate * 1e6)
+baseline_decay_rate = 1 / baseline_length
+window_extension_length_pre = int(window_extension_time_pre * adc_rate * 1e6)
+window_extension_length_post = int(window_extension_time_post * adc_rate * 1e6)
+timeout_length = int(max_event_time * adc_rate * 1e6)
+
+### define traces cache
+max_events_in_traces_cache = 100_000
 n_time_points_in_event = int(adc_rate * max_event_time)
 bytes_per_value = 2
 traces_cache_dtype = 'uint16'
@@ -32,10 +51,9 @@ library_file = 'spectral_controls_library.db'
 ### define default channels for trace analyser and experiment model - these should match the channels in the instrument
 max_events_in_cache = 10_000_000
 adc_channels = ['FSC', 'SSC', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12', 'B13', 'B14']
-trigger_channel = 'FSC'
 area_channels = ['FSC', 'SSC', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12', 'B13', 'B14'] # make sure there is equal number to n_channels_trace in instrument config
 height_channels = ['FSC']
-width_channels = ['FSC']
+width_channels = [trigger_channel]
 scatter_channels = ['FSC', 'SSC']
 fluorescence_channels = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9', 'B10', 'B11', 'B12', 'B13', 'B14']
 event_channels_pnn = ['Time', 'event_id'] + [c + '-A' for c in area_channels] + [c + '-H' for c in height_channels] + [c + '-W' for c in width_channels]

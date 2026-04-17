@@ -14,11 +14,58 @@ import numpy as np
 import time
 import warnings
 
-from honeychrome.settings import traces_cache_size, traces_cache_size, max_events_in_traces_cache, trace_n_points, n_channels_trace, adc_rate
+from honeychrome.settings import traces_cache_size, traces_cache_size, max_events_in_traces_cache, trace_n_points, n_channels_trace, adc_rate, threshold, n_time_points_in_event, window_extension_length_pre, baseline_decay_rate, window_extension_length_post, timeout_length, deltaT
 from honeychrome.settings import max_events_in_cache, n_channels_per_event, channel_dict, event_channels_pnn, analyser_target_repeat_time
 
+threshold_adc = int((threshold / 500) * 2**16 / 2)
+baseline_length = int(1/baseline_decay_rate)
+
+def peak_start_stop_baseline(tr):
+    # initialise peak detector
+    baseline = tr[0:baseline_length].mean()
+    countdown = 0
+    n_start = 0
+    in_peak = False
+
+    for n in range(window_extension_length_pre, len(tr)):
+        # if not in peak, update baselines and detect if there is a peak
+        condition = tr[n] - baseline > threshold
+        if not in_peak:
+            if condition:
+                in_peak = True
+                n_start = n - window_extension_length_pre  # start of integration and end of blc
+            else:
+                baseline = baseline * (1 - baseline_decay_rate) + tr[n - window_extension_length_pre] * baseline_decay_rate
+
+        if in_peak:
+            # start countdown if signal dips below threshold
+            if (not condition) and (countdown == 0) and (n > n_start + 2*window_extension_length_pre):
+                countdown = window_extension_length_pre + window_extension_length_post
+
+            if countdown > 0:
+                countdown -= 1
+                if countdown == 0 or (n - n_start >= timeout_length + window_extension_length_pre) or (n == len(tr) - 1):
+                    in_peak = False
+                    break
+
+    n_end = n - window_extension_length_pre + 1  # end of integration and restart of blc
+
+    # if no peak, then n_start=0 and n_end=end index of trace
+    return n_start, n_end, baseline
+
+def peak_measurements(tr, n_start, n_end, deltaT, area_indices, height_indices):
+    baselines = np.concatenate((tr[:,:n_start], tr[:,n_end:]), axis=1).mean(axis=1)
+    traces_truncated_baseline_subtracted = tr[:,n_start:n_end] - baselines.reshape(-1,1)
+    heights = np.max(traces_truncated_baseline_subtracted[height_indices,:], axis=1)
+    areas = np.sum(traces_truncated_baseline_subtracted[area_indices,:], axis=1)
+    width = (n_end - n_start) * deltaT
+    centre = (n_start + n_end) * 0.5
+    peak = areas, heights, width, centre
+
+    return peak, baselines
+
 class TraceAnalyser(mp.Process):
-    def __init__(self, use_dummy_data=False,
+    def __init__(self,
                  traces_cache_name=None,
                  traces_cache_lock=None,
                  index_head_traces_cache=None,
@@ -30,12 +77,6 @@ class TraceAnalyser(mp.Process):
                  oscilloscope_traces_queue=None,
                  pipe_connection=None):
         super().__init__()
-        if use_dummy_data:
-            self.use_dummy_data = True
-            self.dummy_data_source = 0
-        else:
-            self.use_dummy_data = False
-
         # pipe connection
         self.pipe_connection = pipe_connection
 
@@ -62,7 +103,7 @@ class TraceAnalyser(mp.Process):
         self.adc_rate = adc_rate
         self.indices_area_channels_in_traces = None
         self.indices_height_channels_in_traces = None
-        self.indices_width_channel_in_traces = None
+        self.indices_trigger_channel_in_traces = None
         self.index_time_channel_in_events = None
         self.index_event_id_in_events = None
         self.index_width_channel_in_events = None
@@ -161,7 +202,7 @@ class TraceAnalyser(mp.Process):
 
         self.indices_area_channels_in_traces = [(True if c in area_channels else False) for c in adc_channels]
         self.indices_height_channels_in_traces = [(True if c in height_channels else False) for c in adc_channels]
-        self.indices_width_channel_in_traces = adc_channels.index(trigger_channel)
+        self.indices_trigger_channel_in_traces = adc_channels.index(trigger_channel)
         self.index_time_channel_in_events = event_channels_pnn.index('Time')
         self.index_event_id_in_events = event_channels_pnn.index('event_id')
         self.index_width_channel_in_events = event_channels_pnn.index(trigger_channel + '-W')
@@ -205,9 +246,21 @@ class TraceAnalyser(mp.Process):
                 blob_reshaped = blob_np.reshape(-1, self.n_channels_trace, self.n_time_points_in_event)
 
                 # calculate area, height, width as defined in channel_dict and write to events_cache
-                areas = blob_reshaped[:, self.indices_area_channels_in_traces, :].sum(axis=2)
-                heights = blob_reshaped[:, self.indices_height_channels_in_traces, :].max(axis=2)
-                widths = self.calculate_width(blob_reshaped[:, self.indices_width_channel_in_traces, :])
+
+                ### Simple calculation - if peaks already filtered and background-subtracted
+                # areas = blob_reshaped[:, self.indices_area_channels_in_traces, :].sum(axis=2)
+                # heights = blob_reshaped[:, self.indices_height_channels_in_traces, :].max(axis=2)
+                # widths = self.calculate_width(blob_reshaped[:, self.indices_trigger_channel_in_traces, :])
+
+                ### More sophisticated calculation - loop over traces and perform background substraction
+                areas = np.zeros((n_new_events, len(self.indices_area_channels_in_events)))
+                heights = np.zeros((n_new_events, len(self.indices_height_channels_in_events)))
+                widths = np.zeros(n_new_events)
+                for n, traces in enumerate(blob_reshaped):
+                    n_start, n_end, tr_baseline = peak_start_stop_baseline(traces[self.indices_trigger_channel_in_traces])
+                    peak, baselines = peak_measurements(traces, n_start, n_end, deltaT, self.indices_area_channels_in_traces, self.indices_height_channels_in_traces)
+                    areas[n], heights[n], widths[n], centre = peak
+
                 times = np.ones(n_new_events, dtype=np.int64) * int((time.perf_counter() - start_time) * 1000)
                 event_ids = np.array(range(events_tail, events_tail + n_new_events))
                 with self.events_cache_lock:
@@ -231,7 +284,7 @@ class TraceAnalyser(mp.Process):
                     self.index_tail_events_cache.value = events_tail
 
                 last_event_traces = blob_reshaped[-1, :, :]
-                self.oscilloscope_traces_queue.put({'event_id':event_ids[-1], 'time':times[-1], 'traces':last_event_traces})
+                self.oscilloscope_traces_queue.put({'event_id':event_ids[-1], 'time':times[-1], 'traces':last_event_traces, 'n_start':n_start, 'n_end':n_end, 'peak':peak, 'baselines':baselines})
 
             else:
                 print(f'[Trace Analyser] awaiting traces (traces cache head:{traces_head}, tail:{traces_tail})')

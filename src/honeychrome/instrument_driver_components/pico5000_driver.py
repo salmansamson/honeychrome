@@ -3,7 +3,7 @@ import numpy as np
 from picosdk.ps5000a import ps5000a as ps
 from picosdk.functions import assert_pico_ok, PICO_STATUS_LOOKUP
 
-from honeychrome.settings import adc_channels, magnitude_ceiling, traces_cache_dtype, n_channels_trace, n_time_points_in_event, transfer_target_repeat_time
+from honeychrome.settings import adc_channels, magnitude_ceiling, traces_cache_dtype, n_channels_trace, n_time_points_in_event, transfer_target_repeat_time, threshold, FSC_sense
 
 index_channel_a = adc_channels.index('FSC')
 index_channel_b = adc_channels.index('B1')
@@ -36,10 +36,7 @@ SAMPLE_INTERVAL_NS = 8  # Timebase 3 (31.25 MS/s)
 TIMEBASE = 3  # 8ns at 14-bit
 MAX_SEGMENTS = int(1000 * transfer_target_repeat_time * 2)  # Number of pulses to capture per "Burst"
 resolution = ps.PS5000A_DEVICE_RESOLUTION["PS5000A_DR_14BIT"]
-threshold = 50 #mV
 auto_trig_timeout = 10 #ms
-A_sense = -1
-B_sense = 1
 A_range = 500
 B_range = 50
 trigger_channel = 0 # 0=A, 1=B
@@ -107,7 +104,7 @@ def generate_test_signal():
 # from scipy.signal import decimate
 from scipy import signal
 # from harmonic_filter import high_precision_harmonic_filter
-sos_butt = signal.butter(4, 0.3e6, fs=1/deltaT, output='sos')
+sos_butter = signal.butter(4, 0.3e6, fs=1 / deltaT, output='sos')
 def filter_and_decimate(trace):
     # IIR (Chebyshev Type I) - Very fast, uses very few coefficients
     # filtered_signal = decimate(trace, q=analysis_decimation, ftype='iir')
@@ -122,7 +119,7 @@ def filter_and_decimate(trace):
     # filtered_signal = gaussian_filter1d(filtered_signal, sigma=3)
     # # filtered_signal = filtered_signal[::4]
 
-    trace = signal.sosfiltfilt(sos_butt, trace)
+    trace = signal.sosfiltfilt(sos_butter, trace)
     trace = trace[::analysis_decimation]
     trace = trace[:n_time_points_in_event]
 
@@ -187,9 +184,7 @@ class Pico5000_Device:
         # AUTO TRIGGER: Ch A (0), 100mV Threshold, Rising (0), Auto-trigger (400ms)
         threshold_adc = int((threshold / 500) * max_adc.value)
         if trigger_channel == 0:
-            threshold_adc *= A_sense
-        else:
-            threshold_adc *= B_sense
+            threshold_adc *= FSC_sense
         ps.ps5000aSetSimpleTrigger(chandle, 1, trigger_channel, threshold_adc, 1, 0, auto_trig_timeout)
 
         # Rapid Transfer Buffers
@@ -249,10 +244,10 @@ class Pico5000_Device:
         traces_b = np.array([np.frombuffer(b, dtype=np.int16) for b in self.buffer_list_b], dtype=np.float32)
 
         N = len(traces_a)
-        traces = np.zeros((n_time_points_in_event, n_channels_trace, N), dtype=np.uint16)
+        traces = np.zeros((N, n_channels_trace, n_time_points_in_event), dtype=np.uint16)
         for n in range(N):
-            traces[:, index_channel_a, n] = filter_and_decimate(traces_a[n]) + half_uint16
-            traces[:, index_channel_b, n] = filter_and_decimate(traces_b[n]) + nearly_floor_uint16
+            traces[n, index_channel_a, :] = FSC_sense * filter_and_decimate(traces_a[n]) + half_uint16
+            traces[n, index_channel_b, :] = filter_and_decimate(traces_b[n]) + nearly_floor_uint16
 
         blob_of_traces_as_array = traces.reshape(-1)
         return blob_of_traces_as_array
@@ -264,11 +259,12 @@ if __name__ == '__main__':
     pico_device.connect_to_device()
     pico_device.start_acquisition()
     blob = pico_device.read_out_traces()
-    traces = blob.reshape((n_time_points_in_event, n_channels_trace,-1))
+    traces = blob.reshape((-1, n_channels_trace, n_time_points_in_event))
 
     from matplotlib import pyplot as plt
     fig, ax = plt.subplots(3)
     ax[0].plot(awg_buffer)
-    ax[1].plot(traces[:,index_channel_a,:])
-    ax[2].plot(traces[:,index_channel_b,:])
+    ax[1].plot(traces[:,index_channel_a,:].T)
+    ax[2].plot(traces[:,index_channel_b,:].T)
     plt.show()
+

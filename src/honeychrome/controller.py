@@ -668,14 +668,18 @@ class Controller(QObject):
 
         # save sample, load sample
         self.raw_event_data, _ = self.copy_live_data(extent='all')
-        self.current_sample_path = self.live_sample_path
-        self.live_sample_path = None
-        sample_name = Path(self.current_sample_path).stem
-        self.current_sample = Sample(self.raw_event_data, sample_id=sample_name, channel_labels=self.experiment.settings['raw']['event_channels_pnn'])
-        self.current_sample.metadata['tubename'] = sample_name
-        self.current_sample.metadata['flow_rate'] = str(61.234) #todo get this flow rate (float)
-        self.current_sample.export(self.experiment_dir / self.current_sample_path, source='raw', include_metadata=True)
-        self.load_sample(self.current_sample_path)
+        if self.raw_event_data is not None:
+            self.current_sample_path = self.live_sample_path
+            self.live_sample_path = None
+            sample_name = Path(self.current_sample_path).stem
+            self.current_sample = Sample(self.raw_event_data, sample_id=sample_name, channel_labels=self.experiment.settings['raw']['event_channels_pnn'])
+            self.current_sample.metadata['tubename'] = sample_name
+            self.current_sample.metadata['flow_rate'] = str(61.234) #todo get this flow rate (float)
+            self.current_sample.export(self.experiment_dir / self.current_sample_path, source='raw', include_metadata=True)
+            self.load_sample(self.current_sample_path)
+        else:
+            if self.bus:
+                self.bus.statusMessage.emit(f'No data acquired')
 
         # empty oscilloscope traces queue
         removed = empty_queue_nowait(self.oscilloscope_traces_queue)
