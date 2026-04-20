@@ -18,8 +18,8 @@ def get_project_files():
     project_root = os.path.dirname(os.path.abspath(__file__))
     assets = []
 
-    fcs_path = os.path.join(project_root, 'src', 'honeychrome', 'controller_components', 'data')
-    fcs_path_destination = os.path.join('honeychrome', 'controller_components', 'data')
+    fcs_path = os.path.join(project_root, 'src', 'honeychrome', 'instrument_driver_components', 'data')
+    fcs_path_destination = os.path.join('honeychrome', 'instrument_driver_components', 'data')
     assets.append((fcs_path, fcs_path_destination))
 
     assets_path = os.path.join('src', 'honeychrome', 'view_components', 'assets')

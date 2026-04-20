@@ -37,7 +37,7 @@ dependencies = [
     'numpy==2.4.1',
     'orderly-set==5.5.0',
     'packaging==25.0',
-    'pandas==2.3.3',
+    'pandas==3.0.2',
     'pathvalidate==3.3.1',
     'pillow==12.1.0',
     'psutil==7.2.1',
@@ -64,8 +64,6 @@ dependencies = [
     'urllib3==2.6.3',
     'xyzservices==2025.11.0'
 ]
-
-
 
 [project.optional-dependencies]
 dev = []

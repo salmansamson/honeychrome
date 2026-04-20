@@ -18,7 +18,7 @@ deltaT = 1/adc_rate # [us]
 ### peak detection settings
 trigger_channel = 'FSC'
 FSC_sense = -1
-threshold = 50 # mV
+threshold = 150 # mV
 baseline_time = 3e-6  # time in us, sets decay rate of exponentially moving average
 window_extension_time_pre = 3e-6  # time in us, sets time before threshold crossing to start integration and stop averaging signal
 window_extension_time_post = 3e-6  # time in us, sets time before threshold crossing to start integration and stop averaging signal
