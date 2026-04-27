@@ -1042,8 +1042,8 @@ class Controller(QObject):
         if self.current_mode == 'process':
             self.data_for_cytometry_plots.update({'event_data': self.unmixed_event_data})
             self.data_for_cytometry_plots['histograms'] = initialise_hists(self.data_for_cytometry_plots['plots'], self.data_for_cytometry_plots)
-            gates_to_calculate = list(set(self.data_for_cytometry_plots['lookup_tables'].keys()) - set(self.data_for_cytometry_plots['gate_membership'].keys()) | {'root'})
-            self.calc_hists_and_stats(gates_to_calculate=gates_to_calculate)
+            self.data_for_cytometry_plots['gate_membership'] = {}
+            self.calc_hists_and_stats()
             logger.info(f'Controller: prepared hists for process plots')
 
     @Slot(str, str)
@@ -1193,6 +1193,7 @@ class Controller(QObject):
             # if gates_to_calculate is none, then initialise gates_membership dict, otherwise reference it from data_for_cytometry_plots
             if not gates_to_calculate:
                 #todo hopefully verify bug has gone here?
+                #fixed, I think, but always reinitialising from scratch
                 gate_membership = {'root': np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)}
                 self.data_for_cytometry_plots.update({'gate_membership': gate_membership})
                 # self.data_for_cytometry_plots['gate_membership']['root'] = np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)

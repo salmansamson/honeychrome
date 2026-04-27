@@ -142,6 +142,10 @@ class AfComparisonPlotWidget(QWidget):
     # Emitted when the source gate is changed so the parent can redraw both plots
     # with a consistent gate mask.
     sourceGateChanged = Signal(str)
+    # Emitted when either channel is changed, so the sibling plot can mirror it.
+    channelChanged = Signal(str, str)   # (channel_x, channel_y)
+    # Emitted when a zoom/scaling is applied on one axis, so the sibling can mirror.
+    scalingChanged = Signal(str, object)  # (axis_name, Transform)
 
     def __init__(self, title: str, controller, parent=None):
         super().__init__(parent)
@@ -281,6 +285,38 @@ class AfComparisonPlotWidget(QWidget):
         self._channel_x = channel_x
         self._channel_y = channel_y
         self._configure_axes()
+        self._draw()
+
+    def set_scaling(self, axis_name: str, tr):
+        """
+        Mirror scaling/zoom from the sibling plot.
+        tr is the Transform object that was already modified by the sibling's _apply_zoom.
+        We copy its parameters into our own Transform and update the view accordingly.
+        """
+        if axis_name == 'x':
+            channel = self._channel_x
+            axis = self.axis_bottom
+            vb_set_range = self.vb.setXRange
+        else:
+            channel = self._channel_y
+            axis = self.axis_left
+            vb_set_range = self.vb.setYRange
+
+        if channel not in self._transformations:
+            return
+
+        my_tr = self._transformations[channel]
+        # Copy the transform state from the sibling
+        my_tr.id = tr.id
+        my_tr.logicle_w = tr.logicle_w
+        my_tr.logicle_a = tr.logicle_a
+        my_tr.limits = tr.limits
+        my_tr.set_transform(my_tr.id, my_tr.limits)
+
+        vb_set_range(*my_tr.limits, padding=0)
+        axis.zoomZero = my_tr.zero
+        axis.limits = my_tr.limits
+        axis.setTicks(my_tr.ticks())
         self._draw()
 
     def set_source_gate(self, gate_name: str):
@@ -584,6 +620,7 @@ class AfComparisonPlotWidget(QWidget):
         axis.zoomZero = tr.zero
         axis.setTicks(tr.ticks())
         self._draw()
+        self.scalingChanged.emit(axis_name, tr)
 
     # ------------------------------------------------------------------
     # Slot: channel changed via label click
@@ -597,6 +634,7 @@ class AfComparisonPlotWidget(QWidget):
             self._channel_x = fl_names[n]
             self._configure_axes()
             self._draw()
+            self.channelChanged.emit(self._channel_x, self._channel_y)
 
     def _set_channel_y(self, n, _parent):
         pnn = self.controller.experiment.settings['unmixed'].get('event_channels_pnn', [])
@@ -606,6 +644,7 @@ class AfComparisonPlotWidget(QWidget):
             self._channel_y = fl_names[n]
             self._configure_axes()
             self._draw()
+            self.channelChanged.emit(self._channel_x, self._channel_y)
 
     def _set_source_gate(self, n, _parent):
         gate_names = self.plot_title.leftClickMenuItems
@@ -840,11 +879,15 @@ class AutoSpectralTab(QWidget):
             'OLS (no AF)', self.controller, parent=self
         )
         self._plot_ols.sourceGateChanged.connect(self._on_ols_gate_changed)
+        self._plot_ols.channelChanged.connect(self._on_ols_channel_changed)
+        self._plot_ols.scalingChanged.connect(self._on_ols_scaling_changed)
 
         self._plot_af = AfComparisonPlotWidget(
             'AF-corrected', self.controller, parent=self
         )
         self._plot_af.sourceGateChanged.connect(self._on_af_gate_changed)
+        self._plot_af.channelChanged.connect(self._on_af_channel_changed)
+        self._plot_af.scalingChanged.connect(self._on_af_scaling_changed)
 
         plot_splitter.addWidget(self._plot_ols)
         plot_splitter.addWidget(self._plot_af)
@@ -1247,20 +1290,24 @@ class AutoSpectralTab(QWidget):
 
             # Update the controller's cached AF matrices for this sample so
             # that the next load_sample() call picks up the new assignment
-            # without needing to recompute anything.  We do NOT re-unmix here
-            # to keep the checkbox response instant.  The Unmixed Data tab will
-            # reflect the new assignment the next time the sample is loaded.
+            # without needing to recompute anything.
             if sample_path == self.controller.current_sample_path:
                 self.controller.initialise_af_matrices()
+                # Re-apply unmixing with the new AF assignment so the Unmixed
+                # Data tab updates immediately without requiring a sample reload.
+                if self.controller.raw_event_data is not None:
+                    self.controller.unmixed_event_data = self.controller._apply_unmixing(
+                        self.controller.raw_event_data
+                    )
+                    self.controller.clear_data_for_cytometry_plots()
+                    self.controller.initialise_data_for_cytometry_plots()
 
             n = len(assigned)
             if sample_path == self.controller.current_sample_path:
                 self._assign_status.setText(
-                    f'Current sample: {n} profile(s) assigned. '
-                    f'Reload the sample or click "Update Plots" to apply.'
+                    f'Current sample: {n} profile(s) assigned — Unmixed Data tab updated.'
                     if n else
-                    'Current sample: no AF assigned. '
-                    'Reload the sample to revert to standard OLS unmixing.'
+                    'Current sample: no AF assigned — reverted to standard OLS unmixing.'
                 )
             else:
                 self._assign_status.setText(
@@ -1283,9 +1330,17 @@ class AutoSpectralTab(QWidget):
 
         self.controller.initialise_af_matrices()
 
+        # Re-apply unmixing immediately so the Unmixed Data tab reflects the change.
+        if self.controller.raw_event_data is not None:
+            self.controller.unmixed_event_data = self.controller._apply_unmixing(
+                self.controller.raw_event_data
+            )
+            self.controller.clear_data_for_cytometry_plots()
+            self.controller.initialise_data_for_cytometry_plots()
+
         self._rebuild_assignment_grid()
         self._assign_status.setText(
-            'AF cleared for current sample. Reload the sample to apply OLS unmixing.'
+            'AF cleared for current sample — reverted to standard OLS unmixing.'
         )
         if self.bus:
             self.bus.statusMessage.emit(
@@ -1298,9 +1353,17 @@ class AutoSpectralTab(QWidget):
 
         self.controller.initialise_af_matrices()
 
+        # Re-apply unmixing immediately so the Unmixed Data tab reflects the change.
+        if self.controller.raw_event_data is not None:
+            self.controller.unmixed_event_data = self.controller._apply_unmixing(
+                self.controller.raw_event_data
+            )
+            self.controller.clear_data_for_cytometry_plots()
+            self.controller.initialise_data_for_cytometry_plots()
+
         self._rebuild_assignment_grid()
         self._assign_status.setText(
-            'All AF assignments cleared. Reload samples to apply OLS unmixing.'
+            'All AF assignments cleared — reverted to standard OLS unmixing.'
         )
         if self.bus:
             self.bus.statusMessage.emit('AutoSpectral: all AF assignments cleared.')
@@ -1454,6 +1517,7 @@ class AutoSpectralTab(QWidget):
         """
         Feed event data to both plot widgets and initialise their transforms
         from the live unmixed_transformations.  Pick default X/Y channels.
+        Existing channel, scaling, and gate selections are preserved.
         """
         if self._ols_data is None or self._af_data is None:
             return
@@ -1474,12 +1538,42 @@ class AutoSpectralTab(QWidget):
             ch_x = self._plot_ols._channel_x
             ch_y = self._plot_ols._channel_y
 
+        # Preserve per-channel transform state (limits, logicle_w, etc.) and gate
+        # so that "Update Plots" does not reset zooming/scaling or gating.
+        def _snapshot_transforms(plot):
+            """Return a dict of {channel: (id, limits, logicle_w, logicle_a)} for current channels."""
+            snap = {}
+            for ch in (plot._channel_x, plot._channel_y):
+                if ch and ch in plot._transformations:
+                    tr = plot._transformations[ch]
+                    snap[ch] = (tr.id, tr.limits, tr.logicle_w, tr.logicle_a)
+            return snap
+
+        def _restore_transforms(plot, snap):
+            for ch, (tid, limits, lw, la) in snap.items():
+                if ch in plot._transformations:
+                    tr = plot._transformations[ch]
+                    tr.logicle_w = lw
+                    tr.logicle_a = la
+                    tr.set_transform(tid, limits)
+
+        snap_ols = _snapshot_transforms(self._plot_ols)
+        snap_af = _snapshot_transforms(self._plot_af)
+        gate_ols = self._plot_ols._source_gate
+        gate_af = self._plot_af._source_gate
+
         self._plot_ols.set_event_data(self._ols_data)
         self._plot_ols.initialise_from_controller(ch_x, ch_y)
+        _restore_transforms(self._plot_ols, snap_ols)
+        self._plot_ols._source_gate = gate_ols
+        self._plot_ols._configure_axes()
         self._plot_ols.redraw()
 
         self._plot_af.set_event_data(self._af_data)
         self._plot_af.initialise_from_controller(ch_x, ch_y)
+        _restore_transforms(self._plot_af, snap_af)
+        self._plot_af._source_gate = gate_af
+        self._plot_af._configure_axes()
         self._plot_af.redraw()
 
     def _on_ols_gate_changed(self, gate_name: str):
@@ -1489,6 +1583,30 @@ class AutoSpectralTab(QWidget):
     def _on_af_gate_changed(self, gate_name: str):
         """Sync the OLS plot's source gate when the AF plot's gate changes."""
         self._plot_ols.set_source_gate(gate_name)
+
+    def _on_ols_channel_changed(self, ch_x: str, ch_y: str):
+        """Mirror channel selection from OLS to AF plot."""
+        self._plot_af.blockSignals(True)
+        self._plot_af.set_channels(ch_x, ch_y)
+        self._plot_af.blockSignals(False)
+
+    def _on_af_channel_changed(self, ch_x: str, ch_y: str):
+        """Mirror channel selection from AF to OLS plot."""
+        self._plot_ols.blockSignals(True)
+        self._plot_ols.set_channels(ch_x, ch_y)
+        self._plot_ols.blockSignals(False)
+
+    def _on_ols_scaling_changed(self, axis_name: str, tr):
+        """Mirror zoom/scaling from OLS to AF plot."""
+        self._plot_af.blockSignals(True)
+        self._plot_af.set_scaling(axis_name, tr)
+        self._plot_af.blockSignals(False)
+
+    def _on_af_scaling_changed(self, axis_name: str, tr):
+        """Mirror zoom/scaling from AF to OLS plot."""
+        self._plot_ols.blockSignals(True)
+        self._plot_ols.set_scaling(axis_name, tr)
+        self._plot_ols.blockSignals(False)
 
     # ======================================================================
     # Shared helper
