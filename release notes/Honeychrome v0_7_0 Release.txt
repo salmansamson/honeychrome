@@ -1,0 +1,16 @@
+Honeychrome v0.7.0 Release Notes
+
+This release contains several new features, improvements and bug fixes.
+
+Major new features
+* AutoSpectral AF (the autofluorescence part of AutoSpectral) has been added in a new tab. This (optional) enhancement of the unmixing workflow is rapidly becoming the standard tool for fixing unmixing artifacts caused by variable autofluorescence.
+* tabbed plugin system: Honeychrome now automatically loads plugins from a plugins folder; two example plugins included
+* dot plots coloured by gate
+
+Improvements
+* better colourmap ranges to avoid saturation
+* imported FCS files can now live anywhere: if they are not in the experiment folder, a symbolic link is set up from the experiment folder, so no more broken relative paths
+* build system now produces executable installers for Linux (Ubuntu > 22.04), Windows (10, 11), and MacOs (Intel / ARM). Hopefully this will now cover (almost) everyone who had trouble running the previous executables
+
+Bug fixes
+* The spectral model editor previously had a bug that messed up adding new controls. Now fixed.

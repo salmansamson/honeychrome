@@ -51,6 +51,9 @@ from honeychrome.view_components.cytometry_plot_components import (
 import honeychrome.settings as settings
 
 import logging
+
+from honeychrome.view_components.help_texts import autospectral_af_help_text
+
 logger = logging.getLogger(__name__)
 
 TAB_NAME = 'AutoSpectral'
@@ -713,6 +716,19 @@ class AutoSpectralTab(QWidget):
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setWidget(self._content)
         outer.addWidget(scroll)
+
+        # Help text (rich text / HTML)
+        self.help_label = QLabel(autospectral_af_help_text)
+        self.help_label.setTextFormat(Qt.RichText)
+        self.help_label.setWordWrap(True)
+        # self.help_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        font = self.help_label.font()
+        font.setPointSize(14)  # Set your desired font size
+        self.help_label.setFont(font)
+
+        content_layout.addWidget(self.help_label)
+
+
 
         self._build_extraction_section(content_layout)
         self._build_profile_manager_section(content_layout)

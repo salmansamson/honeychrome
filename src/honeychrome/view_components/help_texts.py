@@ -113,3 +113,22 @@ nxn_help_text = '''
 <li>Hover to inspect spillover of each cell in the array</li>
 </ul>
 '''
+
+autospectral_af_help_text = '''
+<h3>AutoSpectral AF</h3>
+<h5>This is an optional enhancement of the spectral process, which implements the autofluorescence (AF) extraction part of the AutoSpectral package (AutoSpectral AF).</h5>
+<p>By following the steps below, you can extract each cell’s individual autofluorescent background in a manner specific to that cell, producing better unmixing with less spread.</p>
+<ol>
+<li>Extract AF profile from an unstained sample. This can be repeated for each unstained control that you have available, generating multiple AF profiles. 
+Default: 100 clusters. After extraction, the clusters can be inspected by clicking on the Stored AF Profiles list.</li>
+<li>Assign the AF profiles to Samples. Each cell in the sample is automatically assigned its nearest cluster from of the selected controls for a more accurate AF subtraction.</li>
+<li>Inspect the AutoSpectral AF results against standard unmixing. Negative spread and other artifacts caused by inhomogeneous autofluorescence should be much improved.</li>
+</ol>
+<p>Documentation:</p>
+<ul>
+<li><a href="https://www.colibri-cytometry.com/post/introducing-autospectral-an-optimized-unmixing-workflow">AutoSpectral on the Colibri Cytometry blog</a></li>
+<li><a href="https://www.colibri-cytometry.com/post/autospectral-single-cell-autofluorescence">AutoSpectral AF on the Colibri Cytometry blog</a></li>
+<li><a href="https://github.com/DrCytometer/AutoSpectral">AutoSpectral package on Github</a></li>
+</ul>
+<hr/>
+'''
