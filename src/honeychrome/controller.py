@@ -46,6 +46,13 @@ from honeychrome.settings import traces_cache_size, traces_cache_dtype, adc_rate
 import honeychrome.settings as settings
 from honeychrome.settings import max_events_in_cache, n_channels_per_event, experiments_folder, live_data_process_repeat_time, settings_default, samples_default, channel_dict
 from honeychrome.view_components.busy_cursor import with_busy_cursor
+from honeychrome.controller_components.autospectral_functions import (
+        get_af_spectra,
+        precompute_af_matrices,
+        combine_af_precomputed,
+        apply_af_unmixing,
+        apply_af_transfer,
+     )
 
 base_directory = Path.home() / experiments_folder
 
@@ -94,6 +101,9 @@ class Controller(QObject):
         self.raw_lookup_tables = {}
         self.unmixed_lookup_tables = {}
         self.transfer_matrix = None
+        self.af_precomputed = None
+        self.af_spectra = None
+        self.af_precomputed_cache: dict = {}
         self.raw_transformations = None
         self.unmixed_transformations = None
         self.raw_gating = None
@@ -363,6 +373,7 @@ class Controller(QObject):
         self.raw_lookup_tables = {}
         self.unmixed_lookup_tables = {}
         self.transfer_matrix = None
+        self.af_precomputed_cache = {}
         self.raw_transformations = None
         self.unmixed_transformations = None
         self.raw_gating = None
@@ -486,6 +497,213 @@ class Controller(QObject):
         transfer_matrix = transfer_matrix.T
 
         self.transfer_matrix = transfer_matrix
+        # Rebuild the per-profile precomputed cache now that fluor_spectra may
+        # have changed (spectral process refresh changes P).
+        self.cache_all_af_profiles()
+
+        # Set af_precomputed/af_spectra for the current sample (may be None).
+        self.initialise_af_matrices()
+
+    
+    def initialise_af_matrices(self):
+        """
+        Set self.af_precomputed and self.af_spectra for the currently loaded sample
+        by combining cached per-profile matrices via np.hstack.
+
+        No matrix algebra is performed here — only dict lookups and hstack, which
+        are O(n_af * n_channels) and negligible compared to the linalg.solve that
+        was previously run per sample.
+        """
+        af_spectra = self.get_combined_af_spectra_for_sample(self.current_sample_path)
+
+        if af_spectra is None:
+            self.af_precomputed = None
+            self.af_spectra = None
+            return
+
+        # Combine per-profile cached precomputed dicts
+        profile_names = (
+            self.experiment.samples
+            .get('sample_af_profiles', {})
+            .get(self.current_sample_path, [])
+        )
+        cached = [
+            self.af_precomputed_cache[name]
+            for name in profile_names
+            if name in self.af_precomputed_cache
+        ]
+
+        if not cached:
+            # Profiles assigned but none cached yet (e.g. loaded from old file).
+            # Fall back to computing now and caching.
+            logger.warning(
+                'initialise_af_matrices: assigned profiles not in cache — '
+                'computing now. Call cache_all_af_profiles() after spectral process.'
+            )
+            self.cache_all_af_profiles()
+            cached = [
+                self.af_precomputed_cache[name]
+                for name in profile_names
+                if name in self.af_precomputed_cache
+            ]
+
+        if not cached:
+            self.af_precomputed = None
+            self.af_spectra = None
+            return
+
+        if len(cached) == 1:
+            combined = cached[0]
+        else:
+            combined = combine_af_precomputed(cached)
+
+        self.af_precomputed = combined
+        self.af_spectra = af_spectra
+        logger.info(
+        f'Controller: AF matrices set for {self.current_sample_path} '
+        f'({af_spectra.shape[0]} AF spectra, '
+        f'{len(profile_names)} profile(s)) — from cache.'
+    )
+
+    def cache_af_profile(self, profile_name: str) -> bool:
+        """
+        Compute and cache the precomputed AF matrices for a single named profile.
+
+        Call this immediately after storing a new profile in
+        experiment.process['af_profiles'], so the cache is always up to date
+        without needing to reload the experiment.
+
+        Returns True on success, False if the profile or fluor_spectra are
+        unavailable.
+        """
+        fluor_spectra = self._build_fluor_spectra()
+        if fluor_spectra is None:
+            logger.warning(
+                f'cache_af_profile: cannot cache "{profile_name}" — '
+                'fluor_spectra unavailable (spectral model not yet complete?).'
+            )
+            return False
+
+        af_profiles = self.experiment.process.get('af_profiles', {})
+        entry = af_profiles.get(profile_name)
+        if entry is None:
+            logger.warning(
+                f'cache_af_profile: "{profile_name}" not found in af_profiles.'
+            )
+            return False
+
+        try:
+            af_spectra = np.array(entry['spectra'])
+            self.af_precomputed_cache[profile_name] = precompute_af_matrices(
+                fluor_spectra, af_spectra
+            )
+            logger.info(
+                f'Controller: cached AF precomputed matrices for "{profile_name}" '
+                f'({af_spectra.shape[0]} AF spectra).'
+            )
+            return True
+        except Exception as e:
+            logger.error(f'cache_af_profile: failed for "{profile_name}": {e}')
+            return False
+            logger.error(f'cache_af_profile: failed for "{profile_name}": {e}')
+            return False
+
+    def cache_all_af_profiles(self):
+        """
+        (Re)compute precomputed matrices for every stored AF profile and replace
+        the entire cache.  Called by initialise_transfer_matrix() after a spectral
+        process refresh, because P depends on fluor_spectra which may have changed.
+        """
+        self.af_precomputed_cache = {}
+        af_profiles = self.experiment.process.get('af_profiles', {})
+        if not af_profiles:
+            return
+
+        fluor_spectra = self._build_fluor_spectra()
+        if fluor_spectra is None:
+            logger.warning(
+                'cache_all_af_profiles: fluor_spectra unavailable — cache empty.'
+            )
+            return
+
+        for name, entry in af_profiles.items():
+            try:
+                af_spectra = np.array(entry['spectra'])
+                self.af_precomputed_cache[name] = precompute_af_matrices(
+                    fluor_spectra, af_spectra
+                )
+            except Exception as e:
+                logger.error(f'cache_all_af_profiles: failed for "{name}": {e}')
+
+        logger.info(
+            f'Controller: AF cache rebuilt — '
+            f'{len(self.af_precomputed_cache)}/{len(af_profiles)} profiles cached.'
+        )
+
+
+    def get_combined_af_spectra_for_sample(self, sample_path) -> np.ndarray | None:
+        """
+        Return the vertically concatenated AF spectra ndarray for sample_path,
+        or None if no profiles are assigned or sample_path is None.
+        """
+        if sample_path is None:
+            return None
+
+        profile_names = (
+            self.experiment.samples
+            .get('sample_af_profiles', {})
+            .get(sample_path, [])
+        )
+        if not profile_names:
+            return None
+
+        af_profiles = self.experiment.process.get('af_profiles', {})
+        matrices = []
+        for name in profile_names:
+            entry = af_profiles.get(name)
+            if entry is None:
+                logger.warning(
+                    f'get_combined_af_spectra_for_sample: profile "{name}" '
+                    f'assigned to {sample_path} not found in af_profiles — skipping.'
+                )
+                continue
+            matrices.append(np.array(entry['spectra']))
+
+        if not matrices:
+            return None
+
+        return np.vstack(matrices)
+
+
+    def _build_fluor_spectra(self) -> np.ndarray | None:
+        """Build (n_fluors, n_channels) fluorophore spectra matrix from stored profiles."""
+        profiles = self.experiment.process.get('profiles')
+        spectral_model = self.experiment.process.get('spectral_model', [])
+        if not profiles or not spectral_model:
+            return None
+        labels = [c['label'] for c in spectral_model]
+        try:
+            rows = [profiles[label] for label in labels if label in profiles]
+            if not rows:
+                return None
+            return np.array(rows)
+        except Exception as e:
+            logger.error(f'_build_fluor_spectra failed: {e}')
+            return None
+
+
+    def _apply_unmixing(self, raw_event_data):
+        """Apply unmixing — AF-corrected if matrices are set, otherwise plain OLS."""
+        if self.af_precomputed is not None and self.af_spectra is not None:
+            return apply_af_transfer(
+                raw_event_data,
+                self.transfer_matrix,
+                self.af_precomputed,
+                self.af_spectra,
+                self.experiment.settings,
+            )
+        else:
+            return apply_transfer_matrix(self.transfer_matrix, raw_event_data)
 
     @Slot(str, str)
     def new_sample(self, sample_name, sample_type):
@@ -563,7 +781,8 @@ class Controller(QObject):
 
             # apply spectral unmixing and compensation if defined
             if self.experiment.process['unmixing_matrix'] is not None:
-                self.unmixed_event_data = apply_transfer_matrix(self.transfer_matrix, self.raw_event_data)
+                self.initialise_af_matrices()
+                self.unmixed_event_data = self._apply_unmixing(self.raw_event_data)
 
             if self.bus:
                 self.bus.statusMessage.emit(f'Loaded sample {self.current_sample_path}: {n_events} events.')
@@ -823,8 +1042,8 @@ class Controller(QObject):
         if self.current_mode == 'process':
             self.data_for_cytometry_plots.update({'event_data': self.unmixed_event_data})
             self.data_for_cytometry_plots['histograms'] = initialise_hists(self.data_for_cytometry_plots['plots'], self.data_for_cytometry_plots)
-            gates_to_calculate = list(set(self.data_for_cytometry_plots['lookup_tables'].keys()) - set(self.data_for_cytometry_plots['gate_membership'].keys()) | {'root'})
-            self.calc_hists_and_stats(gates_to_calculate=gates_to_calculate)
+            self.data_for_cytometry_plots['gate_membership'] = {}
+            self.calc_hists_and_stats()
             logger.info(f'Controller: prepared hists for process plots')
 
     @Slot(str, str)
@@ -974,6 +1193,7 @@ class Controller(QObject):
             # if gates_to_calculate is none, then initialise gates_membership dict, otherwise reference it from data_for_cytometry_plots
             if not gates_to_calculate:
                 #todo hopefully verify bug has gone here?
+                #fixed, I think, but always reinitialising from scratch
                 gate_membership = {'root': np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)}
                 self.data_for_cytometry_plots.update({'gate_membership': gate_membership})
                 # self.data_for_cytometry_plots['gate_membership']['root'] = np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)

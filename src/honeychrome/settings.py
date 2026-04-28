@@ -185,7 +185,8 @@ settings_default = {
 samples_default = {
     'single_stain_controls': [],
     'all_samples': {},
-    'all_sample_nevents': {}
+    'all_sample_nevents': {},
+    'sample_af_profiles': {},
 }
 
 process_default = {
@@ -197,7 +198,8 @@ process_default = {
     'similarity_matrix': None,
     'hotspot_matrix': None,
     'unmixing_matrix': None,
-    'spillover': None
+    'spillover': None,
+    'af_profiles': {},
 }
 
 cytometry_default = {

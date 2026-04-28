@@ -29,6 +29,7 @@ from honeychrome.view_components.gains_widget import GainsWidget
 from honeychrome.view_components.icon_loader import icon
 from honeychrome.view_components.sample_widget import SampleWidget
 from honeychrome.view_components.help_texts import process_help_text
+from honeychrome.view_components.autospectral_tab import AutoSpectralTab
 
 base_directory = Path.home() / experiments_folder
 
@@ -269,6 +270,16 @@ class MainWindow(QMainWindow):
         self.statistics_layout.addWidget(self.tip_statistics)
         self.statistics_layout.addWidget(self.statistical_comparison_widget)
         self.tabs.addTab(self.statistics_tab, "Statistics")
+
+        # --- AutoSpectral tab ---
+        self.autospectral_widget = AutoSpectralTab(bus, controller, parent=self)
+        autospectral_tab_widget = QWidget()
+        autospectral_tab_layout = QVBoxLayout()
+        autospectral_tab_layout.setContentsMargins(0, 0, 0, 0)
+        autospectral_tab_layout.setSpacing(0)
+        autospectral_tab_widget.setLayout(autospectral_tab_layout)
+        autospectral_tab_layout.addWidget(self.autospectral_widget)
+        self.tabs.addTab(autospectral_tab_widget, "AutoSpectral")
 
         # --- Plugin tabs ---
         self.tab_plugins = load_tabbed_plugins(bus, controller)
