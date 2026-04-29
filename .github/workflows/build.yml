@@ -5,15 +5,9 @@ on:
   # Allows manual triggering from the GitHub Actions tab
   workflow_dispatch:
 
-  # Trigger on push to main, but only if code files change
   push:
-    branches:
-      - main
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.gitignore'
-      - 'LICENSE'
+    tags:
+      - 'v*' # Only builds when you push a version tag (e.g., v1.0.1)
 
 # Cancels internal "queued" builds if you push again before the first finishes
 concurrency:
