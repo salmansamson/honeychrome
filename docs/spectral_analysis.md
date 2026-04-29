@@ -10,7 +10,7 @@ title: Spectral Analysis
 {% include menu.md %}
 
 # How to analyse spectral cytometry data in Honeychrome
-This guide assumes you have already installed Honeychrome using the [executable installers (Windows/Mac/Linux) or Python (cross-platform)](./readme.md), and that you have a set of FCS files to import. We will be using a 9-colour panel run on a 5-laser Cytek Aurora from the [AutoSpectral Full Workflow Example](https://www.colibri-cytometry.com/post/autospectral-full-workflow-example). If you wish to follow this example, download the data from [Mendeley Data](https://www.colibri-cytometry.com/post/autospectral-full-workflow-example) and unzip.
+This guide assumes you have already installed Honeychrome using the [executable installers (Windows/Mac/Linux) or Python (cross-platform)](/readme), and that you have a set of FCS files to import. We will be using a 9-colour panel run on a 5-laser Cytek Aurora from the [AutoSpectral Full Workflow Example](https://www.colibri-cytometry.com/post/autospectral-full-workflow-example). If you wish to follow this example, download the data from [Mendeley Data](https://www.colibri-cytometry.com/post/autospectral-full-workflow-example) and unzip.
 
 {:toc}
 

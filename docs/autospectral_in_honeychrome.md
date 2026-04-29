@@ -17,7 +17,7 @@ AutoSpectral is a set of tools to enhance spectral analysis by providing you wit
 Honeychrome now provides a tab for AutoSpectral AF (the per-cell autofluorescence extraction part of AutoSpectral), which radically clears up artifacts due to variable autofluorescence, for example negative spreading. See [AutoSpectral AF on the Colibri Cytometry blog](https://www.colibri-cytometry.com/post/autospectral-single-cell-autofluorescence)
 
 ## How to perform AutoSpectral AF (per-cell autofluorescence extraction)
-This guide assumes you have already installed Honeychrome using the [executable installers (Windows/Mac/Linux) or Python (cross-platform)](./readme.md), that you have a set of FCS files to import, and that you are already familiar with the basic spectral unmixing process. If not, please go to  [Spectral Analysis](/docs/spectral_analysis) first. 
+This guide assumes you have already installed Honeychrome using the [executable installers (Windows/Mac/Linux) or Python (cross-platform)](/readme), that you have a set of FCS files to import, and that you are already familiar with the basic spectral unmixing process. If not, please go to  [Spectral Analysis](/docs/spectral_analysis) first. 
 
 We will be continuing use of AutoSpectral Full Workflow Example (a 9-colour panel from the 5-laser Cytek Aurora from the AutoSpectral Full Workflow Example as set up in the tutorial [Spectral Analysis](/docs/spectral_analysis).
 

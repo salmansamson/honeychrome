@@ -6,7 +6,7 @@
 
 Open-Source Cross-Platform GUI App for Cytometry Acquisition and Analysis. Built in Python. [Source code on GitHub.](https://github.com/salmansamson/honeychrome) Part of the [Cytkit](https://cytkit.com) project to provide a complete open-source spectral cytometer. 
 
-Now in beta
+{% include menu.md %}
 
 <div>
   <a href="https://youtu.be/RQ4-RQkDCm4"><img src="other/honeychrome screenshot animation.webp" alt="Animated Demo" width="800"></a>
@@ -111,8 +111,8 @@ Honeychrome builds on several great open source Python packages:
 - Several others for processing of data, including numpy, scikit, sklearn
 - Seaborn and Matplotlib for publication-quality graphics
 
-Samson Rogers has been the main developer so far. Thanks to support and advice from many people 
-including Oliver Burton, C. Vant, Lotte Carr, Scott Tasker, Philip Jones, Robyn Pritchard.
+Samson Rogers has been the main developer so far. Oliver Burton contributed the AutoSpectral AF function and many aspects of the spec and usability. 
+Thanks to support and advice from many people including C. Vant, Lotte Carr, Scott Tasker, Philip Jones, Robyn Pritchard.
 
 ## Roadmap
 By January 2027, we hope to get to a stable release labeled v1.0.0, including the following:
