@@ -77,8 +77,8 @@ You can do fine tuning with the spillover matrix and/or the NxN plots:
 
 ![filtered_fine_tuning.png](/assets/filtered_fine_tuning.png)
 
-## Analyse unnmixed cytometry
-You can now analyse your unmixed data. Manipulating plots and gates should hopefully be intuitive, but here are [some instructions](./docs/cytometry_plots_and_gates.md).
+## Analyse unmixed cytometry
+You can now analyse your unmixed data. Manipulating plots and gates should hopefully be intuitive, but here are [some instructions](/docs/cytometry_plots_and_gates.md).
 
 ![unmixed_data_start.png](/assets/unmixed_data_start.png)
 

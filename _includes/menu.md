@@ -5,6 +5,8 @@
 * [Conventional Analysis](/docs/conventional_analysis) 
 * [Manipulate Plots and Gates](/docs/cytometry_plots_and_gates) 
 * [Reports, Exports & Sample Comparison](/docs/reports) 
-* [User Interface Guide](/docs/user_interface_guide) 
-* [File Format](/docs/file_format) 
 * [Programming and Plugins](/docs/programming_plugins)
+
+[//]: # (* [User Interface Guide]&#40;/docs/user_interface_guide&#41; )
+[//]: # (* [File Format]&#40;/docs/file_format&#41; )
+
