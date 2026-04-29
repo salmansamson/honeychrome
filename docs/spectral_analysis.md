@@ -1,6 +1,6 @@
 ---
 layout: default
-title: Spectral Analysis
+title: Spectral Flow Cytometry Analysis
 ---
 [Cytkit](https://cytkit.com) | [Honeychrome](https://honeychrome.cytkit.com/) 
 ---
@@ -22,7 +22,7 @@ Run Honeychrome and select New Experiment. Type "AutoSpectral Full Workflow Exam
 Go to File menu > Import FCS Files, which brings up the following dialog window. You can either copy/move your FCS files into the experiment's Raw subfolder, or create a link to an existing data folder.
 ![Import data dialog](/assets/import_data_dialog.png)
 
-After dragging the data into the Raw subfolder, you should see these files:
+After dragging the data into the Raw subfolder, you should see the files as follows. Note that Honeychrome will respect any folder grouping of the files on the filesystem, and present the same hierarchy in the sample browser:
 ![raw_subfolder_contents.png](/assets/raw_subfolder_contents.png)
 
 You must also tell Honeychrome where the single stained controls are located. Open Experiment Settings (from the dialog or from menu Edit > Experiment Settings) and click on single stained controls to choose the correct folder. Here it is for this example:

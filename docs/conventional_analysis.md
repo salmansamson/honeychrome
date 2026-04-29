@@ -1,6 +1,6 @@
 ---
 layout: default
-title: Spectral Analysis
+title: Conventional Flow Cytometry Analysis
 ---
 [Cytkit](https://cytkit.com) | [Honeychrome](https://honeychrome.cytkit.com/) 
 ---
@@ -19,7 +19,7 @@ _You must however bear one thing in mind._ Do *NOT* do your analysis in the Raw 
 Below we give an example of the latter (on Tregs), with manual compensation.
 
 ## Import your data
-First import your data (menu File > Import FCS Files). In the case below, we have a few Treg data files, with no single stained controls. You will a summary of data in all instrument channels.
+First import your data (menu File > Import FCS Files). In the case below, we have a few Treg data files, with no single stained controls. You will see a summary of data in all instrument channels.
 ![import_treg_data.png](/assets/import_treg_data.png)
 
 ## Use the Spectral Model Editor to assign labels to relevant instrument channels

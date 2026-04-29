@@ -1,6 +1,6 @@
 ---
 layout: default
-title: Spectral Analysis
+title: AutoSpectral in Honeychrome
 ---
 [Cytkit](https://cytkit.com) | [Honeychrome](https://honeychrome.cytkit.com/) 
 ---

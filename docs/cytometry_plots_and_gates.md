@@ -1,6 +1,6 @@
 ---
 layout: default
-title: Spectral Analysis
+title: Cytometry Plots and Gates
 ---
 [Cytkit](https://cytkit.com) | [Honeychrome](https://honeychrome.cytkit.com/) 
 ---
