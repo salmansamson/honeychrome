@@ -20,7 +20,7 @@ from pathlib import Path
 
 import numpy as np
 import colorcet as cc
-from PySide6.QtCore import Qt, QThread, Signal, QObject, QRectF
+from PySide6.QtCore import Qt, QThread, Signal, QObject, QRectF, QSettings
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QLabel,
     QPushButton, QSpinBox, QComboBox, QGroupBox,
@@ -725,15 +725,36 @@ class AutoSpectralTab(QWidget):
         font = self.help_label.font()
         font.setPointSize(14)  # Set your desired font size
         self.help_label.setFont(font)
-
         content_layout.addWidget(self.help_label)
 
+        # toggle button and content
+        self.toggle_content_button = QCheckBox('Show AutoSpectral AF process')
+        self.settings = QSettings("honeychrome", "app_configuration")
+        saved_state = self.settings.value("show_autospectral_af", "false") == "true"
+        self.toggle_content_button.setCheckable(True)
+        self.toggle_content_button.setChecked(saved_state)
+        content_layout.addWidget(self.toggle_content_button)
 
+        self.toggle_content = QWidget()
+        toggle_content_layout = QVBoxLayout(self.toggle_content)
+        self._build_extraction_section(toggle_content_layout)
+        self._build_profile_manager_section(toggle_content_layout)
+        self._build_assignment_section(toggle_content_layout)
+        self._build_comparison_section(toggle_content_layout)
+        content_layout.addWidget(self.toggle_content)
+        self.toggle_content.setVisible(saved_state)
 
-        self._build_extraction_section(content_layout)
-        self._build_profile_manager_section(content_layout)
-        self._build_assignment_section(content_layout)
-        self._build_comparison_section(content_layout)
+        self.toggle_content_button.toggled.connect(self.toggle_content.setVisible)
+        self.toggle_content_button.toggled.connect(self.save_visibility)
+
+        self.toggle_content_button.setStyleSheet("""
+                    QCheckBox {
+                        font-size: 14pt;
+                        spacing: 10px;      /* Gap between checkmark and text */
+                        padding: 10px;      /* Internal padding */
+                    }
+                """)
+
 
         content_layout.addStretch()
 
@@ -741,6 +762,9 @@ class AutoSpectralTab(QWidget):
             self.bus.modeChangeRequested.connect(self._on_mode_change)
             self.bus.loadSampleRequested.connect(self._on_sample_loaded)
             self.bus.spectralProcessRefreshed.connect(self._on_process_refreshed)
+
+    def save_visibility(self, checked):
+        self.settings.setValue("show_autospectral_af", checked)
 
     # ======================================================================
     # Section builders

@@ -130,5 +130,4 @@ Default: 100 clusters. After extraction, the clusters can be inspected by clicki
 <li><a href="https://www.colibri-cytometry.com/post/autospectral-single-cell-autofluorescence">AutoSpectral AF on the Colibri Cytometry blog</a></li>
 <li><a href="https://github.com/DrCytometer/AutoSpectral">AutoSpectral package on Github</a></li>
 </ul>
-<hr/>
 '''
