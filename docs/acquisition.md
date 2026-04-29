@@ -17,4 +17,4 @@ Honeychrome provides an interface for acquiring data on cytometry instruments:
 
 Honeychrome contains drivers for Cytkit (coming soon).
 
-![acquisition.png](acquisition.png)
+![acquisition.png](../assets/acquisition.png)

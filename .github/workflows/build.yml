@@ -2,10 +2,24 @@ name: Multi-Platform Build
 run-name: Build for all platforms
 
 on:
-  push:
-    branches: [ main ]
+  # Allows manual triggering from the GitHub Actions tab
   workflow_dispatch:
 
+  # Trigger on push to main, but only if code files change
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE'
+
+# Cancels internal "queued" builds if you push again before the first finishes
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+  
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
