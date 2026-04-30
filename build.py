@@ -40,7 +40,6 @@ def main():
             '--onedir',
             '--copy-metadata=pandas',
             '--copy-metadata=matplotlib',
-            '--copy-metadata=pytz',
             f'--icon={icon_path}'
             ]
 
