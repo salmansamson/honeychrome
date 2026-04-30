@@ -26,8 +26,8 @@ jobs:
         include:
 #          - os: ubuntu-22.04
 #            artifact_name: linux-x64-stable
-          - os: ubuntu-24.04
-            artifact_name: linux-x64-latest
+#          - os: ubuntu-24.04
+#            artifact_name: linux-x64-latest
           - os: windows-2022
             artifact_name: win-x64
           - os: macos-14

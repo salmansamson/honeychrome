@@ -58,7 +58,12 @@ def main():
     args.append('--runtime-hook=hooks/runtime-optional-deps.py')
 
     # Essential hidden imports
-    essential_hidden = ['numpy._core._exceptions', 'numpy._core._multiarray_umath', 'numpy.fft._pocketfft_internal', 'pytz']
+    essential_hidden = ['numpy._core._exceptions',
+                        'numpy._core._multiarray_umath',
+                        'numpy.fft._pocketfft_internal',
+                        'pytz',
+                        'scipy.special.cython_special',
+                        ]
 
     for imp in essential_hidden:
         args.append(f'--hidden-import={imp}')
@@ -66,7 +71,7 @@ def main():
     # Exclude heavy packages
     # heavy_packages = ['IPython', 'jedi', 'parso', 'bokeh', 'sklearn', 'matplotlib', 'pyqtgraph', 'scipy.sparse', 'scipy.optimize', 'scipy.special', 'scipy.linalg', 'scipy.stats', 'lxml', 'jinja2', 'docx', 'pytest', 'pandas.plotting', 'tkinter', '_tkinter', 'PIL', 'pyarrow', 'urllib3', 'certifi', ]
     heavy_packages = ['IPython', 'jedi', 'parso', 'pytest', 'tkinter', '_tkinter', 'urllib3', 'certifi',
-                      'bokeh', 'bokeh.plotting', 'bokeh.models', 'bokeh.layouts', 'scipy.stats', 'scipy.interpolate', 'scipy.fft', 'narwhals']
+                      'bokeh', 'bokeh.plotting', 'bokeh.models', 'bokeh.layouts', 'narwhals']
 
     for pkg in heavy_packages:
         args.append(f'--exclude-module={pkg}')
