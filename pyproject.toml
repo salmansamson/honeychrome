@@ -34,7 +34,7 @@ dependencies = [
     'matplotlib==3.10.8',
     'narwhals==2.15.0',
     'networkx==3.6.1',
-    'numpy==2.4.1',
+    'numpy==2.4.4',
     'orderly-set==5.5.0',
     'packaging==25.0',
     'pandas==3.0.2',
