@@ -16,7 +16,7 @@ def load_tabbed_plugins(bus, controller):
 
     tab_plugins = {}
 
-    if meipass:
+    if not meipass:
         # Iterate over all *_tab.py files in the directory
         for file_path in plugins_path.glob("*_tab.py"):
             if settings.value(f"EnablePlugin_{file_path}", False, type=bool):
