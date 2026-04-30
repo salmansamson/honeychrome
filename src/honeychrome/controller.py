@@ -174,6 +174,12 @@ class Controller(QObject):
 
         self.current_mode = 'raw'
         self.initialise_ephemeral_data()
+
+        # Recompute unmixing matrix from profiles to fix any column-ordering
+        # inconsistency in the stored matrix (e.g. from pre-fix .kit files).
+        if self.experiment.process.get('unmixing_matrix'):
+            self.refresh_spectral_process()
+
         logger.info(f'Controller: experiment loaded {self.experiment_dir}')
 
         # # load first sample in order: #legacy: consider reinstate autoload of first sample
@@ -701,6 +707,7 @@ class Controller(QObject):
                 self.af_precomputed,
                 self.af_spectra,
                 self.experiment.settings,
+                filtered_fl_ids_raw=self.filtered_raw_fluorescence_channel_ids,
             )
         else:
             return apply_transfer_matrix(self.transfer_matrix, raw_event_data)
