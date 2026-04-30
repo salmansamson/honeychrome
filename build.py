@@ -38,7 +38,9 @@ def main():
             '--clean',
             '--noconfirm',
             '--onedir',
-            '--copy-metadata',
+            '--copy-metadata pandas',
+            '--copy-metadata matplotlib',
+            '--copy-metadata pytz',
             f'--icon={icon_path}'
             ]
 
