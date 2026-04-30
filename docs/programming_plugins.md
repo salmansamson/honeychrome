@@ -58,7 +58,7 @@ controller.experiment.cytometry   # data associated with raw and unmixed cytomet
 controller.experiment.statistics   # statistical comparison data
 ```
 
-See [experiment_model.py](/src/honeychrome/experiment_model.py) for a full definition.
+See [experiment_model.py](https://github.com/salmansamson/honeychrome/blob/main/src/honeychrome/experiment_model.py) for a full definition.
 
 2. Ephemeral data (data in memory of the running application)
 
@@ -88,7 +88,7 @@ cytometry_data_dictionary = {
     'fluoro_indices': None, # list of fluorescence channel indices to the list of channel names
     'lookup_tables': None, # dictionary of boolean lookup tables for each gate on the 1D or 2D plot on which the gate is defined (for fast gating)
     'event_data': None, # event data (which may be raw or unmixed depending on the copy of the dictionary)
-    'transformations': None, # set of transformations for all channels
+    'transformations': None, # set of transforms for all channels
     'statistics': {}, # event statistics for each gate in the hierarchy
     'gating': GatingStrategy(), # flowkit.GatingStrategy object used to define the gating lookup tables
     'plots': [], # set of cytometry plot definitions (1D histograms, 2D histograms, ribbon plots referencing the channel names, source gates and child gates
@@ -99,9 +99,9 @@ cytometry_data_dictionary = {
 
 The controller also contains the communications to the instrument driver and trace analyser processes, and the live queue of oscilloscope traces.
 
-The full definition of the [controller](/src/honeychrome/controller.py) is according to the source code.
+The full definition of the [controller](https://github.com/salmansamson/honeychrome/blob/main/src/honeychrome/controller.py) is according to the source code.
 
-The [transformation](/src/) class is a wrapper around the flotkit.Transform, as defined in the source code.
+The [transform](https://github.com/salmansamson/honeychrome/blob/main/src/honeychrome/controller_components/transform.py) class is a wrapper around the flotkit.Transform, as defined in the source code.
 
 ## Reusable functions and classes
 Honeychrome contains many reusable functions and classes that may be useful in a plugin. See the following in particular, which are all demonstrated in the [data_processing_example_tab.py](/plugin_templates/data_processing_example_plugin_tab.py)
@@ -192,9 +192,9 @@ def example_function():
 
 ## Example Plugins
 Two plugins are provided in the Honeychrome package as examples:
-- Hello World Example Plugin [hello_world_example_plugin_tab.py](/plugin_templates/hello_world_example_plugin_tab.py)
+- Hello World Example Plugin [hello_world_example_plugin_tab.py](https://github.com/salmansamson/honeychrome/blob/main/plugin_templates/hello_world_example_plugin_tab.py)
   - demonstrates the minimal plugin
-- Data Processing Example Plugin [data_processing_example_plugin_tab.py](/plugin_templates/data_processing_example_plugin_tab.py)
+- Data Processing Example Plugin [data_processing_example_plugin_tab.py](https://github.com/salmansamson/honeychrome/blob/main/plugin_templates/data_processing_example_plugin_tab.py)
   - demonstrates a plugin that accesses unmixed data over a set of samples, displays sample picker, demonstrates a toy UMAP workflow, produces graphs, tables, output text
 
 These are automatically copied to the Experiments/plugins folder when Honeychrome is started. To enable the plugins, go to menu Edit > App Configuration.
