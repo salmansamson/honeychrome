@@ -50,15 +50,16 @@ def main():
     #     args.append('--strip')
 
     # Add project files
+    sep = os.pathsep
     for source, dest in get_project_files():
-        args.append(f'--add-data={source}:{dest}')
+        args.append(f'--add-data={source}{sep}{dest}')
 
     # Add hooks directory
     args.append('--additional-hooks-dir=hooks')
     args.append('--runtime-hook=hooks/runtime-optional-deps.py')
 
     # Essential hidden imports
-    essential_hidden = ['numpy._core._exceptions', 'numpy._core._multiarray_umath', 'numpy.fft._pocketfft_internal', ]
+    essential_hidden = ['numpy._core._exceptions', 'numpy._core._multiarray_umath', 'numpy.fft._pocketfft_internal', 'pytz']
 
     for imp in essential_hidden:
         args.append(f'--hidden-import={imp}')
