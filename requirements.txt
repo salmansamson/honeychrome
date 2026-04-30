@@ -58,7 +58,7 @@ networkx==3.6.1
     # via
     #   -r requirements.in
     #   flowkit
-numpy==2.4.4
+numpy==2.4.1
     # via
     #   -r requirements.in
     #   bokeh
