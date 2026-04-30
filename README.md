@@ -56,6 +56,8 @@ You have the following options, depending on whether you want to use the Python 
 code or just download an executable. For most users, it is sufficient to download
 an executable for your platform (Windows/Linux/MacOS).
 
+Note that the plugin system is only available if Honeychrome is run from the Python source code.
+
 ### For non-programmers: download and run executable
 A set of compressed binary packages are available in the releases section.
 > **Note:** Since Honeychrome is very new, you may get warnings on Windows/Mac that the application is unrecognised. If so, please post the warning on the Github issues page, or contact Samson ([cytkit.com/contact](https://cytkit.com/contact)). You can normally click through any warnings; starting the app should function normally after that.
@@ -64,10 +66,12 @@ A set of compressed binary packages are available in the releases section.
 1. Download [Honeychrome for Windows x64](https://github.com/salmansamson/honeychrome/releases/download/v0.6.1-beta/Honeychrome-v0.6.1-windows-x64.exe)
 2. Double click to run the installer
 
-#### Linux
+#### Linux (Ubuntu > 24.04)
 1. Download [Honeychrome for Linux x64 Ubuntu > 24.04](https://github.com/salmansamson/honeychrome/releases/download/v0.6.1-beta/honeychrome-v0.6.1-linux-x64.tar.gz)
 2. Extract the honeychrome folder and put it somewhere appropriate for the single user or system
 3. Change to the honeychrome folder and run ./install_linux.sh
+
+(For other Linux systems, please use the Python instructions below.)
 
 #### MacOs
 1. Download [Honeychrome for MacOS](https://github.com/salmansamson/honeychrome/releases/download/v0.6.1-beta/honeychrome-v0.6.1-macos.dmg)
@@ -77,9 +81,9 @@ A set of compressed binary packages are available in the releases section.
 #### Other systems
 For all other systems, please follow the Python instructions below. 
 
-> **Note:** If you want to use the plugin functionality, please install the full Python package according to the instructions below to have control over the libraries.
+> **Note:** If you want to use the plugin functionality, please clone and run the full Python package according to the instructions below.
 
-### For programmers: clone and run Python source
+### Run Honeychrome from Python source
 Follow these steps to clone the repository and run the application from source:
 
 1.  **Clone the repository:**
