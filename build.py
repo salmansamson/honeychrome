@@ -26,6 +26,10 @@ def get_project_files():
     assets_path_destination = os.path.join('honeychrome', 'view_components', 'assets')
     assets.append((assets_path, assets_path_destination))
 
+    templates_path = os.path.join(project_root, 'plugin_templates')
+    templates_dest = os.path.join('honeychrome', 'plugin_templates')
+    assets.append((templates_path, templates_dest))
+
     return assets
 
 def main():
@@ -43,10 +47,11 @@ def main():
             f'--icon={icon_path}'
             ]
 
-    # # 2. Add --strip ONLY if not on Windows
-    ### try without this - it now causes bug with numpy on linux
-    # if platform.system() != "Windows":
-    #     args.append('--strip')
+    # Make the honeychrome package importable by external plugin scripts
+    args.append('--hidden-import=honeychrome')
+    args.append('--hidden-import=honeychrome.settings')
+    args.append('--hidden-import=honeychrome.plugin_loaders')
+    args.append('--runtime-hook=hooks/runtime-patch-syspath.py')
 
     # Add project files
     sep = os.pathsep
