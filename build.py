@@ -42,9 +42,10 @@ def main():
             f'--icon={icon_path}'
             ]
 
-    # 2. Add --strip ONLY if not on Windows
-    if platform.system() != "Windows":
-        args.append('--strip')
+    # # 2. Add --strip ONLY if not on Windows
+    ### try without this - it now causes bug with numpy on linux
+    # if platform.system() != "Windows":
+    #     args.append('--strip')
 
     # Add project files
     for source, dest in get_project_files():
