@@ -95,7 +95,11 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles):
     from sklearn.metrics.pairwise import cosine_similarity
     from pandas import DataFrame
 
-    profiles_df = DataFrame(profiles)
+    fluorescence_channels = [control['label'] for control in spectral_model]
+    
+    # Build DataFrame with columns in spectral_model order, not dict insertion order.
+    # profiles dict key order may differ from spectral_model order after JSON round-trip.
+    profiles_df = DataFrame({label: profiles[label] for label in fluorescence_channels})
     M = np.array(profiles_df).T
     raw_length = np.shape(M)[1]
     unmixed_length = np.shape(M)[0]
@@ -111,7 +115,6 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles):
 
     # define unmixed channels
     pnn_raw = raw_settings['event_channels_pnn']
-    fluorescence_channels = [control['label'] for control in spectral_model]
     scatter_channel_ids_raw = raw_settings['scatter_channel_ids']
     scatter_channels_pnn = [pnn_raw[n] for n in scatter_channel_ids_raw]
     fluorescence_channels_pnn = fluorescence_channels

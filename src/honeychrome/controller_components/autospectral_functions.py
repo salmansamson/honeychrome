@@ -207,7 +207,8 @@ def combine_af_precomputed(precomputed_list: list) -> dict:
 # Helper: assemble full unmixed event array
 # ---------------------------------------------------------------------------
 
-def apply_af_transfer(raw_event_data, transfer_matrix, af_precomputed, af_spectra, settings):
+def apply_af_transfer(raw_event_data, transfer_matrix, af_precomputed, af_spectra, settings,
+                      filtered_fl_ids_raw=None):
     """
     Assemble a full unmixed event array with AF-corrected fluorescence columns.
     Scatter, time, and event_id columns come from the standard transfer_matrix path.
@@ -217,7 +218,11 @@ def apply_af_transfer(raw_event_data, transfer_matrix, af_precomputed, af_spectr
     raw_settings = settings['raw']
     unmixed_settings = settings['unmixed']
 
-    fl_ids_raw = np.array(raw_settings['fluorescence_channel_ids'])
+    if filtered_fl_ids_raw is not None:
+        fl_ids_raw = np.array(filtered_fl_ids_raw)
+    else:
+        fl_ids_raw = np.array(raw_settings['fluorescence_channel_ids'])
+        
     fl_ids_unmixed = np.array(unmixed_settings['fluorescence_channel_ids'])
 
     unmixed = raw_event_data @ transfer_matrix

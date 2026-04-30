@@ -97,13 +97,15 @@ class ComparisonWorker(QObject):
     error = Signal(str)
 
     def __init__(self, raw_event_data, transfer_matrix,
-                 af_precomputed, af_spectra, exp_settings):
+                 af_precomputed, af_spectra, exp_settings,
+                 filtered_fl_ids_raw):
         super().__init__()
         self.raw_event_data = raw_event_data
         self.transfer_matrix = transfer_matrix
         self.af_precomputed = af_precomputed
         self.af_spectra = af_spectra
         self.exp_settings = exp_settings
+        self.filtered_fl_ids_raw = filtered_fl_ids_raw
 
     def run(self):
         try:
@@ -116,6 +118,7 @@ class ComparisonWorker(QObject):
                 self.af_precomputed,
                 self.af_spectra,
                 self.exp_settings,
+                filtered_fl_ids_raw=self.filtered_fl_ids_raw,
             )
             self.finished.emit(ols_data, af_data)
         except Exception as e:
@@ -1519,6 +1522,7 @@ class AutoSpectralTab(QWidget):
             af_precomputed,
             af_spectra,
             self.controller.experiment.settings,
+            self.controller.filtered_raw_fluorescence_channel_ids,
         )
         self._cmp_worker.moveToThread(self._cmp_thread)
         self._cmp_thread.started.connect(self._cmp_worker.run)
