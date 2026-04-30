@@ -10,35 +10,37 @@ plugins_path = Path(PLUGIN_DIR)
 
 settings = QSettings("honeychrome", "app_configuration")
 
+meipass = getattr(sys, '_MEIPASS', None)
 
 def load_tabbed_plugins(bus, controller):
 
     tab_plugins = {}
 
-    # Iterate over all *_tab.py files in the directory
-    for file_path in plugins_path.glob("*_tab.py"):
-        if settings.value(f"EnablePlugin_{file_path}", False, type=bool):
+    if meipass:
+        # Iterate over all *_tab.py files in the directory
+        for file_path in plugins_path.glob("*_tab.py"):
+            if settings.value(f"EnablePlugin_{file_path}", False, type=bool):
 
-            # 1. Create a module name
-            module_name = f"{plugins_path.name}.{file_path.stem}"
+                # 1. Create a module name
+                module_name = f"{plugins_path.name}.{file_path.stem}"
 
-            # 2. Create a module spec from the file location
-            spec = importlib.util.spec_from_file_location(module_name, file_path)
+                # 2. Create a module spec from the file location
+                spec = importlib.util.spec_from_file_location(module_name, file_path)
 
-            if spec and spec.loader:
-                # 3. Create a new module based on the spec
-                module = importlib.util.module_from_spec(spec)
+                if spec and spec.loader:
+                    # 3. Create a new module based on the spec
+                    module = importlib.util.module_from_spec(spec)
 
-                # 4. Add to sys.modules so it behaves like a normal import
-                sys.modules[module_name] = module
+                    # 4. Add to sys.modules so it behaves like a normal import
+                    sys.modules[module_name] = module
 
-                # 5. Execute the module to actually load its code
-                spec.loader.exec_module(module)
+                    # 5. Execute the module to actually load its code
+                    spec.loader.exec_module(module)
 
-                # 6. initialise widget to be put in the tab
-                widget = module.PluginWidget(bus=bus, controller=controller)
+                    # 6. initialise widget to be put in the tab
+                    widget = module.PluginWidget(bus=bus, controller=controller)
 
-                print(f"Successfully loaded plugin: {module_name}")
-                tab_plugins[module_name] = {'module':module, 'widget':widget}
+                    print(f"Successfully loaded plugin: {module_name}")
+                    tab_plugins[module_name] = {'module':module, 'widget':widget}
 
     return tab_plugins
