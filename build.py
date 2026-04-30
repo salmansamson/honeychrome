@@ -38,6 +38,7 @@ def main():
             '--clean',
             '--noconfirm',
             '--onedir',
+            '--copy-metadata',
             f'--icon={icon_path}'
             ]
 
