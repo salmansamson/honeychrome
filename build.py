@@ -26,6 +26,10 @@ def get_project_files():
     assets_path_destination = os.path.join('honeychrome', 'view_components', 'assets')
     assets.append((assets_path, assets_path_destination))
 
+    templates_path = os.path.join(project_root, 'plugin_templates')
+    templates_dest = os.path.join('honeychrome', 'plugin_templates')
+    assets.append((templates_path, templates_dest))
+
     return assets
 
 def main():
@@ -38,23 +42,33 @@ def main():
             '--clean',
             '--noconfirm',
             '--onedir',
+            '--copy-metadata=pandas',
+            '--copy-metadata=matplotlib',
             f'--icon={icon_path}'
             ]
 
-    # 2. Add --strip ONLY if not on Windows
-    if platform.system() != "Windows":
-        args.append('--strip')
+    # Make the honeychrome package importable by external plugin scripts
+    args.append('--hidden-import=honeychrome')
+    args.append('--hidden-import=honeychrome.settings')
+    args.append('--hidden-import=honeychrome.plugin_loaders')
+    args.append('--runtime-hook=hooks/runtime-patch-syspath.py')
 
     # Add project files
+    sep = os.pathsep
     for source, dest in get_project_files():
-        args.append(f'--add-data={source}:{dest}')
+        args.append(f'--add-data={source}{sep}{dest}')
 
     # Add hooks directory
     args.append('--additional-hooks-dir=hooks')
     args.append('--runtime-hook=hooks/runtime-optional-deps.py')
 
     # Essential hidden imports
-    essential_hidden = ['numpy._core._exceptions', 'numpy._core._multiarray_umath', 'numpy.fft._pocketfft_internal', ]
+    essential_hidden = ['numpy._core._exceptions',
+                        'numpy._core._multiarray_umath',
+                        'numpy.fft._pocketfft_internal',
+                        'pytz',
+                        'scipy.special.cython_special',
+                        ]
 
     for imp in essential_hidden:
         args.append(f'--hidden-import={imp}')
@@ -62,7 +76,7 @@ def main():
     # Exclude heavy packages
     # heavy_packages = ['IPython', 'jedi', 'parso', 'bokeh', 'sklearn', 'matplotlib', 'pyqtgraph', 'scipy.sparse', 'scipy.optimize', 'scipy.special', 'scipy.linalg', 'scipy.stats', 'lxml', 'jinja2', 'docx', 'pytest', 'pandas.plotting', 'tkinter', '_tkinter', 'PIL', 'pyarrow', 'urllib3', 'certifi', ]
     heavy_packages = ['IPython', 'jedi', 'parso', 'pytest', 'tkinter', '_tkinter', 'urllib3', 'certifi',
-                      'bokeh', 'bokeh.plotting', 'bokeh.models', 'bokeh.layouts', 'scipy.stats', 'scipy.interpolate', 'scipy.fft', 'narwhals']
+                      'bokeh', 'bokeh.plotting', 'bokeh.models', 'bokeh.layouts', 'narwhals']
 
     for pkg in heavy_packages:
         args.append(f'--exclude-module={pkg}')

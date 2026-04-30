@@ -65,7 +65,7 @@ A set of compressed binary packages are available in the releases section.
 2. Double click to run the installer
 
 #### Linux
-1. Download [Honeychrome for Linux x64](https://github.com/salmansamson/honeychrome/releases/download/v0.6.1-beta/honeychrome-v0.6.1-linux-x64.tar.gz)
+1. Download [Honeychrome for Linux x64 Ubuntu > 24.04](https://github.com/salmansamson/honeychrome/releases/download/v0.6.1-beta/honeychrome-v0.6.1-linux-x64.tar.gz)
 2. Extract the honeychrome folder and put it somewhere appropriate for the single user or system
 3. Change to the honeychrome folder and run ./install_linux.sh
 
@@ -75,7 +75,9 @@ A set of compressed binary packages are available in the releases section.
 3. Double click the app in your Applications folder to run 
 
 #### Other systems
-For all other systems, please follow the Python instructions below.
+For all other systems, please follow the Python instructions below. 
+
+> **Note:** If you want to use the plugin functionality, please install the full Python package according to the instructions below to have control over the libraries.
 
 ### For programmers: clone and run Python source
 Follow these steps to clone the repository and run the application from source:

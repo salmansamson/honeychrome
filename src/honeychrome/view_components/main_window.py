@@ -176,9 +176,8 @@ class MainWindow(QMainWindow):
         view_menu.addAction(action_oscilloscope)
 
         # help menu
-        action_forum = QAction(icon('bubble-text'), "Users Forum", self)
-        action_forum.triggered.connect(lambda: self.bus.popupMessage.emit('Users forum coming soon! For now, please email <a href="mailto:hello@cytkit.com">hello@cytkit.com</a> with your bugs, ideas and requests.'))
-        # todo user forum
+        action_forum = QAction(icon('bubble-text'), "Discussions", self)
+        action_forum.triggered.connect(lambda: self.bus.popupMessage.emit('Do you want to ask a question, or discuss an issue or a feature request? Visit the <a href="https://github.com/salmansamson/honeychrome/discussions">Honeychrome discussions page on Github</a>.'))
         action_about = QAction(icon('carambola'), "About Honeychrome", self)
         action_about.triggered.connect(self.bus.aboutHoneychrome.emit)
         help_menu.addAction(action_forum)
