@@ -8,6 +8,7 @@ import pyqtgraph as pg
 import warnings
 
 from honeychrome.settings import label_offset_default, roi_handle_size
+from honeychrome.controller_components.functions import rename_label_offset
 
 warnings.filterwarnings("ignore", message="t.core.qobject.connect: QObject::connect(QStyleHints, QStyleHints): unique connections require a pointer to member function of a QObject subclass")
 
@@ -137,8 +138,15 @@ class DraggableRoiLabel(pg.TextItem):
         if self.gating.find_matching_gate_paths(new_name):
             raise Exception(f"gate name {new_name} already exists")
         else:
-            self.gating.rename_gate(self.gate_name, new_name)
+            old_name = self.gate_name
+            self.gating.rename_gate(old_name, new_name)
             self.gate_name = new_name
+            # Update child_gates references in all plots
+            for plot in self.data_for_cytometry_plots['plots']:
+                if old_name in plot['child_gates']:
+                    idx = plot['child_gates'].index(old_name)
+                    plot['child_gates'][idx] = new_name
+                    rename_label_offset(plot, old_name, new_name)
             if self.bus is not None:
                 self.bus.updateSourceChildGates.emit(self.parent_roi.vb.parent().mode, new_name)
                 self.bus.changedGatingHierarchy.emit(self.parent_roi.vb.parent().mode, new_name)
