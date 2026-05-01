@@ -2,7 +2,7 @@
 ---
 
 
-# <img src="https://raw.githubusercontent.com/ssr/honeychrome/main/src/honeychrome/view_components/assets/cytkit_web_logo.png" width="60"> Honeychrome
+# <img src="https://honeychrome.cytkit.com/src/honeychrome/view_components/assets/cytkit_web_logo.png" width="60"> Honeychrome
 
 Open-Source Cross-Platform GUI App for Cytometry Acquisition and Analysis. Built in Python. [Source code on GitHub.](https://github.com/salmansamson/honeychrome) Part of the [Cytkit](https://cytkit.com) project to provide a complete open-source spectral cytometer.
 
@@ -15,13 +15,13 @@ Our aim is to make Honeychrome so intuitive that you don't need instructions. Bu
 We also have a set of guides to using Honeychrome: 
 
 * Installation (below)
-* [Acquire Data](https://github.com/ssr/honeychrome/blob/docs/acquisition)
-* [Spectral Analysis](https://github.com/ssr/honeychrome/blob/docs/spectral_analysis)
-* [AutoSpectral in Honeychrome](https://github.com/ssr/honeychrome/blob/docs/autospectral_in_honeychrome)
-* [Conventional Analysis](https://github.com/ssr/honeychrome/blob/docs/conventional_analysis)
-* [Manipulate Plots and Gates](https://github.com/ssr/honeychrome/blob/docs/cytometry_plots_and_gates)
-* [Reports, Exports & Sample Comparison](https://github.com/ssr/honeychrome/blob/docs/reports)
-* [Programming and Plugins](https://github.com/ssr/honeychrome/blob/docs/programming_plugins)
+* [Acquire Data](https://honeychrome.cytkit.com/docs/acquisition)
+* [Spectral Analysis](https://honeychrome.cytkit.com/docs/spectral_analysis)
+* [AutoSpectral in Honeychrome](https://honeychrome.cytkit.com/docs/autospectral_in_honeychrome)
+* [Conventional Analysis](https://honeychrome.cytkit.com/docs/conventional_analysis)
+* [Manipulate Plots and Gates](https://honeychrome.cytkit.com/docs/cytometry_plots_and_gates)
+* [Reports, Exports & Sample Comparison](https://honeychrome.cytkit.com/docs/reports)
+* [Programming and Plugins](https://honeychrome.cytkit.com/docs/programming_plugins)
 
 ## Mission statement
 
