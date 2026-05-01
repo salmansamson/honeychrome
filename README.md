@@ -12,23 +12,16 @@ Open-Source Cross-Platform GUI App for Cytometry Acquisition and Analysis. Built
 
 Our aim is to make Honeychrome so intuitive that you don't need instructions. But just in case, we have prepared this instructional video on YouTube: [Introduction to Honeychrome in 30 Minutes](https://youtu.be/RQ4-RQkDCm4). 
 
-[//]: # (We also have a set of guides to using Honeychrome: )
+We also have a set of guides to using Honeychrome: 
 
-[//]: # (* Installation &#40;below&#41;)
-
-[//]: # (* [Acquire Data]&#40;/docs/acquisition&#41; )
-
-[//]: # (* [Spectral Analysis]&#40;/docs/spectral_analysis&#41; )
-
-[//]: # (* [AutoSpectral in Honeychrome]&#40;/docs/autospectral_in_honeychrome&#41; )
-
-[//]: # (* [Conventional Analysis]&#40;/docs/conventional_analysis&#41; )
-
-[//]: # (* [Manipulate Plots and Gates]&#40;/docs/cytometry_plots_and_gates&#41; )
-
-[//]: # (* [Reports, Exports & Sample Comparison]&#40;/docs/reports&#41; )
-
-[//]: # (* [Programming and Plugins]&#40;/docs/programming_plugins&#41;)
+* Installation (below)
+* [Acquire Data](/docs/acquisition)
+* [Spectral Analysis](/docs/spectral_analysis)
+* [AutoSpectral in Honeychrome](/docs/autospectral_in_honeychrome)
+* [Conventional Analysis](/docs/conventional_analysis)
+* [Manipulate Plots and Gates](/docs/cytometry_plots_and_gates)
+* [Reports, Exports & Sample Comparison](/docs/reports)
+* [Programming and Plugins](/docs/programming_plugins)
 
 ## Mission statement
 
