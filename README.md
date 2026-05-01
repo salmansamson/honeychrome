@@ -7,7 +7,7 @@
 Open-Source Cross-Platform GUI App for Cytometry Acquisition and Analysis. Built in Python. [Source code on GitHub.](https://github.com/salmansamson/honeychrome) Part of the [Cytkit](https://cytkit.com) project to provide a complete open-source spectral cytometer.
 
 <div>
-  <a href="https://youtu.be/RQ4-RQkDCm4"><img src="https://raw.githubusercontent.com/ssr/honeychrome/main/other/honeychrome screenshot animation.webp" alt="Animated Demo" width="800"></a>
+  <a href="https://youtu.be/RQ4-RQkDCm4"><img src="https://honeychrome.cytkit.com/other/honeychrome screenshot animation.webp" alt="Animated Demo" width="800"></a>
 </div>
 
 Our aim is to make Honeychrome so intuitive that you don't need instructions. But just in case, we have prepared this instructional video on YouTube: [Introduction to Honeychrome in 30 Minutes](https://youtu.be/RQ4-RQkDCm4). 
