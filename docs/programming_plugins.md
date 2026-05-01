@@ -106,7 +106,7 @@ The full definition of the [controller](https://github.com/salmansamson/honeychr
 The [transform](https://github.com/salmansamson/honeychrome/blob/main/src/honeychrome/controller_components/transform.py) class is a wrapper around the flotkit.Transform, as defined in the source code.
 
 ## Reusable functions and classes
-Honeychrome contains many reusable functions and classes that may be useful in a plugin. See the following in particular, which are all demonstrated in the [data_processing_example_tab.py](/plugin_templates/data_processing_example_plugin_tab.py)
+Honeychrome contains many reusable functions and classes that may be useful in a plugin. See the following in particular, which are all demonstrated in the [data_processing_example_tab.py](/honeychrome/plugin_templates/data_processing_example_plugin_tab.py)
 
 
 ### ExportablePlotWidget
@@ -194,9 +194,9 @@ def example_function():
 
 ## Example Plugins
 Two plugins are provided in the Honeychrome package as examples:
-- Hello World Example Plugin [hello_world_example_plugin_tab.py](https://github.com/salmansamson/honeychrome/blob/main/plugin_templates/hello_world_example_plugin_tab.py)
+- Hello World Example Plugin [hello_world_example_plugin_tab.py](https://github.com/salmansamson/honeychrome/blob/main/src/honeychrome/plugin_templates/hello_world_example_plugin_tab.py)
   - demonstrates the minimal plugin
-- Data Processing Example Plugin [data_processing_example_plugin_tab.py](https://github.com/salmansamson/honeychrome/blob/main/plugin_templates/data_processing_example_plugin_tab.py)
+- Data Processing Example Plugin [data_processing_example_plugin_tab.py](https://github.com/salmansamson/honeychrome/blob/main/src/honeychrome/plugin_templates/data_processing_example_plugin_tab.py)
   - demonstrates a plugin that accesses unmixed data over a set of samples, displays sample picker, demonstrates a toy UMAP workflow, produces graphs, tables, output text
 
 These are automatically copied to the Experiments/plugins folder when Honeychrome is started. To enable the plugins, go to menu Edit > App Configuration.
