@@ -76,7 +76,34 @@ For all other systems, please follow the Python instructions below.
 
 > **Note:** If you want to use the plugin functionality, please clone and run the full Python package according to the instructions below.
 
-### Run Honeychrome from Python source
+### Run Honeychrome as a Python package
+This should work on any platform for which Python is available. The simple way is to install Honeychrome from PyPi (pip). You can alternatively clone and run the source code. Either way works if you want to run plugins.
+
+#### Install Honeychrome package from PyPi
+1.  **Create a virtual environment:**
+    *Requires Python 3.12 or higher.*
+    ```bash
+    python3 -m venv .venv
+    ```
+    
+2.  **Activate the virtual environment:**
+    * **Linux/macOS:** `source .venv/bin/activate`
+    * **Windows:** `.venv\Scripts\activate`
+    
+
+3.  **Install Honeychrome with pip:**
+    ```bash
+    pip install honeychrome
+    ```  
+   (Optional: use pip to install any further packages on which your plugins may depend, e.g. the example plugins require umap-learn and hdbscan.)
+   
+
+4.  **Run Honeychrome:**
+    ```bash
+    honeychrome
+    ```
+
+#### Run Honeychrome from Python source
 Follow these steps to clone the repository and run the application from source:
 
 1.  **Clone the repository:**

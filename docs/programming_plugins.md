@@ -18,7 +18,7 @@ Plugins have full access to the data in the application:
 - the current sample
 - the set of signals to communicate with other parts of the GUI
 
-> **Note:** If you want to use the plugin functionality, please clone and run the full Honeychrome Python source code. In the future we intend to make plugins runnable by all Honeychrome installations, but this is not yet provided.
+> **Note:** If you want to use the plugin functionality, please run Honeychrome in Python: see the installation page for instructions. 
 
 ## Specification of a Plugin
 A plugin must be named *_tab.py and placed in the Experiments/plugins folder (within the user's home folder) to be found by Honeychrome. The minimal plugin must provide a name ('plugin_name'), which will be used as the tab's name, and a class PluginWidget (subclass of PySide6.QtWidgets.QWidget), which will be displayed within the tab.
