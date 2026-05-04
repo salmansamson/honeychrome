@@ -3,7 +3,8 @@ import os
 from pathlib import Path
 
 from honeychrome.controller_components.functions import q_settings
-from honeychrome.controller_components.plugin_loaders import load_tabbed_plugins
+# load_tabbed_plugins is imported inside _PluginLoaderWorker.run() to keep it off the main thread
+# from honeychrome.controller_components.plugin_loaders import load_tabbed_plugins
 from honeychrome.settings import file_extension, experiments_folder
 from honeychrome.view_components.configuration_dialogs import AppConfigDialog, ExperimentSettings, InstrumentConfigDialog
 from honeychrome.view_components.help_toggle_widget import HelpToggleWidget
@@ -15,7 +16,7 @@ os.environ["QT_LOGGING_RULES"] = "qt.core.qobject.connect=false" #suppress pyqtg
 
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QMainWindow, QFileDialog, QWidget, QHBoxLayout, QSplitter, QTabWidget, QStatusBar, QVBoxLayout, QLabel, QProgressBar, QScrollArea, QPushButton, QMenu
-from PySide6.QtCore import Qt, QSettings, QByteArray, Slot, QTimer
+from PySide6.QtCore import Qt, QSettings, QByteArray, Slot, QTimer, QThread, Signal as QtSignal
 
 from honeychrome.view_components.gating_hierarchy_widget import GatingHierarchyWidget
 from honeychrome.view_components.heatmap_viewedit import HeatmapViewEditor
@@ -36,10 +37,26 @@ base_directory = Path.home() / experiments_folder
 import logging
 logger = logging.getLogger(__name__)
 
+class _PluginLoaderWorker(QThread):
+    """Loads plugins on a background thread; emits finished_loading when done."""
+    finished_loading = QtSignal(dict)   # emits the tab_plugins dict
+
+    def __init__(self, bus, controller, parent=None):
+        super().__init__(parent)
+        self._bus = bus
+        self._controller = controller
+
+    def run(self):
+        from honeychrome.controller_components.plugin_loaders import load_plugin_modules
+        loaded_modules = load_plugin_modules()
+        # emit modules only, no widgets yet
+        self.finished_loading.emit(loaded_modules)
+
 class MainWindow(QMainWindow):
     def __init__(self, bus=None, controller=None, parent=None, is_dark=False):
         super().__init__(parent)
 
+        self.is_dark = is_dark
         # connect all signals
         self.bus = bus
         # connect to data
@@ -281,17 +298,13 @@ class MainWindow(QMainWindow):
         self.statistics_layout.addWidget(self.statistical_comparison_widget)
         self.tabs.addTab(self.statistics_tab, "Statistics")
 
-        # --- Plugin tabs ---
-        self.tab_plugins = load_tabbed_plugins(bus, controller)
-        for module_name in self.tab_plugins:
-            widget = self.tab_plugins[module_name]['widget']
-            tab = QWidget()
-            layout = QVBoxLayout()
-            layout.setContentsMargins(0, 0, 0, 0)
-            layout.setSpacing(0)
-            tab.setLayout(layout)
-            layout.addWidget(widget)
-            self.tabs.addTab(tab, self.tab_plugins[module_name]['module'].plugin_name)
+        # --- Plugin tabs (loaded asynchronously) ---
+        self.tab_plugins = {}
+        self._bus_ref = bus
+        self._controller_ref = controller
+        self._plugin_loader = _PluginLoaderWorker(bus, controller, parent=self)
+        self._plugin_loader.finished_loading.connect(self._on_plugins_loaded)
+        QTimer.singleShot(2000, self._plugin_loader.start)
 
         # Connect to tab change
         self.tabs.currentChanged.connect(self.on_tab_changed)
@@ -328,6 +341,23 @@ class MainWindow(QMainWindow):
             self.gains_widget.setVisible(False)
 
         self.bus.openImportFCSWidget.connect(self.open_import_fcs_files_widget)
+
+
+    @Slot(dict)
+    def _on_plugins_loaded(self, loaded_modules):
+        from honeychrome.controller_components.plugin_loaders import instantiate_plugin_widgets
+        tab_plugins = instantiate_plugin_widgets(loaded_modules, self._bus_ref, self._controller_ref)
+        self.tab_plugins = tab_plugins
+        for module_name, plugin in tab_plugins.items():
+            widget = plugin['widget']
+            tab = QWidget()
+            layout = QVBoxLayout()
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(0)
+            tab.setLayout(layout)
+            layout.addWidget(widget)
+            self.tabs.addTab(tab, plugin['module'].plugin_name)
+        logger.info(f'MainWindow: {len(tab_plugins)} plugin tab(s) loaded')
 
 
     def populate_recent_menu(self, recent_menu: QMenu):
