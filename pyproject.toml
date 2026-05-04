@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "honeychrome"
-version = "0.7.0"
+version = "0.7.2"
 description = "Open Source GUI App for Cytometry Acquisition and Analysis "
 readme = "README.md"
 requires-python = ">=3.12"
@@ -19,7 +19,6 @@ dependencies = [
     'contourpy==1.3.3',
     'cycler==0.12.1',
     'deepdiff==8.6.1',
-    'python-docx==1.2.0',
     'FlowIO==1.4.0',
     'FlowKit==1.3.0',
     'FlowUtils==1.2.2',
@@ -76,6 +75,9 @@ where = ["src"]
 
 [tool.setuptools.package-dir]
 "" = "src"
+
+[tool.setuptools.package-data]
+"honeychrome" = ["**/*.svg", "**/*.png", "**/*.ico", "**/*.fcs"]
 
 # Optional: Testing configuration
 [tool.pytest.ini_options]

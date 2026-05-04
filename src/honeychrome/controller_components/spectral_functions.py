@@ -105,6 +105,7 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles):
     unmixed_length = np.shape(M)[0]
 
     Mnorm = M / np.tile(np.sqrt(np.sum(M**2, axis=0)), (unmixed_length,1))
+    Mnorm[np.isnan(Mnorm)] = 0
     similarity_matrix = cosine_similarity(Mnorm)
     hotspot_matrix = np.sqrt(np.abs(np.linalg.inv(similarity_matrix)))
 

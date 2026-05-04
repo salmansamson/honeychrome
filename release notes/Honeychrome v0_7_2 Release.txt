@@ -1,11 +1,14 @@
-Honeychrome v0.7.0 Release Notes
+Honeychrome v0.7.2 Release Notes
 
 This release contains several new features, improvements and bug fixes.
 
 Major new features
 * AutoSpectral AF (the autofluorescence part of AutoSpectral) has been added in a new tab. This (optional) enhancement of the unmixing workflow is rapidly becoming the standard tool for fixing unmixing artifacts caused by variable autofluorescence.
-* tabbed plugin system: Honeychrome now automatically loads plugins from a plugins folder; two example plugins included
+* tabbed plugin system: Honeychrome now automatically loads plugins from a plugins folder; two example plugins included. Note that plugins are currently only available if Honeychrome is run in the Python environment (see installation instructions), not as a precompiled executable.
 * dot plots coloured by gate
+
+PyPi release
+* You can now use Honeychrome in a Python environment, simply by issuing the command: "pip install honeychrome", then run "honeychrome" from the command line
 
 Improvements
 * better colourmap ranges to avoid saturation

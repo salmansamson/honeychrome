@@ -21,7 +21,7 @@ Honeychrome allows plotting of 1D histograms, 2D histograms (which can also be s
 
 The screenshot below shows an example of some immunology data.
 
-![daily_streck.png](/assets/daily_streck.png)
+![daily_streck_3.png](/assets/daily_streck_3.png)
 
 If a plot is selected, the middle part of the menu bar shows controls to move the selected plot (to start, left, right, to end).
 
@@ -29,7 +29,7 @@ If a plot is selected, the middle part of the menu bar shows controls to move th
 
 The gating hierarchy (if gating hierarchy toggle is on) is shown on the right.
 
-![img.png](/assets/gating_hierarchy.png)
+![gating_hierarchy2.png](/assets/gating_hierarchy2.png)
 
 ## Choose channels and source gate, choose and adjust transforms
 On a cytometry plot, click the axes titles or plot title to show a menu of the channels and source gates respectively. (Note that this is restricted if gates are already defined on this plot.)
@@ -39,11 +39,10 @@ Selecting "Count" on the Y-axis makes a plot into a 1D histogram. Selecting "All
 Right click on an axis to change its transform (linear / log / logicle). Drag an axis scale near the top end to adjust the full range or near the bottom end to adjust the linear region (for logicle plots).
 
 ![2dplot_with_menu_2.png](/assets/2dplot_with_menu_2.png)
-
 ## Pop out plots
 To work with a plot, if it is too small to manipulate gates accurately, you can double click to pop it out into its own window. (Closing the window pops it back in.)
 
-![popoutplots.png](/assets/popoutplots.png)
+![popoutplots2.png](/assets/popoutplots2.png)
 
 ## Add and manipulate gates
 If a 2D plot is selected, the menu bar shows icons to create a rectangle gate, polygon gate, ellipse gate or quadrant gates.
@@ -59,12 +58,11 @@ If you hover over a gate (or a line, or a vertex on a polygon gate), the highlig
 
 Also drag the gate title to move the label or double click to rename.
 
-![polygon_gate.png](/assets/polygon_gate.png)
+![polygon_gate2.png](/assets/polygon_gate2.png)
 
 
 Right click a gate to bring up a menu: you can create a new plot with this as source gate, or delete the gate.
-![right_click_gate.png](/assets/right_click_gate.png)
-
+![right_click_gate2.png](/assets/right_click_gate2.png)
 ## Dotplots coloured by gate, and other options
 In menu Edit > App Configuration, there are several useful options for cytometry plots. Among them you can select the colourmap, size of plots, etc.
 
@@ -72,7 +70,7 @@ On the first option 2D plot type, select Dot Plot Coloured by Gate. This reloads
 
 ![app_config.png](/assets/app_config.png)
 
-![dot_plots_coloured_by_gate.png](/assets/dot_plots_coloured_by_gate.png)
+![dot_plots_coloured_by_gate2.png](/assets/dot_plots_coloured_by_gate2.png)
 
 ## Further instructions: 
 * [Spectral Analysis](/docs/spectral_analysis) 

@@ -58,7 +58,7 @@ networkx==3.6.1
     # via
     #   -r requirements.in
     #   flowkit
-numpy==2.4.4
+numpy==2.4.1
     # via
     #   -r requirements.in
     #   bokeh
@@ -115,6 +115,7 @@ python-dateutil==2.9.0.post0
     #   pandas
 python-docx==1.2.0
     # via -r requirements.in
+pytz==2025.2
 pyyaml==6.0.3
     # via bokeh
 scikit-learn==1.8.0

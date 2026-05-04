@@ -119,11 +119,13 @@ def main():
     plugins_path.mkdir(parents=True, exist_ok=True)
 
     # copy plugin templates if they do not already exist in experiments/plugins folder
-    template_plugins_path = current_file_path.parent.parent.parent / "plugin_templates"
-    for template in template_plugins_path.glob("*_tab.py"):
-        destination = plugins_path / template.name
-        if not destination.exists():
-            shutil.copy2(template, destination)
+    meipass = getattr(sys, '_MEIPASS', None)
+    if not meipass:
+        template_plugins_path = current_file_path.parent / "plugin_templates"
+        for template in template_plugins_path.glob("*_tab.py"):
+            destination = plugins_path / template.name
+            if not destination.exists():
+                shutil.copy2(template, destination)
 
     logger = setup_logging(Path.home() / experiments_folder / 'honeychrome.log')
 
@@ -208,7 +210,7 @@ def main():
 
     if sys.platform == 'win32':
         import ctypes
-        myappid = 'honeychrome.cytometry.v0.7.0'
+        myappid = 'honeychrome.cytometry.v0.7.2'
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
     # Use Fusion style (works consistently across platforms)
