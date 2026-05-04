@@ -31,6 +31,8 @@ def load_plugin_modules():
                     sys.modules[module_name] = module
                     # 5. Execute the module to actually load its code
                     spec.loader.exec_module(module)
+                    if hasattr(module, '_bootstrap'):
+                        module._bootstrap()
                     print(f"Successfully loaded plugin module: {module_name}")
                     loaded_modules[module_name] = module
     return loaded_modules

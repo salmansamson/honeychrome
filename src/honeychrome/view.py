@@ -236,6 +236,8 @@ class View(QObject):
 
     @Slot(str)
     def init_plot_grids_and_gating_trees(self, scope=''):
+        if self.main_window is None:
+            return
         # reinitialises widgets
         # called for new/load experiment, or on spectral process updated (just for scope = 'unmixed')
         # run this for first initialisation, then for updates

@@ -38,13 +38,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 class _PluginLoaderWorker(QThread):
-    """Loads plugins on a background thread; emits finished_loading when done."""
-    finished_loading = QtSignal(dict)   # emits the tab_plugins dict
+    """Imports plugin modules + runs _bootstrap() on a background thread."""
+    finished_loading = QtSignal(dict)   # emits {module_name: module}
 
-    def __init__(self, bus, controller, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self._bus = bus
-        self._controller = controller
+        #self._bus = bus
+        #self._controller = controller
 
     def run(self):
         from honeychrome.controller_components.plugin_loaders import load_plugin_modules
@@ -297,13 +297,39 @@ class MainWindow(QMainWindow):
         self.statistics_layout.addWidget(self.statistical_comparison_widget)
         self.tabs.addTab(self.statistics_tab, "Statistics")
 
-        # --- Plugin tabs (loaded asynchronously) ---
-        self.tab_plugins = {}
+        # --- Plugin tabs (placeholders + background load) ---
+        self._plugin_placeholders = {}
         self._bus_ref = bus
         self._controller_ref = controller
-        self._plugin_loader = _PluginLoaderWorker(bus, controller, parent=self)
+        import ast
+        _ps = QSettings("honeychrome", "app_configuration")
+        _plugin_dir = Path.home() / experiments_folder / "plugins"
+        for _fp in Path(_plugin_dir).glob("*_tab.py"):
+            if _ps.value(f"EnablePlugin_{_fp}", False, type=bool):
+                _name = _fp.stem.replace('_tab', '').replace('_', ' ').title()
+                try:
+                    _tree = ast.parse(_fp.read_text(encoding='utf-8'))
+                    for _node in ast.walk(_tree):
+                        if isinstance(_node, ast.Assign):
+                            for _t in _node.targets:
+                                if isinstance(_t, ast.Name) and _t.id == 'plugin_name':
+                                    if isinstance(_node.value, ast.Constant):
+                                        _name = _node.value.s
+                except Exception:
+                    pass
+                _ph = QWidget()
+                _ph_layout = QVBoxLayout(_ph)
+                _ph_layout.setContentsMargins(20, 20, 20, 20)
+                _ph_label = QLabel("Loading…")
+                _ph_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+                _ph_layout.addWidget(_ph_label)
+                _ph_layout.addStretch()
+                _idx = self.tabs.addTab(_ph, _name)
+                _module_name = f"{_plugin_dir.name}.{_fp.stem}"
+                self._plugin_placeholders[_module_name] = _idx
+        self._plugin_loader = _PluginLoaderWorker(parent=self)
         self._plugin_loader.finished_loading.connect(self._on_plugins_loaded)
-        QTimer.singleShot(2000, self._plugin_loader.start)
+        self._plugin_loader.start()
 
         # Connect to tab change
         self.tabs.currentChanged.connect(self.on_tab_changed)
@@ -355,7 +381,12 @@ class MainWindow(QMainWindow):
             layout.setSpacing(0)
             tab.setLayout(layout)
             layout.addWidget(widget)
-            self.tabs.addTab(tab, plugin['module'].plugin_name)
+            idx = self._plugin_placeholders.get(module_name)
+            if idx is not None:
+                self.tabs.removeTab(idx)
+                self.tabs.insertTab(idx, tab, plugin['module'].plugin_name)
+            else:
+                self.tabs.addTab(tab, plugin['module'].plugin_name)
         logger.info(f'MainWindow: {len(tab_plugins)} plugin tab(s) loaded')
 
 
