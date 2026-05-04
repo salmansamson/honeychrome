@@ -327,7 +327,7 @@ def get_af_spectra(
     unstained_raw: np.ndarray,
     fluor_spectra: np.ndarray,
     n_clusters: int = 100,
-    similarity_threshold: float = 0.98,
+    similarity_threshold: float = 0.995,
     min_cells: int = 200,
     random_state: int = 42,
 ) -> np.ndarray:
