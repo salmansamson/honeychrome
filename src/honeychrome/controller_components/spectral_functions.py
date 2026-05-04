@@ -91,7 +91,7 @@ def get_profile(sample, gate_label, raw_gating, fluorescence_channel_ids):
 
     return profile
 
-def calculate_spectral_process(raw_settings, spectral_model, profiles):
+def calculate_spectral_process(raw_settings, spectral_model, profiles, existing_spillover=None):
     from sklearn.metrics.pairwise import cosine_similarity
     from pandas import DataFrame
 
@@ -151,8 +151,13 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles):
         'n_fluorophore_channels': n_fluorophore_channels
     }
 
-    # set up default spillover matrix
-    spillover = np.eye(unmixed_settings['n_fluorophore_channels'])
+    # Preserve existing spillover if it is the right size; otherwise reset to identity.
+    if (existing_spillover is not None
+            and np.array(existing_spillover).shape == (n_fluorophore_channels, n_fluorophore_channels)):
+        spillover = np.array(existing_spillover)
+    else:
+        spillover = np.eye(n_fluorophore_channels)
+
 
     # populate process variables
     spectral_process = {

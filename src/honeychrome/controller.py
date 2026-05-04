@@ -176,10 +176,11 @@ class Controller(QObject):
         self.initialise_ephemeral_data()
 
         ### SSR: this addition causes a bug - it wipes the spillover matrix
+        ### OTB: now updated to only update the unmixing matrix, retaining any existing spillover matrix
         # # Recompute unmixing matrix from profiles to fix any column-ordering
         # # inconsistency in the stored matrix (e.g. from pre-fix .kit files).
-        # if self.experiment.process.get('unmixing_matrix'):
-        #     self.refresh_spectral_process()
+        if self.experiment.process.get('unmixing_matrix'):
+            self.refresh_spectral_process()
 
         logger.info(f'Controller: experiment loaded {self.experiment_dir}')
 
@@ -1349,7 +1350,9 @@ class Controller(QObject):
         if spectral_model and spectral_model_valid:
             if self.bus:
                 self.bus.statusMessage.emit(f'Refreshing spectral process...')
-            unmixed_settings, spectral_process = calculate_spectral_process(raw_settings, spectral_model, profiles)
+            existing_spillover = self.experiment.process.get('spillover')
+            unmixed_settings, spectral_process = calculate_spectral_process(raw_settings, spectral_model, profiles,
+                                                                            existing_spillover=existing_spillover)
             self.experiment.process.update(spectral_process)
 
             # update cytometry only if channels have changed
