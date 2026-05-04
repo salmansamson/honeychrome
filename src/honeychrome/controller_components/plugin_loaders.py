@@ -11,6 +11,7 @@ plugins_path = Path(PLUGIN_DIR)
 settings = QSettings("honeychrome", "app_configuration")
 
 meipass = getattr(sys, '_MEIPASS', None)
+
 def load_plugin_modules():
     """Import and execute plugin modules only — no Qt widget creation.
     Safe to call from a background thread."""
@@ -30,17 +31,20 @@ def load_plugin_modules():
                     sys.modules[module_name] = module
                     # 5. Execute the module to actually load its code
                     spec.loader.exec_module(module)
-                print(f"Successfully loaded plugin module: {module_name}")
-                loaded_modules[module_name] = module
+                    print(f"Successfully loaded plugin module: {module_name}")
+                    loaded_modules[module_name] = module
     return loaded_modules
 
 
-                # 6. initialise widget to be put in the tab
-                widget = module.PluginWidget(bus=bus, controller=controller)
-
-                print(f"Successfully loaded plugin: {module_name}")
-                tab_plugins[module_name] = {'module':module, 'widget':widget}
-
+def instantiate_plugin_widgets(loaded_modules, bus, controller):
+    """Create PluginWidget instances from pre-loaded modules.
+    Must be called on the main (Qt) thread."""
+    tab_plugins = {}
+    for module_name, module in loaded_modules.items():
+        # 6. initialise widget to be put in the tab
+        widget = module.PluginWidget(bus=bus, controller=controller)
+        print(f"Successfully instantiated plugin: {module_name}")
+        tab_plugins[module_name] = {'module': module, 'widget': widget}
     return tab_plugins
 
 
