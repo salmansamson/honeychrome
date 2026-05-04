@@ -469,11 +469,13 @@ class StatisticsPlotWidget(QWidget):
                 y = self.statistics_comparison['statistic']
 
                 if self.statistics_comparison['plot_type'] == 'Box and Whisker Chart':
+                    # compatibility with seaborn 0.14
                     sns.boxplot(
                         data=self.statistics_comparison['data'],
                         x=x,
                         y=y,
-                        hue=hue,
+                        hue=hue if hue is not None else x,   # use x for colouring when no hue grouping
+                        legend=False if hue is None else True,
                         showfliers=True,
                         width=0.6,
                         palette="Set2",
