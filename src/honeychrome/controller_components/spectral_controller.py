@@ -62,6 +62,7 @@ class ProfileUpdater:
         #     if self.bus:
         #         self.bus.warningMessage.emit('Selected number of fluorophores has changed. Previous controls have been flushed.')
 
+    ### OTB: changed so it finds the unstained sample when a universal negative is selected
     def get_unstained_negative(self):
         try:
             sample_path = None
@@ -74,14 +75,47 @@ class ProfileUpdater:
             if sample_path:
                 full_sample_path = str(self.experiment_dir / sample_path)
                 sample = sample_from_fcs(full_sample_path)
+
+                positive_gate_label = 'Pos Unstained'
                 negative_gate_label = 'Neg Unstained'
-                if self.raw_gating.find_matching_gate_paths(negative_gate_label):
-                    self.unstained_negative = get_profile(sample, negative_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
-                    return True
-                else:
-                    raise Exception(f'No gate in Raw Data is named "{negative_gate_label}". ')
+                raw_plots = self.controller.data_for_cytometry_plots_raw['plots']
+
+                for target_gate_label in [positive_gate_label, negative_gate_label]:
+                    if not self.raw_gating.find_matching_gate_paths(target_gate_label):
+                        channel_x = 'FSC-A'
+                        channel_y = 'SSC-A'
+                        dim_x = Dimension(channel_x, range_min=0.2, range_max=0.8, transformation_ref=channel_x)
+                        dim_y = Dimension(channel_y, range_min=(0.1 if target_gate_label == positive_gate_label else 0.3),
+                                                    range_max=(0.7 if target_gate_label == positive_gate_label else 0.9),
+                                                    transformation_ref=channel_y)
+                        target_gate = gates.RectangleGate(target_gate_label, dimensions=[dim_x, dim_y])
+                        self.raw_gating.add_gate(target_gate, gate_path=('root',))
+
+                        target_plot = None
+                        for plot in raw_plots:
+                            if (plot['type'] == 'hist2d'
+                                    and plot['channel_x'] == channel_x
+                                    and plot['channel_y'] == channel_y
+                                    and plot['source_gate'] == 'root'
+                                    and not set(plot['child_gates']) - {positive_gate_label, negative_gate_label}):
+                                target_plot = plot
+                        if not target_plot:
+                            target_plot = {'type': 'hist2d', 'channel_x': channel_x, 'channel_y': channel_y,
+                                        'source_gate': 'root', 'child_gates': [positive_gate_label, negative_gate_label]}
+                            raw_plots.append(target_plot)
+                            if self.bus:
+                                self.bus.showNewPlot.emit('raw')
+                        if target_gate_label not in target_plot['child_gates']:
+                            target_plot['child_gates'].append(target_gate_label)
+
+                        if self.bus:
+                            self.bus.changedGatingHierarchy.emit('raw', target_gate_label)
+
+                self.unstained_negative = get_profile(sample, negative_gate_label, self.raw_gating,
+                                                    self.controller.filtered_raw_fluorescence_channel_ids)
+                return True
             else:
-                raise Exception(f'No sample in Single Stain Controls is named "Unstained". ')
+                raise Exception(f'No sample in Single Stain Controls is named "Unstained".')
         except Exception as e:
             text = f'Failed to generate profile of unstained negative. {e}.'
             warnings.warn(text)
@@ -119,7 +153,8 @@ class ProfileUpdater:
                                 # negative_gate_label = f'Neg Unstained'
                                 negative_gate_label = positive_gate_label # if using internal negatives, take negative gate as the same as positive gate, resulting in ignoring negative gate
                             else:
-                                negative_gate_label = f'Neg {control['label']}'
+                                # temporary partial fix to allow label renaming
+                                negative_gate_label = 'Neg ' + control['gate_label'].removeprefix('Pos ')
 
                             if not self.raw_gating.find_matching_gate_paths(negative_gate_label):
                                 raise Exception(f'Negative gate label {negative_gate_label} not present in Raw Data. ')
