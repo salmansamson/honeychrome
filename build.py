@@ -47,6 +47,9 @@ def main():
             f'--icon={icon_path}'
             ]
 
+    if platform.system() == "Darwin":
+        args.append('--windowed')
+
     # Make the honeychrome package importable by external plugin scripts
     args.append('--hidden-import=honeychrome')
     args.append('--hidden-import=honeychrome.settings')
