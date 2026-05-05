@@ -15,7 +15,7 @@ echo "Installing $APP_NAME shortcut from $INSTALL_DIR..."
 
 cat <<EOF > "$DESKTOP_FILE_PATH"
 [Desktop Entry]
-Version=0.7.2
+Version=0.7.3
 Type=Application
 Name=$APP_NAME
 Comment=Honeychrome Open Source Cytometry Acquisition and Analysis
