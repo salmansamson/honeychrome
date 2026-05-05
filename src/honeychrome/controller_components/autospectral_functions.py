@@ -5,7 +5,7 @@ AutoSpectral AF extraction for Honeychrome.
 
 Public API
 ----------
-get_af_spectra(unstained_raw, fluor_spectra, n_clusters, similarity_threshold)
+get_af_spectra(unstained_raw, fluor_spectra, n_clusters)
     Identifies AF spectral profiles from an unstained sample using KMeans
     clustering.  Returns an (n_af, n_channels) ndarray of L-inf-normalised
     AF spectra, with the population mean prepended as row 0.
@@ -327,7 +327,6 @@ def get_af_spectra(
     unstained_raw: np.ndarray,
     fluor_spectra: np.ndarray,
     n_clusters: int = 100,
-    similarity_threshold: float = 0.995,
     min_cells: int = 200,
     random_state: int = 42,
 ) -> np.ndarray:
@@ -342,9 +341,6 @@ def get_af_spectra(
         L-infinity-normalised fluorophore spectra (from spectral model).
     n_clusters : int
         Target KMeans cluster count (capped by sample size).
-    similarity_threshold : float
-        Cosine similarity above which an AF candidate is discarded as
-        likely fluorophore contamination.
     min_cells : int
         Minimum number of events required; raises ValueError if not met.
     random_state : int
@@ -397,47 +393,6 @@ def get_af_spectra(
         mean_af = mean_af / mean_peak
     af_spectra = np.vstack([mean_af[np.newaxis, :], af_candidates])
 
-    # Contamination QC
-    af_spectra = _remove_fluorophore_contaminants(af_spectra, fluor_spectra, similarity_threshold)
-
-    logger.info(f'get_af_spectra: returning {af_spectra.shape[0]} AF spectra after QC')
+    logger.info(f'get_af_spectra: returning {af_spectra.shape[0]} AF spectra')
     return af_spectra
 
-
-def _remove_fluorophore_contaminants(
-    af_spectra: np.ndarray,
-    fluor_spectra: np.ndarray,
-    threshold: float,
-) -> np.ndarray:
-    """
-    Remove AF candidates whose cosine similarity to any known fluorophore
-    exceeds *threshold*.  Row 0 (population mean) is always kept.
-    """
-    if af_spectra.shape[0] == 0:
-        return af_spectra
-
-    # Normalise for cosine similarity
-    af_norms = np.linalg.norm(af_spectra, axis=1, keepdims=True)
-    af_norms = np.where(af_norms < 1e-12, 1.0, af_norms)
-    af_unit = af_spectra / af_norms
-
-    fl_norms = np.linalg.norm(fluor_spectra, axis=1, keepdims=True)
-    fl_norms = np.where(fl_norms < 1e-12, 1.0, fl_norms)
-    fl_unit = fluor_spectra / fl_norms
-
-    # cosine similarity matrix: (n_af, n_fluors)
-    cos_sim = af_unit @ fl_unit.T
-    max_sim = cos_sim.max(axis=1)   # worst-case similarity per AF candidate
-
-    # Always keep row 0 (mean)
-    keep = max_sim < threshold
-    keep[0] = True
-
-    n_removed = (~keep).sum()
-    if n_removed:
-        logger.info(
-            f'_remove_fluorophore_contaminants: removed {n_removed} '
-            f'AF candidates (cosine similarity >= {threshold:.2f})'
-        )
-
-    return af_spectra[keep]

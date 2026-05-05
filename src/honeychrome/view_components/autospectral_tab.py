@@ -57,7 +57,6 @@ from honeychrome.view_components.help_texts import autospectral_af_help_text
 logger = logging.getLogger(__name__)
 
 TAB_NAME = 'AutoSpectral'
-_SIMILARITY_THRESHOLD = 0.98
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +83,6 @@ class AfTrainingWorker(QObject):
                 self.unstained_raw,
                 self.fluor_spectra,
                 n_clusters=self.n_clusters,
-                similarity_threshold=_SIMILARITY_THRESHOLD,
             )
             self.finished.emit(af_spectra)
         except Exception as e:
