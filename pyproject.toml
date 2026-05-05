@@ -85,3 +85,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+markers = [
+    "numpy_only: fast pure-numpy tests, no FCS files required",
+    "controller: controller-level tests requiring an experiment on disk",
+]
