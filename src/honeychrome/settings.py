@@ -102,7 +102,8 @@ spectral_model_column_labels = {
     "gate_channel": "Major Channel",
     "sample_name": "Sample Name",
     "gate_label": "Positive Gate",
-    "universal_negative_name": "Universal Negative"
+    "universal_negative_name": "Universal Negative",
+    "use_cleaned": "Use Cleaned",
 }
 
 # Sentinel value stored in universal_negative_name when the user explicitly
@@ -205,7 +206,7 @@ process_default = {
     'unmixing_matrix': None,
     'spillover': None,
     'af_profiles': {},
-    'cleaned_events': {},  # dict[label, {"positive": ndarray, "negative": ndarray}] — runtime only, not serialised
+    'cleaned_events': {},
 }
 
 cytometry_default = {

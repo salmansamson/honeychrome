@@ -4,10 +4,10 @@ from datetime import datetime
 from typing import List, Any, Dict
 from PySide6 import QtCore
 from PySide6.QtCore import Qt, QModelIndex, QTimer, QThread, Slot, QObject, QEvent, QSize
-from PySide6.QtWidgets import (QApplication, QFrame, QVBoxLayout, QHBoxLayout, QTableView, QPushButton, QStyledItemDelegate, QComboBox, QLineEdit, QMessageBox, QHeaderView, QLabel, QWidget)
+from PySide6.QtWidgets import (QApplication, QFrame, QVBoxLayout, QHBoxLayout, QTableView, QPushButton, QStyledItemDelegate, QComboBox, QLineEdit, QMessageBox, QHeaderView, QLabel, QWidget, QCheckBox)
 
 from honeychrome.controller_components.functions import raw_gates_list
-from honeychrome.controller_components.spectral_controller import SpectralAutoGenerator, ProfileUpdater, spectral_library
+from honeychrome.controller_components.spectral_controller import SpectralAutoGenerator, ProfileUpdater, SpectralCleaner, spectral_library
 from honeychrome.controller_components.spectral_functions import sanitise_control_in_place, _find_default_unstained
 from honeychrome.view_components.icon_loader import icon
 from honeychrome.settings import spectral_model_column_labels, heading_style, INTERNAL_NEGATIVE_SENTINEL
@@ -110,6 +110,8 @@ class ListTableModel(QtCore.QAbstractTableModel):
         key = COLUMNS[col]
         val = self._data[row].get(key, None)
         if role in (Qt.DisplayRole, Qt.EditRole):
+            if key == "use_cleaned":
+                return None   # checkbox widget handles display; suppress cell text
             return "" if val is None else str(val)
         return None
 
@@ -244,6 +246,7 @@ class SpectralControlsEditor(QFrame):
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(6, QHeaderView.Stretch)
+        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
 
         self.label_delegate = LabelDelegate()
         self.view.setItemDelegateForColumn(COLUMNS.index("label"), self.label_delegate)
@@ -276,10 +279,20 @@ class SpectralControlsEditor(QFrame):
         self.force_recalc_btn = QPushButton(icon('refresh'), "Recalculate")
         self.force_recalc_btn.setToolTip('Recalculate the unmixing matrix; reset spillover and unmixed plots and gates. \n(Useful if the control data has been replaced or control gates have moved under the same names.) \nDoes not change the spectral controls table.')
 
+        self.clean_controls_btn = QPushButton(icon('sparkles'), "Clean Controls")
+        self.clean_controls_btn.setToolTip(
+            'Run saturation exclusion and brightest-event selection for all cell controls\n'
+            'that have a Universal Negative assigned.\n'
+            'Once complete, each control will have a "Use Cleaned" checkbox.\n'
+            'Cleaned controls are used in profile extraction by default.'
+        )
+        self.clean_controls_btn.clicked.connect(self._on_clean_controls)
+
         btn_top_layout.addWidget(self.auto_generate_button)
         btn_top_layout.addWidget(self.negatives_combo)
         btn_top_layout.addWidget(self.fluorescence_channel_filter_combo)
         btn_top_layout.addWidget(self.force_recalc_btn)
+        btn_top_layout.addWidget(self.clean_controls_btn)
         btn_top_layout.addStretch()
 
         self.add_row_btn = QPushButton(icon('plus'), "Add Control")
@@ -524,6 +537,43 @@ class SpectralControlsEditor(QFrame):
                 self._add_or_replace_combobox_if_enabled(idx, enable_gate_label_cb, [""] + raw_gates_list(self.raw_gating))
             elif col_name == "universal_negative_name":
                 self._add_or_replace_combobox_if_enabled(idx, enable_universal_negative_cb, universal_negative_options)
+
+        # "Use Cleaned" checkbox — visible only when cleaned data exist for this control
+        label = self.model._data[row].get('label') or ''
+        cleaned_events = self.controller.experiment.process.get('cleaned_events', {})
+        cleaned_available = label in cleaned_events
+        uc_col = COLUMNS.index("use_cleaned")
+        uc_idx = self.model.index(row, uc_col)
+        proxy_uc_idx = self.proxy.mapFromSource(uc_idx)
+
+        old = self.view.indexWidget(proxy_uc_idx)
+        if old is not None:
+            old.deleteLater()
+            self.view.setIndexWidget(proxy_uc_idx, None)
+
+        if cleaned_available:
+            cb = QCheckBox()
+            cb.installEventFilter(WheelBlocker(cb))
+            # Default to checked if use_cleaned is True or not yet set
+            current_val = self.model._data[row].get('use_cleaned')
+            cb.setChecked(current_val is not False)  # True or None → checked; False → unchecked
+            cb.setToolTip('Use cleaned event pool for profile extraction.\nUncheck to revert to the standard gate-mean method for this control.')
+
+            def _on_toggle(checked, idx=uc_idx, row=row):
+                self.model._data[row]['use_cleaned'] = checked
+                # Re-run generate() for this control immediately
+                self.setEnabled(False)
+                self.profile_updater.flush()
+                control_valid = self.profile_updater.generate(
+                    self.model._data[row], self.spectral_library_search_results
+                )
+                self.refresh_comboboxes()
+                self.setEnabled(True)
+                if control_valid:
+                    self.bus.spectralModelUpdated.emit()
+
+            cb.toggled.connect(_on_toggle)
+            self.view.setIndexWidget(proxy_uc_idx, cb)
                 
 
     def add_row(self):
@@ -679,6 +729,38 @@ class SpectralControlsEditor(QFrame):
         self.bus.spectralModelUpdated.emit()
         self.refresh_table_and_enable()
         logger.info(f'SpectralModelEditor: forced recalculation')
+
+    @Slot()
+    def _on_clean_controls(self):
+        """Launch SpectralCleaner in a QThread. On completion, set use_cleaned=True
+        for all successfully cleaned controls and trigger a full recalculate."""
+        self.setEnabled(False)
+        self.clean_controls_btn.setText("Cleaning…")
+
+        self.cleaner_thread = QThread()
+        self.spectral_cleaner = SpectralCleaner(self.bus, self.controller)
+        self.spectral_cleaner.moveToThread(self.cleaner_thread)
+
+        self.cleaner_thread.started.connect(self.spectral_cleaner.run)
+        self.spectral_cleaner.cleaningFinished.connect(self.cleaner_thread.quit)
+        self.cleaner_thread.finished.connect(self._on_clean_controls_finished)
+        self.cleaner_thread.start()
+
+    @Slot()
+    def _on_clean_controls_finished(self):
+        """After SpectralCleaner.run() completes: mark controls as use_cleaned=True,
+        recalculate profiles, refresh UI."""
+        cleaned_events = self.controller.experiment.process.get('cleaned_events', {})
+        for control in self.model._data:
+            label = control.get('label') or ''
+            if label in cleaned_events:
+                # Only set the default if not already explicitly set by the user
+                if control.get('use_cleaned') is None:
+                    control['use_cleaned'] = True
+
+        self.clean_controls_btn.setText("Clean Controls")
+        self._on_force_recalc()   # regenerates all profiles, emits spectralModelUpdated
+        logger.info('SpectralControlsEditor: Clean Controls run complete.')
 
 
     @Slot(list)

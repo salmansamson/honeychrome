@@ -147,16 +147,20 @@ class ExperimentModel:
         self.settings = file_data['settings']
         self.samples = file_data['samples']
         self.process = file_data['process']
+        self.process.setdefault('cleaned_events', {})   # runtime-only; not in older files
         self.cytometry = file_data['cytometry']
         self.statistics = file_data['statistics']
 
     def save(self):
         if self.experiment_path is None:
             raise ValueError("No file path set for saving")
+        # cleaned_events holds numpy arrays at runtime and must not be serialised.
+        # It is recomputed on demand by SpectralCleaner when the user clicks "Clean Controls".
+        process_to_save = {k: v for k, v in self.process.items() if k != 'cleaned_events'}
         file_data = {
             'settings':self.settings,
             'samples':self.samples,
-            'process':self.process,
+            'process':process_to_save,
             'cytometry':self.cytometry,
             'statistics':self.statistics
         }

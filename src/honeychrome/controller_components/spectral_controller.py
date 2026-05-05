@@ -203,6 +203,27 @@ class ProfileUpdater:
                         positive_gate_label = control['gate_label']
                         if not self.raw_gating.find_matching_gate_paths(positive_gate_label):
                             raise Exception(f'Positive gate label {positive_gate_label} not present in Raw Data. ')
+
+                        # Stage 2: use cleaned event pool when available and opted in
+                        cleaned_store = self.controller.experiment.process.get('cleaned_events', {})
+                        cleaned = cleaned_store.get(control['label']) if control.get('use_cleaned') is not False else None
+                        if cleaned is not None and len(cleaned.get('positive', [])) > 0:
+                            positive_profile = cleaned['positive'].mean(axis=0)
+                            negative_profile = cleaned['negative'].mean(axis=0)
+                            profile = positive_profile - negative_profile
+                            if profile.sum() == 0:
+                                profile = positive_profile
+                            if profile.sum() > 0:
+                                profile = profile / profile.max()
+                            else:
+                                raise Exception(f'Cleaned profile for "{control["label"]}" is zero or negative.')
+                            control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
+                            profile = profile.tolist()
+                            self.profiles[control['label']] = profile
+                            profile_dict = dict(zip(self.fluorescence_channels_pnn, profile))
+                            spectral_library.deposit_control_with_profile_and_experiment_dir(control, profile_dict, str(self.experiment_dir))
+                            return True
+
                         positive_profile = get_profile(sample, positive_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
 
                         from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
@@ -604,3 +625,160 @@ class SpectralAutoGenerator(QObject):
         else:
             warnings.warn('Invalid spectral control, no events')
             return True
+
+
+
+# ---------------------------------------------------------------------------
+# SpectralCleaner — Stage 2
+# Runs saturation exclusion + brightest-event selection for all cell controls
+# that have a universal_negative_name.  Stores CleanResult in
+# experiment.process["cleaned_events"][label].
+# ---------------------------------------------------------------------------
+
+TARGET_N  = 50   # minimum events needed for a reliable profile
+INITIAL_N = 250   # starting cushion
+
+
+class SpectralCleaner(QObject):
+    """
+    Runs the AutoSpectral cleaning pipeline (Stage 2: saturation exclusion +
+    brightest-event selection) for every eligible cell control.
+
+    Instantiate, optionally move to a QThread, then call run().
+    The caller is responsible for emitting bus.spectralModelUpdated after run()
+    completes (e.g. via a QThread.finished signal).
+    """
+    cleaningFinished = Signal()
+
+    def __init__(self, bus, controller):
+        super().__init__()
+        self.bus = bus
+        self.controller = controller
+        self.experiment_dir  = controller.experiment_dir
+        self.samples         = controller.experiment.samples
+        self.spectral_model  = controller.experiment.process['spectral_model']
+        if 'cleaned_events' not in controller.experiment.process:
+            controller.experiment.process['cleaned_events'] = {}
+        self.cleaned_events  = controller.experiment.process['cleaned_events']
+        self.raw_gating      = controller.raw_gating
+        self.event_channels_pnn = controller.experiment.settings['raw']['event_channels_pnn']
+        controller.filter_raw_fluorescence_channels()
+        self.fluor_ch_ids    = controller.filtered_raw_fluorescence_channel_ids
+        self.ceiling         = controller.experiment.settings['raw']['magnitude_ceiling']
+
+        # Build a ProfileUpdater instance solely to reuse _get_negative_events()
+        self._profile_updater = ProfileUpdater(controller, bus)
+
+    @with_busy_cursor
+    def run(self):
+        eligible = [
+            c for c in self.spectral_model
+            if c.get('control_type') == 'Single Stained Spectral Control'
+            and c.get('particle_type') == 'Cells'
+            and c.get('universal_negative_name')
+        ]
+
+        total = len(eligible)
+        for n, control in enumerate(eligible):
+            if self.bus:
+                self.bus.progress.emit(n, total)
+            self._clean_one(control)
+
+        if self.bus:
+            self.bus.progress.emit(total, total)
+
+        logger.info(f'SpectralCleaner: cleaned {total} cell controls.')
+        self.cleaningFinished.emit()
+
+    def _clean_one(self, control: dict):
+        from honeychrome.controller_components.spectral_functions import get_raw_events
+        from honeychrome.controller_components.spectral_cleaning import (
+            clean_control, select_positive_events
+        )
+        from honeychrome.controller_components.functions import sample_from_fcs
+
+        label = control['label']
+        try:
+            # --- load positive events ---
+            all_samples_rev = {v: k for k, v in self.samples['all_samples'].items()}
+            rel_path = all_samples_rev.get(control['sample_name'])
+            if rel_path is None:
+                raise ValueError(f'Sample "{control["sample_name"]}" not found.')
+            full_path = str(self.experiment_dir / rel_path)
+            sample = sample_from_fcs(full_path)
+
+            positive_gate_label = control.get('gate_label')
+            pos_events = get_raw_events(
+                sample, self.fluor_ch_ids,
+                gate_label=positive_gate_label,
+                gating_strategy=self.raw_gating,
+            )
+
+            # --- load negative events via ProfileUpdater helper ---
+            neg_events = self._profile_updater._get_negative_events(control)
+            if neg_events is None or len(neg_events) == 0:
+                logger.warning(f'SpectralCleaner: no negative events for "{label}" — skipping.')
+                return
+
+            # --- determine peak channel index ---
+            peak_ch_name = control.get('gate_channel', '')
+            try:
+                peak_ch_idx = self.fluor_ch_ids.index(
+                    self.event_channels_pnn.index(peak_ch_name)
+                )
+            except (ValueError, IndexError):
+                peak_ch_idx = int(np.argmax(pos_events.mean(axis=0)))
+
+            # --- adaptive top-up loop ---
+            quantile  = 0.9995
+            initial_n = INITIAL_N
+
+            for attempt in range(10):
+                pos_sel, sel_idx, threshold = select_positive_events(
+                    pos_events, neg_events, peak_ch_idx,
+                    initial_n=initial_n,
+                    positivity_quantile=quantile,
+                )
+                result = clean_control(
+                    pos_sel, neg_events, peak_ch_idx,
+                    ceiling=self.ceiling,
+                    positivity_quantile=quantile,
+                )
+
+                if len(result.positive) >= TARGET_N or quantile <= 0.95:
+                    break
+
+                # Too few survived — widen threshold and take more forward
+                quantile  = max(0.95, quantile - 0.01)
+                initial_n = min(500, int(initial_n * 1.5))
+
+            if len(result.positive) < TARGET_N:
+                msg = (f'SpectralCleaner: only {len(result.positive)} events '
+                       f'available for "{label}" after cleaning; '
+                       f'profile may be unreliable.')
+                logger.warning(msg)
+                if self.bus:
+                    self.bus.warningMessage.emit(msg)
+
+            # --- store result (runtime only — not serialised) ---
+            self.cleaned_events[label] = {
+                'positive': result.positive,
+                'negative': result.negative,
+                'n_removed_saturation': result.n_removed_saturation,
+                'n_surviving_positive': result.n_surviving_positive,
+                'positivity_quantile_used': result.positivity_quantile_used,
+                'warnings': result.warnings,
+            }
+
+            logger.info(
+                f'SpectralCleaner: "{label}" — '
+                f'{result.n_surviving_positive} positive events selected, '
+                f'{result.n_removed_saturation} removed for saturation, '
+                f'quantile={result.positivity_quantile_used:.3f}.'
+            )
+
+        except Exception as e:
+            msg = f'SpectralCleaner: failed to clean "{label}": {e}'
+            logger.error(msg)
+            if self.bus:
+                self.bus.warningMessage.emit(msg)
