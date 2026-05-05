@@ -89,7 +89,7 @@ class WheelBlocker(QObject):
         return super().eventFilter(obj, event)
 
 class ListTableModel(QtCore.QAbstractTableModel):
-    dataEditedSignal = QtCore.Signal(int)
+    dataEditedSignal = QtCore.Signal(int, int) # changed to track cosmetic vs function changes
     dataDeletedSignal = QtCore.Signal(list)
 
     def __init__(self, data: List[Dict[str, Any]], fluorescence_channels_pnn, parent=None):
@@ -141,7 +141,8 @@ class ListTableModel(QtCore.QAbstractTableModel):
         #         return False
         self._data[row][key] = value
         self.dataChanged.emit(index, index, [Qt.DisplayRole, Qt.EditRole])
-        self.dataEditedSignal.emit(row)
+        # changed to return col so we can track cosmetic vs functional changes
+        self.dataEditedSignal.emit(row, col)
         return True
 
     def insertRow(self, position, parent=QModelIndex()):
@@ -244,8 +245,15 @@ class SpectralControlsEditor(QFrame):
         self.label_delegate = LabelDelegate()
         self.view.setItemDelegateForColumn(COLUMNS.index("label"), self.label_delegate)
 
-        self.model.dataEditedSignal.connect(self._on_update_control)
         self.model.dataDeletedSignal.connect(self._on_delete_controls)
+
+        # Debounce rapid edits and guard against re-entrant generate calls
+        self._pending_update_index = None
+        self._update_timer = QTimer()
+        self._update_timer.setSingleShot(True)
+        self._update_timer.setInterval(300)
+        self._update_timer.timeout.connect(self._do_update_control)
+        self.model.dataEditedSignal.connect(self._on_update_control)
 
         self.filter_edit = QLineEdit()
         self.filter_edit.setPlaceholderText("Filter table...")
@@ -584,20 +592,32 @@ class SpectralControlsEditor(QFrame):
         self.bus.showSelectedProfiles.emit(profile_list)
 
     @Slot(int)
-    def _on_update_control(self, index):
-        # sanitise data and regenerate profile if control is valid
+    def _on_update_control(self, index, col):
+        self._pending_update_index = index
+        self._pending_update_col = col # track cosmetic vs functional changes
+        self._update_timer.start()  # restarts timer on each rapid edit
+
+    def _do_update_control(self):
+        index = self._pending_update_index
+        col = self._pending_update_col
+        label_only = (COLUMNS[col] == 'label') # track cosmetic changes
+        if index is None:
+            return
+        self.setEnabled(False)  # block further interaction during generate
         control = self.model._data[index]
         unused_raw_channels = self.model.unused_raw_channels(control['gate_channel'])
         if control['control_type'] == 'Channel Assignment' and not control['gate_channel'] and unused_raw_channels:
             control['gate_channel'] = unused_raw_channels[0]
         sanitise_control_in_place(control)
-        self.profile_updater.flush() # remove profiles that are not in the model
-        control_valid = self.profile_updater.generate(control, self.spectral_library_search_results) # generate profile, pass in search results in case control is from library
+        self.profile_updater.flush()
+        control_valid = self.profile_updater.generate(control, self.spectral_library_search_results)
         self.refresh_comboboxes()
+        self.setEnabled(True)  # re-enable after generate completes
         if control_valid:
             self.bus.showSelectedProfiles.emit([control['label']])
-            self.bus.spectralModelUpdated.emit()
-        logger.info(f'SpectralModelEditor: updated {'valid' if control_valid else 'invalid'} control {control}')
+            if not label_only:
+                self.bus.spectralModelUpdated.emit()
+        logger.info(f'SpectralModelEditor: updated {"valid" if control_valid else "invalid"} control {control}')
 
     @Slot()
     def _on_force_recalc(self):
