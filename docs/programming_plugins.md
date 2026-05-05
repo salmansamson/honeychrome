@@ -48,6 +48,21 @@ class PluginWidget(QWidget):
         self.controller = controller
 ```
 
+## Use the FlowKit objects through Honeychrome
+[FlowKit](https://flowkit.readthedocs.io/en/latest/) is a Python toolkit for flow cytometry analysis and visualization, which has excellent documentation and tutorials for programmers. FlowKit handles sample data, FCS file input/output, transforms, gates and gating strategies, sessions and workspaces.
+
+Honeychrome uses the [FlowKit](https://flowkit.readthedocs.io/en/latest/) objects for the sample data, channel transforms and specification of gating strategies in the raw and unmixed data. These can be accessed through the controller:
+```
+controller.current_sample   # current sample (flowkit.Sample object)
+controller.raw_transformations   # transformations of the data in all raw channels (wrapper to flowkit.transform objects)
+controller.unmixed_transformations   # transformations of the data in all raw channels (wrapper to flowkit.transform objects)
+controller.raw_gating   # gating hierarchy for raw data (flowkit.GatingStrategy object)
+controller.unmixed_gating   # gating hierarchy for unmixed data (flowkit.GatingStrategy object)
+```
+
+Note that `controller.raw_transformations` and `controller.unmixed_transformations` are dictionaries of the current `flowkit.transforms` objects assigned to each channel, which are accessed with `controller.raw_transformations[raw_channel_name].xform` or `controller.unmixed_transformations[unmixed_label_name].xform`, yielding a `flowkit.LogicleTransform, flowkit.LinearTransform` or `flowkit.LogTransform` object, or `None` if not assigned.
+
+
 ## Accessing Data
 The following data can be accessed through the controller:
 

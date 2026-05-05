@@ -70,6 +70,7 @@ roi_handle_size = 12 # pixels
 colormap_name = 'rainbow4' # Choose a Colorcet colormap (e.g., 'fire', 'bgy', 'rainbow')
 colourmap_choice = ['bjy', 'kbc', 'bgy', 'bmy', 'CET_CBD2', 'rainbow', 'rainbow4', 'fire'] # use linear or rainbow colourmaps
 hist2dtype = '2D Histogram'
+send_debug_data = True # on by default
 hist2dtypes = ['2D Histogram', 'Dot plot coloured by gate']
 report_include_raw = False
 report_include_unmixed = True
