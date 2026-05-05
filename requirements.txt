@@ -10,6 +10,8 @@ bitarray==3.8.0
     # via -r requirements.in
 bokeh==3.8.2
     # via flowkit
+certifi==2026.4.22
+    # via sentry-sdk
 colorama==0.4.6
     # via pyqtgraph
 colorcet==3.1.0
@@ -116,6 +118,7 @@ python-dateutil==2.9.0.post0
 python-docx==1.2.0
     # via -r requirements.in
 pytz==2025.2
+    # via -r requirements.in
 pyyaml==6.0.3
     # via bokeh
 scikit-learn==1.8.0
@@ -126,7 +129,8 @@ scipy==1.17.0
     #   scikit-learn
 seaborn==0.13.2
     # via -r requirements.in
-sentry_sdk==2.59.0
+sentry-sdk==2.59.0
+    # via -r requirements.in
 shiboken6==6.10.1
     # via
     #   pyside6
@@ -140,5 +144,7 @@ tornado==6.5.4
     # via bokeh
 typing-extensions==4.15.0
     # via python-docx
+urllib3==2.6.3
+    # via sentry-sdk
 xyzservices==2025.11.0
     # via bokeh
