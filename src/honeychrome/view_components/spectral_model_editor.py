@@ -8,9 +8,9 @@ from PySide6.QtWidgets import (QApplication, QFrame, QVBoxLayout, QHBoxLayout, Q
 
 from honeychrome.controller_components.functions import raw_gates_list
 from honeychrome.controller_components.spectral_controller import SpectralAutoGenerator, ProfileUpdater, spectral_library
-from honeychrome.controller_components.spectral_functions import sanitise_control_in_place
+from honeychrome.controller_components.spectral_functions import sanitise_control_in_place, _find_default_unstained
 from honeychrome.view_components.icon_loader import icon
-from honeychrome.settings import spectral_model_column_labels, heading_style
+from honeychrome.settings import spectral_model_column_labels, heading_style, INTERNAL_NEGATIVE_SENTINEL
 
 import logging
 logger = logging.getLogger(__name__)
@@ -232,6 +232,8 @@ class SpectralControlsEditor(QFrame):
         # Column 0: label
         # Column 1, 2, 3...: control_type particle_type gate_channel gate_label
         # Column 4: sample_name
+        # Column 5: gate_label
+        # Column 6: universal_negative_name
         header = self.view.horizontalHeader()
         header.setMinimumSectionSize(100)
         header.setStretchLastSection(True)
@@ -240,7 +242,8 @@ class SpectralControlsEditor(QFrame):
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.Stretch)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(6, QHeaderView.Stretch)
 
         self.label_delegate = LabelDelegate()
         self.view.setItemDelegateForColumn(COLUMNS.index("label"), self.label_delegate)
@@ -329,11 +332,28 @@ class SpectralControlsEditor(QFrame):
         if self.negatives_combo.currentText() == 'Using unstained negative':
             self.controller.experiment.process['negative_type'] = 'unstained'
             self.negatives_combo.setToolTip('Negative set to "Neg Unstained" gate on Unstained sample')
+            # Pre-populate universal_negative_name for any control that has none set.
+            # Beads get the sentinel unconditionally; cells get it only if no Unstained
+            # sample exists to auto-assign.
+            default_unstained = _find_default_unstained(self.samples['all_samples'])
+            for control in self.model._data:
+                if control.get('control_type') == 'Single Stained Spectral Control':
+                    if not control.get('universal_negative_name'):
+                        if control.get('particle_type') == 'Cells' and default_unstained:
+                            control['universal_negative_name'] = default_unstained
+                        else:
+                            control['universal_negative_name'] = INTERNAL_NEGATIVE_SENTINEL
+            self.model.layoutChanged.emit()
         else:
             self.controller.experiment.process['negative_type'] = 'internal'
             self.negatives_combo.setCurrentText('Using internal negatives')
             self.negatives_combo.setToolTip('Negative set to bottom percentile of each control sample')
         logger.info(f'SpectralModelEditor: set negative type to {self.controller.experiment.process['negative_type']}')
+        self._update_universal_negative_column_visibility()
+        # Defer recalculation until after the signal handler returns and the Qt
+        # event loop is back in a clean state — calling _on_force_recalc() directly
+        # here causes a hard crash via the busy cursor thread mechanism.
+        QTimer.singleShot(0, self._on_force_recalc)
 
     def set_fluorescence_channel_filter(self):
         if self.model.rowCount():
@@ -375,6 +395,20 @@ class SpectralControlsEditor(QFrame):
         elif self.controller.experiment.process['fluorescence_channel_filter'] == 'all_fluorescence':
             self.fluorescence_channel_filter_combo.setCurrentText('Using all fluorescence channels')
             self.fluorescence_channel_filter_combo.setToolTip('Including both area and height channels in spectral model')
+
+        self._update_universal_negative_column_visibility()
+
+
+    def _update_universal_negative_column_visibility(self):
+        """Hide the Universal Negative column when using internal negatives.
+        The underlying data is preserved — hiding is purely visual."""
+        col_idx = COLUMNS.index("universal_negative_name")
+        using_unstained = self.controller.experiment.process.get('negative_type') == 'unstained'
+        if using_unstained:
+            self.view.horizontalHeader().showSection(col_idx)
+        else:
+            self.view.horizontalHeader().hideSection(col_idx)
+
 
     def refresh_comboboxes(self):
         for row in range(self.model.rowCount()):
@@ -464,7 +498,18 @@ class SpectralControlsEditor(QFrame):
             enable_sample_name_cb = False
             enable_gate_label_cb = False
 
-        for col_name in ["control_type", "particle_type", "gate_channel", "sample_name", "gate_label"]:
+        # Build list of available FCS file names for the universal negative combobox.
+        # The sentinel option lets users explicitly opt back into the internal negative
+        # for a specific control even when the global toggle is "Using unstained negative".
+        all_fcs_names = [self.samples['all_samples'][p] for p in self.samples['all_samples']]
+        universal_negative_options = [INTERNAL_NEGATIVE_SENTINEL] + all_fcs_names
+        is_cell_single_stain = (
+            self.model._data[row]['control_type'] == 'Single Stained Spectral Control'
+            and self.model._data[row]['particle_type'] == 'Cells'
+        )
+        enable_universal_negative_cb = is_cell_single_stain
+
+        for col_name in ["control_type", "particle_type", "gate_channel", "sample_name", "gate_label", "universal_negative_name"]:
             idx = self.model.index(row, COLUMNS.index(col_name))
             if col_name == "control_type":
                 self._add_or_replace_combobox_if_enabled(idx, True, [""] + CONTROL_TYPES)
@@ -477,6 +522,9 @@ class SpectralControlsEditor(QFrame):
                 self._add_or_replace_combobox_if_enabled(idx, enable_sample_name_cb, [""] + current_control_list)
             elif col_name == "gate_label":
                 self._add_or_replace_combobox_if_enabled(idx, enable_gate_label_cb, [""] + raw_gates_list(self.raw_gating))
+            elif col_name == "universal_negative_name":
+                self._add_or_replace_combobox_if_enabled(idx, enable_universal_negative_cb, universal_negative_options)
+                
 
     def add_row(self):
         pos = self.model.rowCount()

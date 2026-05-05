@@ -316,9 +316,13 @@ def apply_gates_in_place(data_for_cytometry_plots, gates_to_calculate=None):
                 if gate.gate_type == 'QuadrantGate':
                     quadrant_names = gate.quadrants.keys()
                     for name in quadrant_names:
+                        if name not in lookup_tables:
+                            continue
                         mask = lookup_tables[name][indices_data_digitized_flattened]
                         gate_membership[name] = mask * gate_membership[parent_id[0]]
                 else:
+                    if gate_id[0] not in lookup_tables:
+                        continue
                     mask = lookup_tables[gate_id[0]][indices_data_digitized_flattened]
                     gate_membership[gate_id[0]] = mask * gate_membership[parent_id[0]]
 

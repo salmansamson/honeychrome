@@ -199,3 +199,39 @@ def sanitise_control_in_place(control):
         control['gate_label'] = ''
 
     # print(json.dumps(control, indent=2))
+
+def _find_default_unstained(samples: dict) -> str | None:
+    """Return the tube name of the first sample whose path or name matches 'unstained', or None."""
+    import re
+    for path, name in samples.items():
+        if re.search(r'unstained', path, re.IGNORECASE) or re.search(r'unstained', name, re.IGNORECASE):
+            return name
+    return None
+
+
+def get_raw_events(
+    sample,
+    fluorescence_channel_ids: list,
+    gate_label: str | None = None,
+    gating_strategy=None,
+) -> np.ndarray:
+    """
+    Return a (n_events, n_channels) float64 array of raw fluorescence values.
+
+    If gate_label is supplied (and gating_strategy is not None), only events
+    inside that gate are returned. Otherwise all events are returned.
+    This is the foundation that every subsequent cleaning stage builds on.
+    """
+    all_events = sample.get_events('raw')
+
+    if gate_label and gating_strategy:
+        gate_paths = gating_strategy.find_matching_gate_paths(gate_label)
+        if gate_paths:
+            event_mask = gating_strategy.gate_sample(sample).get_gate_membership(gate_label)
+        else:
+            warnings.warn(f'get_raw_events: gate "{gate_label}" not found — returning all events.')
+            event_mask = np.ones(sample.event_count, dtype=bool)
+    else:
+        event_mask = np.ones(sample.event_count, dtype=bool)
+
+    return all_events[event_mask][:, fluorescence_channel_ids].astype(np.float64)

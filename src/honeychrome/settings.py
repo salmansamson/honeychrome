@@ -101,8 +101,13 @@ spectral_model_column_labels = {
     "particle_type": "Particle Type",
     "gate_channel": "Major Channel",
     "sample_name": "Sample Name",
-    "gate_label": "Positive Gate"
+    "gate_label": "Positive Gate",
+    "universal_negative_name": "Universal Negative"
 }
+
+# Sentinel value stored in universal_negative_name when the user explicitly
+# wants the internal (same-sample) negative for a cell control.
+INTERNAL_NEGATIVE_SENTINEL = "[Internal Negative]"
 
 ### put together channel_dict for controller + trace analyst
 channel_dict = {'adc_channels': adc_channels, 'trigger_channel': trigger_channel, 'area_channels': area_channels,
@@ -200,6 +205,7 @@ process_default = {
     'unmixing_matrix': None,
     'spillover': None,
     'af_profiles': {},
+    'cleaned_events': {},  # dict[label, {"positive": ndarray, "negative": ndarray}] — runtime only, not serialised
 }
 
 cytometry_default = {

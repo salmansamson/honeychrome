@@ -32,6 +32,16 @@ class SpectralLibrary:
 
         conn = sqlite3.connect(self.library_path)
         try:
+            # Migrate any missing columns before appending (e.g. universal_negative_name added in Stage 1)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='spectral_controls_history'")
+            if cursor.fetchone():
+                existing_cols = {row[1] for row in cursor.execute("PRAGMA table_info(spectral_controls_history)")}
+                for col in library_deposit.columns:
+                    if col not in existing_cols:
+                        cursor.execute(f"ALTER TABLE spectral_controls_history ADD COLUMN \"{col}\" TEXT")
+                conn.commit()
+
             library_deposit.to_sql('spectral_controls_history', conn, if_exists='append', index=True, index_label='label')
         finally:
             conn.close()

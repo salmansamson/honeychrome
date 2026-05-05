@@ -20,6 +20,14 @@ logger = logging.getLogger(__name__)
 # connect to spectral library
 spectral_library = SpectralLibrary()
 
+def _find_default_unstained_tube(all_samples: dict) -> str | None:
+    """Return tube name of the first sample whose path or name contains 'unstained'."""
+    import re
+    for path, name in all_samples.items():
+        if re.search(r'unstained', path, re.IGNORECASE) or re.search(r'unstained', name, re.IGNORECASE):
+            return name
+    return None
+
 class ProfileUpdater:
     def __init__(self, controller, bus):
         self.controller = controller
@@ -32,7 +40,8 @@ class ProfileUpdater:
         self.raw_gating = controller.raw_gating
         self.n_fluorophore_channels = None
         self.fluorescence_channels_pnn = []
-        self.unstained_negative = None
+        self.unstained_negative = None          # legacy mean-vector cache — kept for existing generate() path
+        self._negative_events_cache: dict[str, np.ndarray] = {}  # Stage 1+: raw event arrays keyed by tube name
         self.refresh()
 
     def refresh(self):
@@ -43,6 +52,7 @@ class ProfileUpdater:
 
     def flush(self):
         self.unstained_negative = None
+        self._negative_events_cache.clear()
         self.refresh()
         controls = [control['label'] for control in self.spectral_model]
         labels = list(self.profiles.keys())
@@ -78,7 +88,9 @@ class ProfileUpdater:
 
                 positive_gate_label = 'Pos Unstained'
                 negative_gate_label = 'Neg Unstained'
-                raw_plots = self.controller.data_for_cytometry_plots_raw['plots']
+                # Use the persistent cytometry store, not the ephemeral runtime view —
+                # data_for_cytometry_plots_raw['plots'] may be None if no sample is loaded.
+                raw_plots = self.controller.experiment.cytometry['raw_plots']
 
                 for target_gate_label in [positive_gate_label, negative_gate_label]:
                     if not self.raw_gating.find_matching_gate_paths(target_gate_label):
@@ -124,6 +136,57 @@ class ProfileUpdater:
             return False
 
 
+    def _get_negative_events(self, control) -> np.ndarray | None:
+        """
+        Resolve and return raw fluorescence event array for the negative of *control*.
+
+        Priority order:
+          1. control["universal_negative_name"] — per-control assignment (Stage 1+)
+          2. Global unstained fallback (negative_type == "unstained")
+          3. None — caller falls back to existing gate-mean path
+
+        Results are cached by tube name so each FCS file is loaded at most once.
+        """
+        from honeychrome.controller_components.spectral_functions import get_raw_events
+        from honeychrome.controller_components.functions import sample_from_fcs
+        from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
+
+        tube_name = control.get('universal_negative_name') or ''
+
+        # Explicit per-control opt-out: use the internal (same-sample) negative
+        if tube_name == INTERNAL_NEGATIVE_SENTINEL:
+            return None
+
+        # Fallback to global unstained if no per-control assignment
+        if not tube_name:
+            if self.controller.experiment.process.get('negative_type') == 'unstained':
+                tube_name = _find_default_unstained_tube(self.samples['all_samples']) or ''
+            if not tube_name:
+                return None
+
+        if tube_name in self._negative_events_cache:
+            return self._negative_events_cache[tube_name]
+
+        # Resolve path from tube name
+        all_samples_reverse = {v: k for k, v in self.samples['all_samples'].items()}
+        rel_path = all_samples_reverse.get(tube_name)
+        if rel_path is None:
+            warnings.warn(f'_get_negative_events: tube "{tube_name}" not found in samples.')
+            return None
+
+        full_path = str(self.experiment_dir / rel_path)
+        try:
+            sample = sample_from_fcs(full_path)
+            gate_label = 'Neg Unstained' if self.raw_gating.find_matching_gate_paths('Neg Unstained') else None
+            events = get_raw_events(sample, self.controller.filtered_raw_fluorescence_channel_ids,
+                                    gate_label=gate_label, gating_strategy=self.raw_gating)
+            self._negative_events_cache[tube_name] = events
+            return events
+        except Exception as e:
+            warnings.warn(f'_get_negative_events: failed to load "{tube_name}": {e}')
+            return None
+    
+
     def generate(self, control, search_results):
         if control['control_type'] == 'Single Stained Spectral Control':
             try:
@@ -142,22 +205,62 @@ class ProfileUpdater:
                             raise Exception(f'Positive gate label {positive_gate_label} not present in Raw Data. ')
                         positive_profile = get_profile(sample, positive_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
 
-                        if self.controller.experiment.process['negative_type'] == 'unstained':
-                            if self.unstained_negative is None:
-                                success = self.get_unstained_negative() # get it if it isn't defined
-                                if not success:
-                                    return
-                            negative_profile = self.unstained_negative
-                        else:
-                            if 'unstained' in control['label'].lower():
-                                # negative_gate_label = f'Neg Unstained'
-                                negative_gate_label = positive_gate_label # if using internal negatives, take negative gate as the same as positive gate, resulting in ignoring negative gate
+                        from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
+                        universal_neg_name = control.get('universal_negative_name') or ''
+                        explicit_internal = (universal_neg_name == INTERNAL_NEGATIVE_SENTINEL)
+                        use_unstained = (
+                            self.controller.experiment.process['negative_type'] == 'unstained'
+                            and not explicit_internal
+                        )
+
+                        if use_unstained:
+                            # Resolve the specific unstained FCS for this control:
+                            # (1) per-control universal_negative_name, (2) global Unstained sample.
+                            # If neither is available, fall back to internal negative with a warning.
+                            resolved_unstained = None
+
+                            if universal_neg_name and not explicit_internal:
+                                # Per-control assignment — load it directly.
+                                # Ensure Neg Unstained gate exists first (get_unstained_negative
+                                # creates it if absent; it is idempotent if already present).
+                                if self.unstained_negative is None:
+                                    self.get_unstained_negative()
+                                all_samples_rev = {v: k for k, v in self.samples['all_samples'].items()}
+                                neg_rel_path = all_samples_rev.get(universal_neg_name)
+                                if neg_rel_path:
+                                    neg_full_path = str(self.experiment_dir / neg_rel_path)
+                                    neg_sample = sample_from_fcs(neg_full_path)
+                                    neg_gate_label = 'Neg Unstained'
+                                    if self.raw_gating.find_matching_gate_paths(neg_gate_label):
+                                        resolved_unstained = get_profile(neg_sample, neg_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
+                                    else:
+                                        warnings.warn(f'{control["label"]}: universal negative "{universal_neg_name}" has no "Neg Unstained" gate — using internal negative.')
+                                else:
+                                    warnings.warn(f'{control["label"]}: universal negative "{universal_neg_name}" not found in samples — using internal negative.')
                             else:
-                                # temporary partial fix to allow label renaming
-                                negative_gate_label = 'Neg ' + control['gate_label'].removeprefix('Pos ')
+                                # Global unstained fallback
+                                if self.unstained_negative is None:
+                                    self.get_unstained_negative()
+                                resolved_unstained = self.unstained_negative
+
+                            if resolved_unstained is not None:
+                                negative_profile = resolved_unstained
+                            else:
+                                # No unstained available for this control — fall back gracefully
+                                warnings.warn(f'{control["label"]}: no unstained negative available — using internal negative.')
+                                if self.bus:
+                                    self.bus.warningMessage.emit(f'{control["label"]}: no unstained negative available, using internal negative.')
+                                use_unstained = False  # drop through to internal path below
+
+                        if not use_unstained:
+                            if 'unstained' in control['label'].lower():
+                                negative_gate_label = positive_gate_label
+                            else:
+                                negative_gate_label = f'Neg {control["label"]}'
 
                             if not self.raw_gating.find_matching_gate_paths(negative_gate_label):
-                                raise Exception(f'Negative gate label {negative_gate_label} not present in Raw Data. ')
+                                raise Exception(f'Internal negative gate "{negative_gate_label}" not present in Raw Data. '
+                                                f'Please run Auto-Generate to recreate spectral gates.')
 
                             negative_profile = get_profile(sample, negative_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
 
@@ -448,9 +551,11 @@ class SpectralAutoGenerator(QObject):
                     # report = self.raw_gating.gate_sample(sample).report.set_index('gate_name')  # Note this is slow
                     # print(f'{label}: explained variance {int(explained_variance * 100)}, best channel {self.event_channels_pnn[channel_id_best_match]}, brightest events {int(best_match)}/100, gate {report.loc[positive_gate_label]['count']}/100')
 
+                    default_unstained = _find_default_unstained_tube(self.samples['all_samples']) if particle_type == 'Cells' else None
                     control = {'label': label, 'control_type': 'Single Stained Spectral Control', 'particle_type': particle_type,
                                'gate_channel': gate_channel, 'sample_name': tubename,
-                               'sample_path': full_sample_path, 'gate_label': positive_gate_label}
+                               'sample_path': full_sample_path, 'gate_label': positive_gate_label,
+                               'universal_negative_name': default_unstained or ''}
 
                     positive_profile = get_profile(sample, control['gate_label'], self.raw_gating, self.fluorescence_channel_ids)
                     if self.controller.experiment.process['negative_type'] == 'unstained':
