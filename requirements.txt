@@ -11,7 +11,9 @@ bitarray==3.8.0
 bokeh==3.8.2
     # via flowkit
 certifi==2026.4.22
-    # via sentry-sdk
+    # via
+    #   -r requirements.in
+    #   sentry-sdk
 colorama==0.4.6
     # via pyqtgraph
 colorcet==3.1.0
