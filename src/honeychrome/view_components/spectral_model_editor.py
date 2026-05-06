@@ -514,8 +514,9 @@ class SpectralControlsEditor(QFrame):
         # Build list of available FCS file names for the universal negative combobox.
         # The sentinel option lets users explicitly opt back into the internal negative
         # for a specific control even when the global toggle is "Using unstained negative".
-        all_fcs_names = [self.samples['all_samples'][p] for p in self.samples['all_samples']]
-        universal_negative_options = [INTERNAL_NEGATIVE_SENTINEL] + all_fcs_names
+        ssc_paths = self.samples.get('single_stain_controls', [])
+        ssc_fcs_names = [self.samples['all_samples'][p] for p in ssc_paths if p in self.samples['all_samples']]
+        universal_negative_options = [INTERNAL_NEGATIVE_SENTINEL] + ssc_fcs_names
         is_cell_single_stain = (
             self.model._data[row]['control_type'] == 'Single Stained Spectral Control'
             and self.model._data[row]['particle_type'] == 'Cells'
