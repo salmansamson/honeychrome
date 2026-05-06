@@ -323,15 +323,128 @@ def apply_af_unmixing(
 # AF spectra identification (training step)
 # ---------------------------------------------------------------------------
 
+def _cosine_similarity_matrix(a: np.ndarray) -> np.ndarray:
+    """
+    Compute pairwise cosine similarity for rows of a.
+    Returns an (n, n) matrix in [-1, 1].
+    """
+    norms = np.linalg.norm(a, axis=1, keepdims=True)
+    norms = np.where(norms < 1e-12, 1.0, norms)
+    a_norm = a / norms
+    return a_norm @ a_norm.T
+
+
+def _deduplicate_spectra(
+    spectra: np.ndarray,
+    cosine_threshold: float = 0.99,
+) -> np.ndarray:
+    """
+    Greedy cosine-similarity deduplication.
+
+    Iterates through rows in order, keeping a row only if its cosine
+    similarity to every already-kept row is below cosine_threshold.
+
+    Parameters
+    ----------
+    spectra : ndarray, shape (n, n_channels)
+        L-inf-normalised spectra.
+    cosine_threshold : float
+        Rows more similar than this to any kept row are dropped.
+
+    Returns
+    -------
+    ndarray, shape (m, n_channels), m <= n
+    """
+    if len(spectra) == 0:
+        return spectra
+
+    sim = _cosine_similarity_matrix(spectra)
+    kept = []
+    for i in range(len(spectra)):
+        if all(sim[i, j] < cosine_threshold for j in kept):
+            kept.append(i)
+    return spectra[kept]
+
+
+def _qc_af_spectra(
+    af_spectra: np.ndarray,
+    fluor_spectra: np.ndarray,
+    cosine_threshold: float = 0.99,
+) -> np.ndarray:
+    """
+    Remove any AF spectrum whose cosine similarity to any fluorophore
+    spectrum exceeds cosine_threshold — these are likely contamination
+    from single-stained controls in the unstained sample.
+
+    Parameters
+    ----------
+    af_spectra : ndarray, shape (n_af, n_channels)
+    fluor_spectra : ndarray, shape (n_fluors, n_channels)
+    cosine_threshold : float
+
+    Returns
+    -------
+    ndarray — filtered af_spectra (may be shorter than input)
+    """
+    if len(af_spectra) == 0:
+        return af_spectra
+
+    # Normalise both sets
+    def _row_normalise(m):
+        norms = np.linalg.norm(m, axis=1, keepdims=True)
+        norms = np.where(norms < 1e-12, 1.0, norms)
+        return m / norms
+
+    af_norm    = _row_normalise(af_spectra)
+    fluor_norm = _row_normalise(fluor_spectra)
+
+    # sim[i, j] = cosine similarity of af_spectra[i] to fluor_spectra[j]
+    sim = af_norm @ fluor_norm.T   # (n_af, n_fluors)
+    contaminated = (sim >= cosine_threshold).any(axis=1)
+    n_removed = contaminated.sum()
+    if n_removed:
+        logger.warning(
+            f'get_af_spectra: removed {n_removed} AF spectrum/spectra '
+            f'with cosine similarity >= {cosine_threshold} to a fluorophore '
+            f'(likely control contamination in unstained sample).'
+        )
+    return af_spectra[~contaminated]
+
+
 def get_af_spectra(
     unstained_raw: np.ndarray,
     fluor_spectra: np.ndarray,
     n_clusters: int = 100,
     min_cells: int = 200,
     random_state: int = 42,
+    cosine_threshold: float = 0.99,
+    refine: bool = True,
+    problem_quantile: float = 0.99,
+    contaminant_threshold: float = 0.99,
 ) -> np.ndarray:
     """
     Identify AF spectral profiles from an unstained sample.
+
+    Stage 1 — Base spectra
+    ----------------------
+    KMeans clusters the unstained events in raw+OLS-unmixed space, as before.
+    After L-inf normalisation the centroids are deduplicated by cosine
+    similarity (threshold cosine_threshold) to remove near-identical profiles
+    that cause spurious matching of near-zero events.  A contamination QC
+    filter then removes any spectrum resembling a fluorophore.  The population
+    mean is prepended as row 0.
+
+    Stage 2 — Refine (optional, refine=True)
+    -----------------------------------------
+    Runs a first-pass AF unmixing on the unstained sample using the base
+    spectra.  Cells whose post-correction fluorophore L2 norm exceeds
+    problem_quantile are "problem cells" — inadequately corrected events still
+    far from zero.  Their per-channel error is normalised by the AF scale
+    factor (spill ratios) and re-clustered.  For each error cluster, modulated
+    versions of the contributing base spectra are created:
+        updated = base_spec * (1 + median_ratio),  re-normalised L-inf
+    These targeted spectra are appended to the base library and the full set
+    is passed through contamination QC again.
 
     Parameters
     ----------
@@ -340,21 +453,37 @@ def get_af_spectra(
     fluor_spectra : ndarray, shape (n_fluors, n_channels)
         L-infinity-normalised fluorophore spectra (from spectral model).
     n_clusters : int
-        Target KMeans cluster count (capped by sample size).
+        Target KMeans cluster count for the base stage (capped by sample
+        size).  After deduplication the actual count will typically be much
+        lower.
     min_cells : int
         Minimum number of events required; raises ValueError if not met.
     random_state : int
         Random seed for reproducibility.
+    cosine_threshold : float
+        Cosine similarity threshold for deduplicating base spectra.
+        Rows more similar than this to any already-kept row are dropped.
+        Default 0.99.
+    refine : bool
+        Whether to run the second-pass refinement stage.  Default False.
+    problem_quantile : float
+        Quantile of post-correction fluorophore L2 norm used to define
+        "problem cells" for the refine stage.  Default 0.99 (top 1%).
+    contaminant_threshold : float
+        Cosine similarity to a fluorophore above which an AF spectrum is
+        considered contamination and removed.  Default 0.99.
 
     Returns
     -------
     ndarray, shape (n_af, n_channels)
-        Row 0 is the population mean; rows 1..n are cluster centroids that
-        passed the contamination QC filter.
+        Row 0 is the population mean of the base spectra; subsequent rows
+        are deduplicated base spectra and (if refine=True) modulated spectra
+        for problem cells.
     """
     from sklearn.cluster import KMeans, MiniBatchKMeans
 
     n_cells, n_channels = unstained_raw.shape
+    n_fluors = fluor_spectra.shape[0]
 
     if n_cells < min_cells:
         raise ValueError(
@@ -365,9 +494,13 @@ def get_af_spectra(
     n_clusters = max(2, min(n_clusters, n_cells // 3))
     logger.info(f'get_af_spectra: n_cells={n_cells}, n_clusters={n_clusters}')
 
-    # Initial OLS unmix (no AF) for clustering input
+    # -------------------------------------------------------------------------
+    # Stage 1 — Base spectra via KMeans
+    # -------------------------------------------------------------------------
+
+    # OLS unmix without AF — used as additional clustering features
     P = np.linalg.solve(fluor_spectra @ fluor_spectra.T, fluor_spectra)
-    unmixed_no_af = unstained_raw @ P.T
+    unmixed_no_af = unstained_raw @ P.T   # (n_cells, n_fluors)
 
     cluster_input = np.concatenate([unstained_raw, unmixed_no_af], axis=1)
 
@@ -377,7 +510,6 @@ def get_af_spectra(
         km = KMeans(n_clusters=n_clusters, random_state=random_state, n_init='auto')
 
     km.fit(cluster_input)
-
     centres_spectral = km.cluster_centers_[:, :n_channels]
 
     # L-infinity normalise
@@ -386,13 +518,190 @@ def get_af_spectra(
     af_candidates = centres_spectral / peak_vals
     af_candidates = af_candidates[~np.isnan(af_candidates).any(axis=1)]
 
-    # Prepend population mean
+    # Deduplicate: collapse near-identical spectral shapes
+    af_candidates = _deduplicate_spectra(af_candidates, cosine_threshold)
+    logger.info(
+        f'get_af_spectra: {len(af_candidates)} base spectra after deduplication '
+        f'(cosine_threshold={cosine_threshold})'
+    )
+
+    # Contamination QC: remove any spectrum resembling a fluorophore
+    af_candidates = _qc_af_spectra(af_candidates, fluor_spectra, contaminant_threshold)
+
+    if len(af_candidates) == 0:
+        raise ValueError(
+            'All AF candidate spectra were removed by contamination QC. '
+            'Check whether the unstained sample contains single-stained events.'
+        )
+
+    # Prepend population mean of the deduplicated base spectra
     mean_af = af_candidates.mean(axis=0)
     mean_peak = np.abs(mean_af).max()
     if mean_peak > 1e-12:
         mean_af = mean_af / mean_peak
     af_spectra = np.vstack([mean_af[np.newaxis, :], af_candidates])
 
-    logger.info(f'get_af_spectra: returning {af_spectra.shape[0]} AF spectra')
+    logger.info(f'get_af_spectra: {af_spectra.shape[0]} spectra after stage 1')
+
+    # -------------------------------------------------------------------------
+    # Stage 2 — Refine: targeted modulation for problem cells
+    # -------------------------------------------------------------------------
+
+    if refine:
+        logger.info('get_af_spectra: running refine stage')
+
+        # First-pass per-cell unmixing on the unstained sample using base spectra
+        precomputed = precompute_af_matrices(fluor_spectra, af_spectra)
+        first_pass  = apply_af_unmixing(unstained_raw, precomputed, af_spectra)
+
+        unmixed_fluors = first_pass['unmixed']   # (n_cells, n_fluors)
+        af_scale       = first_pass['af_scale']  # (n_cells,)  — scalar k per cell
+        af_idx_0based  = first_pass['af_idx'] - 1  # convert to 0-based
+
+        # Error magnitude: L2 norm of fluorophore channels after correction.
+        # In an unstained sample any residual fluorophore signal is correction error.
+        error_magnitude = np.sqrt(np.sum(unmixed_fluors ** 2, axis=1))  # (n_cells,)
+
+        # Identify problem cells — those still furthest from zero.
+        # Step the quantile down in 5% increments until we have enough cells,
+        # mirroring the R fallback loop.
+        pq = problem_quantile
+        while True:
+            threshold   = np.quantile(error_magnitude, pq)
+            problem_idx = np.where(error_magnitude > threshold)[0]
+            problem_n   = len(problem_idx)
+            if problem_n >= 500:
+                break
+            pq -= 0.05
+            if pq < 0.5:
+                # Accept whatever we have at the 50% mark
+                threshold   = np.quantile(error_magnitude, pq)
+                problem_idx = np.where(error_magnitude > threshold)[0]
+                problem_n   = len(problem_idx)
+                break
+
+        logger.info(
+            f'get_af_spectra refine: {problem_n} problem cells '
+            f'(quantile={pq:.2f}, threshold={threshold:.2f})'
+        )
+
+        if problem_n > 10:
+            # Per-channel error for the problem cells.
+            # error = residuals + proj_fluor in R; here we use the unmixed
+            # fluorophore values directly — in an unstained sample these are
+            # purely error (no true fluorophore signal present).
+            # Shape: (problem_n, n_fluors)
+            fluor_error = unmixed_fluors[problem_idx]
+
+            # Normalise by AF scale to get dimensionless spill ratios,
+            # matching R: spill.ratios = error[problem.idx, ] / af.abundance
+            af_scale_problem = af_scale[problem_idx]
+            af_scale_problem = np.where(
+                np.abs(af_scale_problem) < 1e-6, 1e-6, af_scale_problem
+            )
+            spill_ratios = fluor_error / af_scale_problem[:, np.newaxis]  # (problem_n, n_fluors)
+
+            # Re-cluster the spill ratios to find distinct error patterns
+            error_som_dim = max(2, int(np.floor(np.sqrt(problem_n / 3))))
+            n_error_clusters = error_som_dim ** 2
+            logger.info(
+                f'get_af_spectra refine: clustering {problem_n} problem cells '
+                f'into {n_error_clusters} error clusters'
+            )
+
+            if problem_n > 200_000:
+                km_err = MiniBatchKMeans(
+                    n_clusters=n_error_clusters, random_state=random_state, n_init='auto'
+                )
+            else:
+                km_err = KMeans(
+                    n_clusters=n_error_clusters, random_state=random_state, n_init='auto'
+                )
+            km_err.fit(spill_ratios)
+            error_labels = km_err.labels_   # (problem_n,)
+
+            # For each error cluster: find contributing base AF indices,
+            # compute the median spill ratio, modulate each contributing spectrum.
+            modulated = []
+            for cl in np.unique(error_labels):
+                cl_mask    = error_labels == cl
+                cl_ratios  = spill_ratios[cl_mask]            # (cl_n, n_fluors)
+                global_idx = problem_idx[cl_mask]
+
+                # Median correction pattern for this cluster
+                median_ratio = np.median(cl_ratios, axis=0)   # (n_fluors,)
+
+                # Which base AF spectra were assigned to these problem cells?
+                contributing = np.unique(af_idx_0based[global_idx])
+
+                for base_idx in contributing:
+                    base_spec = af_spectra[base_idx]                        # (n_channels,)
+                    # The spill_ratios are in fluorophore space (n_fluors),
+                    # but we need to modulate in detector space (n_channels).
+                    # Project the median ratio back to detector space via S_t.
+                    # ratio_detector = S_t @ median_ratio  (n_channels,)
+                    ratio_detector = fluor_spectra.T @ median_ratio          # (n_channels,)
+                    updated = base_spec * (1.0 + ratio_detector)
+                    peak = np.abs(updated).max()
+                    if peak > 1e-12:
+                        updated = updated / peak
+                    if not np.isnan(updated).any():
+                        modulated.append(updated)
+
+            if modulated:
+                modulated_arr = np.vstack(modulated)   # (n_modulated, n_channels)
+
+                # Step 1: deduplicate modulated spectra against each other
+                modulated_arr = _deduplicate_spectra(modulated_arr, cosine_threshold)
+
+                # Step 2: drop any modulated spectrum too similar to an
+                # already-kept base spectrum.
+                # Build cross-similarity: (n_modulated, n_af_existing)
+                def _row_normalise(m):
+                    norms = np.linalg.norm(m, axis=1, keepdims=True)
+                    norms = np.where(norms < 1e-12, 1.0, norms)
+                    return m / norms
+
+                mod_norm      = _row_normalise(modulated_arr)
+                existing_norm = _row_normalise(af_spectra)
+                cross_sim     = mod_norm @ existing_norm.T   # (n_modulated, n_af_existing)
+                novel_mask    = (cross_sim < cosine_threshold).all(axis=1)
+                modulated_arr = modulated_arr[novel_mask]
+
+                n_novel = len(modulated_arr)
+                logger.info(
+                    f'get_af_spectra refine: {n_novel} novel modulated spectra after '
+                    f'deduplication (dropped {len(modulated) - n_novel} redundant)'
+                )
+
+                if n_novel > 0:
+                    af_spectra = np.vstack([af_spectra, modulated_arr])
+
+                    # NA guard
+                    af_spectra = af_spectra[~np.isnan(af_spectra).any(axis=1)]
+
+                    # Contamination QC on the expanded set
+                    af_spectra = _qc_af_spectra(
+                        af_spectra, fluor_spectra, contaminant_threshold
+                    )
+
+                    if len(af_spectra) == 0:
+                        raise ValueError(
+                            'All AF spectra were removed by contamination QC '
+                            'after refine stage.'
+                        )
+                else:
+                    logger.info(
+                        'get_af_spectra refine: all modulated spectra were '
+                        'duplicates of existing base spectra — nothing appended.'
+                    )
+
+        else:
+            logger.info(
+                f'get_af_spectra refine: only {problem_n} problem cells found — '
+                f'skipping modulation (need > 10).'
+            )
+
+    logger.info(f'get_af_spectra: returning {af_spectra.shape[0]} AF spectra total')
     return af_spectra
 
