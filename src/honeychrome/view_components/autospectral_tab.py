@@ -990,8 +990,8 @@ class AutoSpectralTab(QWidget):
 
         all_samples = self.controller.experiment.samples.get('all_samples', {})
         controls = self.controller.experiment.samples.get('single_stain_controls', [])
-        # Show SSC first since unstained is usually there
-        candidates = list(controls) + [p for p in all_samples if p not in controls]
+        # Show SSC only since unstained is usually there--if not, user should relocate sample manually
+        candidates = list(controls)
 
         preselect = 0
         for i, path in enumerate(candidates, start=1):
