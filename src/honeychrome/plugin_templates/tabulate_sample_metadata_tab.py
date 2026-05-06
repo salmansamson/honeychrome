@@ -45,33 +45,16 @@ class PluginWidget(QWidget):
         self.bus = bus
         self.controller = controller
 
+        # --- Add gui objects ---
         # --- Create widget, scroll area and layouts to hold the plugin content ---
         self.label = QLabel(plugin_name)
-
-        # the content widget goes in a scroll widget, which goes in the PluginWidget
-        self.content_widget = QWidget()
-        main_layout = QVBoxLayout(self.content_widget)
-
-        # make this widget scrollable and resizeable
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setWidget(self.content_widget)
-
         overall_layout = QVBoxLayout(self)
-        overall_layout.addWidget(self.label_disabled)
-        overall_layout.addWidget(scroll)
-
-        # --- Add gui objects ---
-
         output_widget = QWidget()
+        overall_layout.addWidget(output_widget)
         self.output_layout = QVBoxLayout(output_widget)
 
-        main_layout.addWidget(self.label)
-        main_layout.addWidget(QLabel('Select a sample to view its metadata.'))
-        main_layout.addWidget(output_widget)
-        main_layout.addStretch()
+        overall_layout.addWidget(QLabel('Select a sample to view its metadata.'))
+        overall_layout.addWidget(output_widget)
 
         # connect signals:
         # loadSampleRequested: if user selects a sample from sample browser, run tabulate_metadata
@@ -82,7 +65,8 @@ class PluginWidget(QWidget):
         if self.controller.current_mode == plugin_name:
 
             # generate and add table widget
-            table_data = self.controller.current_sample.get_metadata()
+            metadata = self.controller.current_sample.get_metadata()
+            table_data = [{'Key':key, 'Value':value} for key, value in metadata.items()]
             table_widget = CopyableTableWidget(table_data, table_headers)
 
             clear_layout(self.output_layout)
