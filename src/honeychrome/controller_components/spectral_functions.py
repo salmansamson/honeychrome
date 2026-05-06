@@ -214,12 +214,17 @@ def get_raw_events(
     fluorescence_channel_ids: list,
     gate_label: str | None = None,
     gating_strategy=None,
-) -> np.ndarray:
+    extra_channel_ids: list | None = None,
+) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """
     Return a (n_events, n_channels) float64 array of raw fluorescence values.
 
     If gate_label is supplied (and gating_strategy is not None), only events
     inside that gate are returned. Otherwise all events are returned.
+
+    If extra_channel_ids is supplied (e.g. scatter channel indices), a second
+    array of shape (n_events, len(extra_channel_ids)) is returned as a tuple:
+        (fluorescence_array, extra_array)
     This is the foundation that every subsequent cleaning stage builds on.
     """
     all_events = sample.get_events('raw')
@@ -234,4 +239,11 @@ def get_raw_events(
     else:
         event_mask = np.ones(sample.event_count, dtype=bool)
 
-    return all_events[event_mask][:, fluorescence_channel_ids].astype(np.float64)
+    gated = all_events[event_mask]
+    fluor = gated[:, fluorescence_channel_ids].astype(np.float64)
+
+    if extra_channel_ids is not None:
+        extra = gated[:, extra_channel_ids].astype(np.float64)
+        return fluor, extra
+
+    return fluor

@@ -699,7 +699,7 @@ class SpectralCleaner(QObject):
 
         label = control['label']
         try:
-            # --- load positive events ---
+            # --- load positive fluorescence + scatter events ---
             all_samples_rev = {v: k for k, v in self.samples['all_samples'].items()}
             rel_path = all_samples_rev.get(control['sample_name'])
             if rel_path is None:
@@ -708,17 +708,61 @@ class SpectralCleaner(QObject):
             sample = sample_from_fcs(full_path)
 
             positive_gate_label = control.get('gate_label')
-            pos_events = get_raw_events(
+            scatter_ch_ids = self.controller.experiment.settings['raw']['scatter_channel_ids']
+            scatter_ch_pnn = self.controller.experiment.settings['raw']['event_channels_pnn']
+
+            pos_events, pos_scatter_all = get_raw_events(
                 sample, self.fluor_ch_ids,
                 gate_label=positive_gate_label,
                 gating_strategy=self.raw_gating,
+                extra_channel_ids=scatter_ch_ids,
             )
 
-            # --- load negative events via ProfileUpdater helper ---
+            # Reduce scatter to FSC-A and SSC-A columns only (scatter_match_negative
+            # expects shape (n, 2); scatter_ch_ids may include -H and -W variants).
+            def _fsc_ssc_cols(all_scatter: np.ndarray) -> np.ndarray:
+                fsc_a = next((col for col, ch_id in enumerate(scatter_ch_ids)
+                            if scatter_ch_pnn[ch_id] == 'FSC-A'), None)
+                ssc_a = next((col for col, ch_id in enumerate(scatter_ch_ids)
+                            if scatter_ch_pnn[ch_id] == 'SSC-A'), None)
+                if fsc_a is None:
+                    fsc_a = next((col for col, ch_id in enumerate(scatter_ch_ids)
+                                if 'FSC' in scatter_ch_pnn[ch_id]), 0)
+                if ssc_a is None:
+                    ssc_a = next((col for col, ch_id in enumerate(scatter_ch_ids)
+                                if 'SSC' in scatter_ch_pnn[ch_id]), 1)
+                return all_scatter[:, [fsc_a, ssc_a]]
+            
+            pos_scatter = _fsc_ssc_cols(pos_scatter_all) if pos_scatter_all.shape[1] > 2 else pos_scatter_all
+
+            # --- load negative fluorescence + scatter events via ProfileUpdater helper ---
             neg_events = self._profile_updater._get_negative_events(control)
             if neg_events is None or len(neg_events) == 0:
                 logger.warning(f'SpectralCleaner: no negative events for "{label}" — skipping.')
                 return
+
+            # --- load negative fluorescence + scatter events ---
+            tube_name = control.get('universal_negative_name') or ''
+            if not tube_name:
+                logger.warning(f'SpectralCleaner: no negative assigned for "{label}" — skipping.')
+                return
+            all_samples_rev2 = {v: k for k, v in self.samples['all_samples'].items()}
+            neg_rel_path = all_samples_rev2.get(tube_name)
+            if not neg_rel_path:
+                logger.warning(f'SpectralCleaner: negative tube "{tube_name}" not found — skipping.')
+                return
+            neg_full_path = str(self.experiment_dir / neg_rel_path)
+            neg_sample = sample_from_fcs(neg_full_path)
+            neg_events, neg_scatter_all = get_raw_events(
+                neg_sample, self.fluor_ch_ids,
+                gate_label=None,
+                gating_strategy=self.raw_gating,
+                extra_channel_ids=scatter_ch_ids,
+            )
+            if len(neg_events) == 0:
+                logger.warning(f'SpectralCleaner: no negative events for "{label}" — skipping.')
+                return
+            neg_scatter = _fsc_ssc_cols(neg_scatter_all) if neg_scatter_all.shape[1] > 2 else neg_scatter_all
 
             # --- determine peak channel index ---
             peak_ch_name = control.get('gate_channel', '')
@@ -730,7 +774,7 @@ class SpectralCleaner(QObject):
                 peak_ch_idx = int(np.argmax(pos_events.mean(axis=0)))
 
             # --- adaptive top-up loop ---
-            quantile  = 0.9995
+            quantile  = 0.995
             initial_n = INITIAL_N
 
             for attempt in range(10):
@@ -739,10 +783,15 @@ class SpectralCleaner(QObject):
                     initial_n=initial_n,
                     positivity_quantile=quantile,
                 )
+                # Keep pos_scatter aligned with the selected positive rows
+                pos_scatter_sel = pos_scatter[sel_idx] if len(pos_scatter) == len(pos_events) else np.empty((0, 2))
+
                 result = clean_control(
                     pos_sel, neg_events, peak_ch_idx,
                     ceiling=self.ceiling,
                     positivity_quantile=quantile,
+                    scatter_pos=pos_scatter_sel,
+                    scatter_neg=neg_scatter,
                 )
 
                 if len(result.positive) >= TARGET_N or quantile <= 0.95:
@@ -764,7 +813,11 @@ class SpectralCleaner(QObject):
             self.cleaned_events[label] = {
                 'positive': result.positive,
                 'negative': result.negative,
+                'scatter_pos': result.scatter_pos,
+                'scatter_neg': result.scatter_neg,
+                'hull_vertices': result.hull_vertices,
                 'n_removed_saturation': result.n_removed_saturation,
+                'n_scatter_matched': result.n_scatter_matched,
                 'n_surviving_positive': result.n_surviving_positive,
                 'positivity_quantile_used': result.positivity_quantile_used,
                 'warnings': result.warnings,
@@ -774,6 +827,7 @@ class SpectralCleaner(QObject):
                 f'SpectralCleaner: "{label}" — '
                 f'{result.n_surviving_positive} positive events selected, '
                 f'{result.n_removed_saturation} removed for saturation, '
+                f'{result.n_scatter_matched} scatter-matched negatives, '
                 f'quantile={result.positivity_quantile_used:.3f}.'
             )
 
