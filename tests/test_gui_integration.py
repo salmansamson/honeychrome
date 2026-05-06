@@ -171,7 +171,7 @@ def app_window(qapp, experiment_dir):
     Tests share this window and must be run in order (use ``-p no:randomly``
     or declare explicit dependencies via ``pytest-order``).
     """
-    from honeychrome.event_bus import EventBus
+    from honeychrome.view_components.event_bus import EventBus
     from honeychrome.controller import Controller
     from honeychrome.view_components.main_window import MainWindow
 
@@ -199,6 +199,8 @@ def test_01_new_experiment(qtbot: QtBot, app_window, experiment_dir):
     """
     Trigger 'New Experiment', supply a name and confirm the experiment is
     created on disk.
+
+    SSR: might work, but this doesn't click in the splash window at all.
     """
     from PySide6.QtWidgets import QFileDialog
 
@@ -240,6 +242,8 @@ def test_02_import_fcs_and_update_channels(qtbot: QtBot, app_window, experiment_
     """
     Open the Import FCS Files dialog, set the Raw subdirectory to the symlinked
     folder, click 'Update Experiment Configuration', and wait for completion.
+
+    SSR: win.bus.experimentUpdated doesn't exist; inconsistent folders re instructions above; doesn't detect difference between default channels and imported
     """
     from PySide6.QtWidgets import QDialog
 
@@ -287,6 +291,8 @@ def test_03_load_raw_sample_histograms(qtbot: QtBot, app_window):
     Click the first sample in the sample pane, switch to the Raw Data tab,
     and verify that histogram data has been computed for all fluorescence
     channels.
+
+    SSR: no real clicking here. extremely crude test criteria, probably has not waited long enough, gui totally bypassed
     """
     win = app_window
     controller = win.controller
@@ -328,7 +334,8 @@ def test_03_load_raw_sample_histograms(qtbot: QtBot, app_window):
 @requires_data
 @pytest.mark.gui
 def test_04_switch_to_spectral_process_tab(qtbot: QtBot, app_window):
-    """Switch to the Spectral Process tab."""
+    """Switch to the Spectral Process tab.
+    ssr: too simple here. hardly worth a separate test"""
     win = app_window
     tabs = win.tabs
     idx = _tab_index(tabs, "Spectral Process")
@@ -349,6 +356,8 @@ def test_05_autogenerate_spectral_model(qtbot: QtBot, app_window):
     Click 'Auto generate spectral controls'.  Because the spectral model is
     empty at this point no confirmation dialog is expected.  Wait for the
     background SpectralAutoGenerator thread to finish.
+
+    ssr: nice to see a proper button press, but checking of spectral model extremely crude.
     """
     win = app_window
     editor = win.spectral_controls_editor
@@ -381,6 +390,8 @@ def test_06_delete_redundant_label_rows(qtbot: QtBot, app_window):
     """
     Select and delete rows with empty or duplicate labels, starting from the
     bottom of the spectral model table.
+
+    ssr: i think this ok, although it is not really much of a test by itself
     """
     win = app_window
     editor = win.spectral_controls_editor
@@ -437,6 +448,8 @@ def test_07_process_viewers_populated(qtbot: QtBot, app_window):
     """
     After auto-generation the profiles viewer, similarity matrix and hotspot
     matrix must all contain data.
+
+    ssr: totally bypasses gui
     """
     win = app_window
     controller = win.controller
@@ -465,6 +478,8 @@ def test_08_load_fully_stained_sample_nxn(qtbot: QtBot, app_window):
     """
     Load the first non-control sample (assumed to be fully stained) and verify
     that the NxN grid is populated (all cells contain image data).
+
+    ssr: along correct lines, but wait probably too short,
     """
     win = app_window
     controller = win.controller
@@ -511,6 +526,8 @@ def test_09_select_singlets_updates_nxn(qtbot: QtBot, app_window):
     """
     Emit a gate-selection event for the 'Singlets' gate and verify that the
     NxN grid updates (pixmap cache is cleared and new data is provided).
+
+    ssr: controller.set_current_gate doesn't exist; gateSelected doesn't exist, test criteria doesn't make sense
     """
     win = app_window
     controller = win.controller
@@ -548,6 +565,8 @@ def test_10_nxn_cell_click_updates_fine_tuning(qtbot: QtBot, app_window):
     Click cell (0, 0) of the NxN grid.  The spillover / fine-tuning heatmap
     (unmixing_viewer) must update to show only the row for that fluorophore,
     and the row-plots inside the NxN viewer must refresh.
+
+    ssr: nonexistent signal, extremely crude criterion, missed the change of spillover
     """
     win = app_window
     nxn_view = win.nxn_viewer.table_view  # QTableView inside NxNGrid
@@ -588,6 +607,8 @@ def test_11_spectral_model_label_selection_filters_views(qtbot: QtBot, app_windo
     Select the first row in the spectral model table.  The profiles viewer,
     similarity matrix, hotspot matrix, fine-tuning matrix and NxN grid must
     all be filtered to show that fluorophore only.
+
+    ssr: looks reasonable for profiles, but ignores matrices
     """
     win = app_window
     editor = win.spectral_controls_editor
@@ -640,6 +661,8 @@ def test_12_unmixed_tab_default_plots_populated(qtbot: QtBot, app_window):
     """
     Switch to the Unmixed Data tab.  The cytometry grid must contain at least
     one populated 2D/histogram plot using the currently loaded sample.
+
+    ssr: trivial
     """
     win = app_window
     tabs = win.tabs
@@ -664,6 +687,8 @@ def test_13_create_new_plot_from_singlets_gate(qtbot: QtBot, app_window):
     """
     Right-click the Singlets item in the unmixed gating hierarchy and choose
     'Create new plot from gate'.  A new 2-D plot must appear in the grid.
+
+    ssr: nonexistent win.bus.createPlotFromGate, poor criterion
     """
     win = app_window
     gating_tree = win.gating_tree_unmixed
@@ -714,6 +739,8 @@ def test_14_change_plot_axes_labels(qtbot: QtBot, app_window):
     """
     On the most recently added plot, change the X axis to CD45 and Y axis to
     CD11b.  The plot data must refresh.
+
+    ssr: bypasses gui interaction and edits plot specification directly, hallucinated signal win.bus.plotUpdated, meaningless criterion
     """
     win = app_window
     controller = win.controller
@@ -759,6 +786,8 @@ def test_15_double_click_pops_out_plot(qtbot: QtBot, app_window):
     """
     Double-clicking an interactive cytometry plot must open it in a detached
     window (DetachedWidget / separate QMainWindow).
+
+    ssr: wrong class (from sandbox!)
     """
     from PySide6.QtCore import Qt
 
@@ -803,6 +832,8 @@ def test_16_draw_polygon_gate(qtbot: QtBot, app_window):
     a series of clicks to draw a triangle gate, double-click to close it,
     and verify the gate is added to the unmixed gating hierarchy with
     statistics populated.
+
+    ssr: can't identify which button is for the polygon gate; wrong class for plot; wrong place to look for stats
     """
     from PySide6.QtCore import Qt, QPoint
 
@@ -888,6 +919,8 @@ def test_17_rename_gate_updates_hierarchy(qtbot: QtBot, app_window):
     """
     Rename the most recently added polygon gate and verify the new label
     is reflected in the gating hierarchy tree.
+
+    ssr: hallucinated rename_gate method, no attempt to click in gui or find gate
     """
     win = app_window
     controller = win.controller
@@ -946,6 +979,9 @@ def test_18_drag_x_axis_near_top_updates_transform(qtbot: QtBot, app_window):
     Drag the X axis label area towards the top of the plot to zoom in /
     change the transform, then confirm the transform stored in the controller
     changes.
+
+    ssr: wrong class, poor aiming, poor criterion
+    _get_active_x_transform looks in wrong place
     """
     from PySide6.QtCore import Qt, QPoint
 
@@ -994,6 +1030,8 @@ def test_19_drag_x_axis_near_bottom_updates_transform(qtbot: QtBot, app_window):
     """
     Drag the X axis label downwards to zoom out / change the lower transform
     bound.  The controller transform must update.
+
+    ssr: ditto
     """
     from PySide6.QtCore import Qt, QPoint
 
