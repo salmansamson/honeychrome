@@ -129,8 +129,10 @@ class DictTreeModel(QAbstractItemModel):
         self.root_item.append_child(parent_item)
         for path in data:
             nevents = self.full_data['all_sample_nevents'][path]
-            icon = load_icon('droplet') if nevents > 0 else load_icon('droplet-empty')
-            # icon = load_icon('test-pipe-2') if nevents > 0 else load_icon('test-pipe-2-empty')
+            if path in self.full_data.get('unstained_samples', []):
+                icon = load_icon('droplet', colour='#4a90d9') if nevents > 0 else load_icon('droplet-empty')
+            else:
+                icon = load_icon('droplet') if nevents > 0 else load_icon('droplet-empty')
             item = TreeItem(icon, str(Path(path).stem), nevents, path, parent_item)
             parent_item.append_child(item)
 
@@ -151,8 +153,10 @@ class DictTreeModel(QAbstractItemModel):
         elif isinstance(data, list):
             for path in data:
                 nevents = self.full_data['all_sample_nevents'][path]
-                icon = load_icon('droplet') if nevents > 0 else load_icon('droplet-empty')
-                # icon = load_icon('test-pipe-2') if nevents > 0 else load_icon('test-pipe-2-empty')
+                if path in self.full_data.get('unstained_samples', []):
+                    icon = load_icon('droplet', colour='#4a90d9') if nevents > 0 else load_icon('droplet-empty')
+                else:
+                    icon = load_icon('droplet') if nevents > 0 else load_icon('droplet-empty')
                 item = TreeItem(icon, str(Path(path).stem), nevents, path, parent_item)
                 parent_item.append_child(item)
         else:
@@ -488,6 +492,10 @@ class SampleWidget(QWidget):
         else:
             unstained.append(path)
         self.controller.experiment.save()
+        self.model.refresh_tree()
+        self.tree_view.expandAll()
+        if self.bus:
+            self.bus.sampleTreeUpdated.emit()
 
     def refresh_sample_tree(self):
         self.controller.experiment.scan_sample_tree()
