@@ -1,13 +1,14 @@
 '''
 Honeychrome - open source cytometry data acquisition and analysis software
 '''
-import shutil
 
 # from honeychrome.tools import DepthFinder # debug module imports here
 
 import os
 import sys
 from pathlib import Path
+import platform
+import shutil
 
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
@@ -146,8 +147,21 @@ def main():
             event_level=logging.ERROR  # Actually send ERROR and above as alerts
         )
         # Keep it anonymous with send_default_pii=False (i.e. all personal data are scrubbed, e.g. usernames, file names and locations, etc)
-        sentry_sdk.init(dsn="https://c99858ad29b86e3c551978e9b72c7724@o4511334133334016.ingest.de.sentry.io/4511334139887696", integrations=[sentry_logging], send_default_pii=False)
+        sentry_sdk.init(dsn="https://c99858ad29b86e3c551978e9b72c7724@o4511334133334016.ingest.de.sentry.io/4511334139887696",
+                        integrations=[sentry_logging],
+                        release=f"honeychrome@{__version__}",
+                        send_default_pii=False)
+        sentry_sdk.set_tag("os_name", platform.system())
+        sentry_sdk.set_tag("os_release", platform.release())
+        sentry_sdk.set_tag("os_version", platform.version())
         sentry_sdk.metrics.count("honeychrome.launch", 1, attributes={"version": __version__, 'platform': sys.platform})
+
+        # # Test sentry
+        # try:
+        #     division_by_zero = 1 / 0
+        # except Exception as e:
+        #     # Manually send the caught exception to Sentry
+        #     sentry_sdk.capture_exception(e)
 
     '''
     define objects for communication between processes
