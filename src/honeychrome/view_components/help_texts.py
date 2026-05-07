@@ -119,8 +119,9 @@ autospectral_af_help_text = '''
 <h5>This is an optional enhancement of the spectral process, which implements the autofluorescence (AF) extraction part of the AutoSpectral package (AutoSpectral AF).</h5>
 <p>By following the steps below, you can extract each cell’s individual autofluorescent background in a manner specific to that cell, producing better unmixing with less spread.</p>
 <ol>
-<li>Extract AF profile from an unstained sample. This can be repeated for each unstained control that you have available, generating multiple AF profiles. 
-Default: 100 clusters. After extraction, the clusters can be inspected by clicking on the Stored AF Profiles list.</li>
+<li>Extract AF profile from an unstained sample. This can be repeated for each unstained control that you have available, generating multiple AF profiles. </li>
+<li>Only unstained cell control samples will appear as options. Mark your unstained samples by right-clicking on the sample and selecting "Mark as Unstained".</li>
+<li>Default: 100 clusters (duplicates will be removed, so you will see fewer). After extraction, the clusters can be inspected by clicking on the Stored AF Profiles list.</li>
 <li>Assign the AF profiles to Samples. Each cell in the sample is automatically assigned its nearest cluster from of the selected controls for a more accurate AF subtraction.</li>
 <li>Inspect the AutoSpectral AF results against standard unmixing. Negative spread and other artifacts caused by inhomogeneous autofluorescence should be much improved.</li>
 </ol>

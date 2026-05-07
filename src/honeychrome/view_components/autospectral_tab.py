@@ -15,6 +15,7 @@ Sections
    Unmixed Data tab.
 """
 
+import re
 from copy import deepcopy
 from pathlib import Path
 
@@ -983,22 +984,35 @@ class AutoSpectralTab(QWidget):
     # ======================================================================
 
     def _populate_sample_combo(self):
-        """Populate unstained-sample picker with all samples (including SSC)."""
+        """Populate unstained-sample picker with cell controls that are marked or
+        regex-identified as unstained."""
         self._sample_combo.blockSignals(True)
         self._sample_combo.clear()
         self._sample_combo.addItem('— select unstained sample —', userData=None)
 
-        all_samples = self.controller.experiment.samples.get('all_samples', {})
-        controls = self.controller.experiment.samples.get('single_stain_controls', [])
-        # Show SSC only since unstained is usually there--if not, user should relocate sample manually
-        candidates = list(controls)
+        samples = self.controller.experiment.samples
+        all_samples = samples.get('all_samples', {})
+        controls = samples.get('single_stain_controls', [])
+        manually_tagged = set(samples.get('unstained_samples', []))
+
+        # Restrict to cell controls that are either manually tagged or match the
+        # "Unstained" regex (but allow tagged files that haven't been marked as Beads)
+        candidates = [
+            p for p in controls
+            if not re.search(r'[Bb]eads', all_samples.get(p, ''))
+            and (
+                p in manually_tagged
+                or 'unstained' in all_samples.get(p, '').lower()
+                or 'unstained' in p.lower()
+            )
+        ]
 
         preselect = 0
         for i, path in enumerate(candidates, start=1):
             display = Path(path).stem
             self._sample_combo.addItem(display, userData=path)
-            if 'unstained' in display.lower():
-                preselect = i
+            if 'unstained' in display.lower() or path in manually_tagged:
+                preselect = preselect or i
 
         if preselect:
             self._sample_combo.setCurrentIndex(preselect)
