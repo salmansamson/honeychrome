@@ -148,6 +148,7 @@ class ExperimentModel:
         self.samples = file_data['samples']
         self.process = file_data['process']
         self.process.setdefault('cleaned_events', {})   # runtime-only; not in older files
+        self.samples.setdefault('unstained_samples', [])  # not present in older .kit files
         self.cytometry = file_data['cytometry']
         self.statistics = file_data['statistics']
 
@@ -233,6 +234,12 @@ class ExperimentModel:
                 self.samples['all_samples'].pop(sample_path)
 
         self.samples['all_sample_nevents'] = all_sample_nevents
+
+        # Prune any manually-tagged unstained samples that no longer exist on disk
+        self.samples['unstained_samples'] = [
+            p for p in self.samples.get('unstained_samples', [])
+            if p in self.samples['all_samples']
+        ]
 
 
 if __name__ == '__main__':

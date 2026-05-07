@@ -131,12 +131,23 @@ class ListTableModel(QtCore.QAbstractTableModel):
             return "" if val is None else str(val)
         return None
 
+    _COLUMN_TOOLTIPS = {
+        'universal_negative_name': (
+            'The unstained sample used as the negative reference for this control.\n'
+            'To add a sample here: right-click any sample in the Sample panel\n'
+            'and choose "Mark as Unstained".'
+        ),
+    }
+
     def headerData(self, section, orientation, role=Qt.DisplayRole):
-        if role != Qt.DisplayRole:
-            return None
         if orientation == Qt.Horizontal:
-            return spectral_model_column_labels[COLUMNS[section]]
-        return section + 1
+            if role == Qt.DisplayRole:
+                return spectral_model_column_labels[COLUMNS[section]]
+            if role == Qt.ToolTipRole:
+                return self._COLUMN_TOOLTIPS.get(COLUMNS[section])
+        if role == Qt.DisplayRole:
+            return section + 1
+        return None
 
     def flags(self, index):
         if not index.isValid():
@@ -369,6 +380,11 @@ class SpectralControlsEditor(QFrame):
             # Beads get the sentinel unconditionally; cells get it only if no Unstained
             # sample exists to auto-assign.
             default_unstained = _find_default_unstained(self.samples['all_samples'])
+            # Also check manually-tagged unstained samples as a fallback
+            if not default_unstained:
+                unstained_paths = self.samples.get('unstained_samples', [])
+                if unstained_paths:
+                    default_unstained = self.samples['all_samples'].get(unstained_paths[0])
             for control in self.model._data:
                 if control.get('control_type') == 'Single Stained Spectral Control':
                     if not control.get('universal_negative_name'):
@@ -536,12 +552,20 @@ class SpectralControlsEditor(QFrame):
         # for a specific control even when the global toggle is "Using unstained negative".
         ssc_paths = self.samples.get('single_stain_controls', [])
         ssc_fcs_names = [self.samples['all_samples'][p] for p in ssc_paths if p in self.samples['all_samples']]
-        universal_negative_options = [INTERNAL_NEGATIVE_SENTINEL] + ssc_fcs_names
+        # Also include manually-tagged unstained samples (may live outside the SSC folder)
+        unstained_paths = self.samples.get('unstained_samples', [])
+        unstained_names = [self.samples['all_samples'][p] for p in unstained_paths
+                        if p in self.samples['all_samples'] and self.samples['all_samples'][p] not in ssc_fcs_names]
+        universal_negative_options = [INTERNAL_NEGATIVE_SENTINEL] + ssc_fcs_names + unstained_names
         is_cell_single_stain = (
             self.model._data[row]['control_type'] == 'Single Stained Spectral Control'
             and self.model._data[row]['particle_type'] == 'Cells'
         )
-        enable_universal_negative_cb = is_cell_single_stain
+        is_bead_single_stain = (
+            self.model._data[row]['control_type'] == 'Single Stained Spectral Control'
+            and self.model._data[row]['particle_type'] == 'Beads'
+        )
+        enable_universal_negative_cb = is_cell_single_stain or is_bead_single_stain
 
         for col_name in ["control_type", "particle_type", "gate_channel", "sample_name", "gate_label", "universal_negative_name"]:
             idx = self.model.index(row, COLUMNS.index(col_name))

@@ -420,6 +420,15 @@ class SampleWidget(QWidget):
 
                 # Add item-specific actions
                 if path in self.model.full_data['all_samples']:
+                    # Unstained toggle
+                    unstained_list = self.controller.experiment.samples.get('unstained_samples', [])
+                    is_unstained = path in unstained_list
+                    mark_action = QAction("Unmark as Unstained" if is_unstained else "Mark as Unstained", self)
+                    mark_action.setCheckable(True)
+                    mark_action.setChecked(is_unstained)
+                    mark_action.triggered.connect(lambda checked, p=path: self.toggle_unstained(p))
+                    menu.addAction(mark_action)
+
                     source_folder = str(self.controller.experiment_dir / self.controller.experiment.settings['raw']['raw_samples_subdirectory'])
                     folders = get_all_subfolders_recursive(source_folder, self.controller.experiment_dir)
                     move_actions = []
@@ -471,6 +480,14 @@ class SampleWidget(QWidget):
         if reply == QMessageBox.Yes:
             sample_path.unlink()
             self.refresh_sample_tree()
+
+    def toggle_unstained(self, path):
+        unstained = self.controller.experiment.samples.setdefault('unstained_samples', [])
+        if path in unstained:
+            unstained.remove(path)
+        else:
+            unstained.append(path)
+        self.controller.experiment.save()
 
     def refresh_sample_tree(self):
         self.controller.experiment.scan_sample_tree()

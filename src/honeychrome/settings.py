@@ -194,6 +194,7 @@ samples_default = {
     'all_samples': {},
     'all_sample_nevents': {},
     'sample_af_profiles': {},
+    'unstained_samples': [],
 }
 
 process_default = {

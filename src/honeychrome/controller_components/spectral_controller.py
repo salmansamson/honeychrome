@@ -127,7 +127,10 @@ class ProfileUpdater:
                                                     self.controller.filtered_raw_fluorescence_channel_ids)
                 return True
             else:
-                raise Exception(f'No sample in Single Stain Controls is named "Unstained".')
+                raise Exception(
+                    'No unstained sample found. Name a control "Unstained", or right-click '
+                    'any sample in the sample panel and choose "Mark as Unstained".'
+                )
         except Exception as e:
             text = f'Failed to generate profile of unstained negative. {e}.'
             warnings.warn(text)
@@ -305,7 +308,7 @@ class ProfileUpdater:
                                     f'Go back to the raw data and adjust your gates. ')
                             else:
                                 raise Exception(f'Profile {control['label']} is negative: this will yield nonsense results. '
-                                    f'Make sure the unstained negative has lower fluorescence than tha positive. '
+                                    f'Make sure the unstained negative has lower fluorescence than the positive. '
                                     f'Go back to the raw data and adjust your gates (or use internal negatives).')
 
                         control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
@@ -417,12 +420,19 @@ class SpectralAutoGenerator(QObject):
     def get_unstained_negative(self):
         try:
             sample_path = None
-            for path in self.samples['all_samples']:
-                match_path = re.findall('([Uu]nstained)', path)
-                match_tubename = re.findall('([Uu]nstained)', self.samples['all_samples'][path])
-                if match_path or match_tubename:
+            # 1. Check manually designated unstained samples first
+            for path in self.samples.get('unstained_samples', []):
+                if path in self.samples['all_samples']:
                     sample_path = path
                     break
+            # 2. Fall back to filename/tubename regex
+            if sample_path is None:
+                for path in self.samples['all_samples']:
+                    match_path = re.findall('([Uu]nstained)', path)
+                    match_tubename = re.findall('([Uu]nstained)', self.samples['all_samples'][path])
+                    if match_path or match_tubename:
+                        sample_path = path
+                        break
             if sample_path:
                 full_sample_path = str(self.experiment_dir / sample_path)
                 sample = sample_from_fcs(full_sample_path)
@@ -579,7 +589,7 @@ class SpectralAutoGenerator(QObject):
                     # report = self.raw_gating.gate_sample(sample).report.set_index('gate_name')  # Note this is slow
                     # print(f'{label}: explained variance {int(explained_variance * 100)}, best channel {self.event_channels_pnn[channel_id_best_match]}, brightest events {int(best_match)}/100, gate {report.loc[positive_gate_label]['count']}/100')
 
-                    default_unstained = _find_default_unstained_tube(self.samples['all_samples']) if particle_type == 'Cells' else None
+                    default_unstained = _find_default_unstained_tube(self.samples['all_samples'])
                     control = {'label': label, 'control_type': 'Single Stained Spectral Control', 'particle_type': particle_type,
                                'gate_channel': gate_channel, 'sample_name': tubename,
                                'sample_path': full_sample_path, 'gate_label': positive_gate_label,
@@ -681,7 +691,7 @@ class SpectralCleaner(QObject):
         eligible = [
             c for c in self.spectral_model
             if c.get('control_type') == 'Single Stained Spectral Control'
-            and c.get('particle_type') == 'Cells'
+            and c.get('particle_type') in ('Cells', 'Beads')
             and c.get('universal_negative_name')
         ]
 
