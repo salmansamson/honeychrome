@@ -49,6 +49,7 @@ from honeychrome.view_components.cytometry_plot_components import (
     ZoomAxis,
     TransparentGraphicsLayoutWidget,
 )
+from honeychrome.view_components.profiles_viewer import BottomAxisVerticalTickLabels
 import honeychrome.settings as settings
 
 import logging
@@ -764,6 +765,7 @@ class AutoSpectralTab(QWidget):
             self.bus.modeChangeRequested.connect(self._on_mode_change)
             self.bus.loadSampleRequested.connect(self._on_sample_loaded)
             self.bus.spectralProcessRefreshed.connect(self._on_process_refreshed)
+            self.bus.sampleTreeUpdated.connect(self._populate_sample_combo)
 
     def save_visibility(self, checked):
         self.settings.setValue("show_autospectral_af", checked)
@@ -782,10 +784,10 @@ class AutoSpectralTab(QWidget):
         layout.addRow('Unstained sample:', self._sample_combo)
 
         self._n_clusters_spin = QSpinBox()
-        self._n_clusters_spin.setRange(4, 400)
-        self._n_clusters_spin.setValue(100)
+        self._n_clusters_spin.setRange(4, 1000)
+        self._n_clusters_spin.setValue(200)
         self._n_clusters_spin.setToolTip(
-            'KMeans cluster count (equivalent to som.dim²=100 in R AutoSpectral).'
+            'KMeans cluster count (equivalent to som.dim² in R AutoSpectral).'
         )
         layout.addRow('AF clusters:', self._n_clusters_spin)
 
@@ -802,12 +804,15 @@ class AutoSpectralTab(QWidget):
         grp = QGroupBox('Stored AF Profiles')
         layout = QVBoxLayout(grp)
 
-        self._profile_plot = pg.PlotWidget()
-        self._profile_plot.setBackground('w')
-        self._profile_plot.setLabel('left', 'Normalised intensity')
-        self._profile_plot.setLabel('bottom', 'Channel index')
-        self._profile_plot.setMaximumHeight(180)
+        self._profile_plot_axis = BottomAxisVerticalTickLabels()
+        self._profile_plot = pg.PlotWidget(axisItems={'bottom': self._profile_plot_axis})
+        self._profile_plot.setLabel('left', 'Intensity')
+        self._profile_plot.showGrid(x=True, y=True, alpha=0.3)
+        self._profile_plot.setMaximumHeight(440)
         self._profile_plot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        # Disable mouse wheel rescaling
+        self._profile_plot.setMouseEnabled(x=False, y=False)
+        self._profile_plot.getViewBox().wheelEvent = lambda ev: None
         layout.addWidget(self._profile_plot)
 
         self._profile_list = QListWidget()
@@ -1175,9 +1180,22 @@ class AutoSpectralTab(QWidget):
             nPts=max(n_af, 2), alpha=False
         )
         x = np.arange(n_ch)
+
+        # Set detector labels on x-axis
+        channel_names = entry.get('channel_names', [])
+        print(f'[AF plot] n_ch={n_ch}, channel_names count={len(channel_names)}, '
+              f'first 3: {channel_names[:3]}')
+        if channel_names and len(channel_names) == n_ch:
+            ticks = [[(i, name) for i, name in enumerate(channel_names)], []]
+            print(f'[AF plot] setting ticks, first tick: {ticks[0][0]}')
+            self._profile_plot_axis.setTicks(ticks)
+        else:
+            print(f'[AF plot] WARNING: channel_names length mismatch or empty — no ticks set')
+            self._profile_plot_axis.setTicks(None)
+
         for i, row in enumerate(af_spectra):
             pen = (pg.mkPen(color=(0, 0, 0), width=2) if i == 0
-                   else pg.mkPen(color=colours[i], width=1))
+                else pg.mkPen(color=colours[i], width=1))
             self._profile_plot.plot(x, row, pen=pen)
 
     def _save_selected_profile_csv(self):
