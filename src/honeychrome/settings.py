@@ -97,6 +97,7 @@ spectral_negative_gate_percent = 25 # take the bottom few percent of events
 
 spectral_model_column_labels = {
     "label": "Label",
+    'antigen': 'Antigen', 
     "control_type": "Control Type",
     "particle_type": "Particle Type",
     "gate_channel": "Major Channel",

@@ -77,6 +77,9 @@ where = ["src"]
 "" = "src"
 
 [tool.setuptools.package-data]
+"honeychrome" = ["data/*.csv"]
+
+[tool.setuptools.package-data]
 "honeychrome" = ["**/*.svg", "**/*.png", "**/*.ico", "**/*.fcs"]
 
 # Optional: Testing configuration

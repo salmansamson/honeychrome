@@ -30,6 +30,10 @@ def get_project_files():
     templates_dest = os.path.join('honeychrome', 'plugin_templates')
     assets.append((templates_path, templates_dest))
 
+    label_data_path = os.path.join(project_root, 'src', 'honeychrome', 'data')
+    label_data_destination = os.path.join('honeychrome', 'data')
+    assets.append((label_data_path, label_data_destination))
+
     return assets
 
 def main():

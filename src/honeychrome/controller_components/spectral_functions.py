@@ -267,7 +267,7 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles, existing_
 
 def sanitise_control_in_place(control):
     if control['control_type'] == 'Single Stained Spectral Control':
-        control['gate_channel'] = ''
+        pass  # gate_channel is set by the auto-generator and must not be cleared on re-generation
     elif control['control_type'] == 'Single Stained Spectral Control from Library':
         control['particle_type'] = ''
         control['gate_channel'] = ''

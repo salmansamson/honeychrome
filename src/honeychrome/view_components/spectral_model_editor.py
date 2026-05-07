@@ -155,7 +155,7 @@ class ListTableModel(QtCore.QAbstractTableModel):
             return Qt.ItemIsEnabled
         colname = COLUMNS[index.column()]
         base = Qt.ItemIsSelectable | Qt.ItemIsEnabled
-        if colname == "label":
+        if colname in ("label", "antigen"):
             base |= Qt.ItemIsEditable
         return base
 
@@ -267,18 +267,21 @@ class SpectralControlsEditor(QFrame):
         header = self.view.horizontalHeader()
         header.setMinimumSectionSize(100)
         header.setStretchLastSection(True)
-        header.setSectionResizeMode(0, QHeaderView.Interactive)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(6, QHeaderView.Stretch)
-        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(8, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.Interactive)   # label
+        header.setSectionResizeMode(1, QHeaderView.Interactive)   # antigen
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # control_type
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # particle_type
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # gate_channel
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # sample_name
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # gate_label
+        header.setSectionResizeMode(7, QHeaderView.Stretch)           # universal_negative_name
+        header.setSectionResizeMode(8, QHeaderView.ResizeToContents)  # use_cleaned
+        header.setSectionResizeMode(9, QHeaderView.ResizeToContents)  # af_remove
 
         self.label_delegate = LabelDelegate()
         self.view.setItemDelegateForColumn(COLUMNS.index("label"), self.label_delegate)
+        self.antigen_delegate = LabelDelegate()
+        self.view.setItemDelegateForColumn(COLUMNS.index("antigen"), self.antigen_delegate)
 
         self.model.dataDeletedSignal.connect(self._on_delete_controls)
 
@@ -802,8 +805,20 @@ class SpectralControlsEditor(QFrame):
     def _do_update_control(self):
         index = self._pending_update_index
         col = self._pending_update_col
-        label_only = (COLUMNS[col] == 'label') # track cosmetic changes
+        label_only = (COLUMNS[col] in ('label', 'antigen')) # track cosmetic changes
         if index is None:
+            return
+        if label_only:
+            control = self.model._data[index]
+            # Keep the profiles dict key in sync with the (possibly renamed) label.
+            # ProfileUpdater.flush() would do this on the next functional edit anyway,
+            # but doing it here keeps profiles consistent immediately.
+            old_labels = [k for k in self.profile_updater.profiles if k not in [c['label'] for c in self.model._data]]
+            new_labels = [c['label'] for c in self.model._data if c['label'] not in self.profile_updater.profiles]
+            for old, new in zip(old_labels, new_labels):
+                self.profile_updater.profiles[new] = self.profile_updater.profiles.pop(old)
+            self.bus.showSelectedProfiles.emit([control['label']])
+            logger.info(f'SpectralModelEditor: cosmetic edit on row {index}, col "{COLUMNS[col]}" — skipping regeneration')
             return
         self.setEnabled(False)  # block further interaction during generate
         control = self.model._data[index]

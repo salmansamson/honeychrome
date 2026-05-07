@@ -9,6 +9,7 @@ from flowkit import Dimension, gates
 
 from honeychrome.controller_components.functions import timer, sample_from_fcs
 from honeychrome.controller_components.spectral_functions import get_best_channel, get_profile, get_profile_from_events
+from honeychrome.controller_components.label_matching import match_fluorophore, match_marker, get_fluorophore_db, get_marker_db
 from honeychrome.controller_components.spectral_librarian import SpectralLibrary
 from honeychrome.experiment_model import check_fcs_matches_experiment
 from honeychrome.view_components.busy_cursor import with_busy_cursor
@@ -497,10 +498,13 @@ class SpectralAutoGenerator(QObject):
                 warnings.warn(f'Unknown particle type from name, assigning as {particle_type}')
 
             match = re.findall(r'^(.*?)(?=\(|cell|bead)', tubename, re.IGNORECASE)
-            if match:
-                label = match[0].strip()
-            else:
-                label = tubename
+            raw_label = match[0].strip() if match else tubename
+
+            canonical_fluor = match_fluorophore(raw_label, get_fluorophore_db())
+            label = canonical_fluor if canonical_fluor else raw_label
+
+            canonical_marker = match_marker(raw_label, get_marker_db())
+            antigen = canonical_marker or ''
 
             # discard if label is already in spectral model
             if label in [control['label'] for control in self.spectral_model]:
@@ -590,10 +594,17 @@ class SpectralAutoGenerator(QObject):
                     # print(f'{label}: explained variance {int(explained_variance * 100)}, best channel {self.event_channels_pnn[channel_id_best_match]}, brightest events {int(best_match)}/100, gate {report.loc[positive_gate_label]['count']}/100')
 
                     default_unstained = _find_default_unstained_tube(self.samples['all_samples'])
-                    control = {'label': label, 'control_type': 'Single Stained Spectral Control', 'particle_type': particle_type,
-                               'gate_channel': gate_channel, 'sample_name': tubename,
-                               'sample_path': full_sample_path, 'gate_label': positive_gate_label,
-                               'universal_negative_name': default_unstained or ''}
+                    control = {
+                        'label': label,
+                        'antigen': antigen,
+                        'control_type': 'Single Stained Spectral Control', 
+                        'particle_type': particle_type,
+                        'gate_channel': gate_channel, 
+                        'sample_name': tubename,
+                        'sample_path': full_sample_path, 
+                        'gate_label': positive_gate_label,
+                        'universal_negative_name': default_unstained or '',
+                    }
 
                     positive_profile = get_profile(sample, control['gate_label'], self.raw_gating, self.fluorescence_channel_ids)
                     if self.controller.experiment.process['negative_type'] == 'unstained':
