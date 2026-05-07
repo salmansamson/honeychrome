@@ -121,7 +121,7 @@ autospectral_af_help_text = '''
 <ol>
 <li>Extract AF profile from an unstained sample. This can be repeated for each unstained control that you have available, generating multiple AF profiles. </li>
 <li>Only unstained cell control samples will appear as options. Mark your unstained samples by right-clicking on the sample and selecting "Mark as Unstained".</li>
-<li>Default: 100 clusters (duplicates will be removed, so you will see fewer). After extraction, the clusters can be inspected by clicking on the Stored AF Profiles list.</li>
+<li>Default: 200 clusters (duplicates will be removed, so you will see fewer). After extraction, the clusters can be inspected by clicking on the Stored AF Profiles list.</li>
 <li>Assign the AF profiles to Samples. Each cell in the sample is automatically assigned its nearest cluster from of the selected controls for a more accurate AF subtraction.</li>
 <li>Inspect the AutoSpectral AF results against standard unmixing. Negative spread and other artifacts caused by inhomogeneous autofluorescence should be much improved.</li>
 </ol>
