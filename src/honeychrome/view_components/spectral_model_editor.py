@@ -1,5 +1,6 @@
 import json
 import sys
+import re
 from datetime import datetime
 from typing import List, Any, Dict
 from PySide6 import QtCore
@@ -551,12 +552,33 @@ class SpectralControlsEditor(QFrame):
         # The sentinel option lets users explicitly opt back into the internal negative
         # for a specific control even when the global toggle is "Using unstained negative".
         ssc_paths = self.samples.get('single_stain_controls', [])
-        ssc_fcs_names = [self.samples['all_samples'][p] for p in ssc_paths if p in self.samples['all_samples']]
-        # Also include manually-tagged unstained samples (may live outside the SSC folder)
-        unstained_paths = self.samples.get('unstained_samples', [])
-        unstained_names = [self.samples['all_samples'][p] for p in unstained_paths
-                        if p in self.samples['all_samples'] and self.samples['all_samples'][p] not in ssc_fcs_names]
-        universal_negative_options = [INTERNAL_NEGATIVE_SENTINEL] + ssc_fcs_names + unstained_names
+        manually_tagged = set(self.samples.get('unstained_samples', []))
+        particle_type = self.model._data[row].get('particle_type', '')
+
+        # Restrict to samples that are unstained (manually tagged or regex) and
+        # match the particle type of this control (Cells or Beads)
+        unstained_options = []
+        for p in ssc_paths:
+            if p not in self.samples['all_samples']:
+                continue
+            tube_name = self.samples['all_samples'][p]
+            is_unstained = (
+                p in manually_tagged
+                or 'unstained' in tube_name.lower()
+                or 'unstained' in p.lower()
+            )
+            if not is_unstained:
+                continue
+            # Match particle type: Beads tube for Beads control, non-Beads for Cells
+            import re
+            is_bead = bool(re.search(r'[Bb]eads', tube_name))
+            if particle_type == 'Beads' and not is_bead:
+                continue
+            if particle_type == 'Cells' and is_bead:
+                continue
+            unstained_options.append(tube_name)
+
+        universal_negative_options = [INTERNAL_NEGATIVE_SENTINEL] + unstained_options
         is_cell_single_stain = (
             self.model._data[row]['control_type'] == 'Single Stained Spectral Control'
             and self.model._data[row]['particle_type'] == 'Cells'
