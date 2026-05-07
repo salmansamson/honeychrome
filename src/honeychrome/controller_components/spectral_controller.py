@@ -8,7 +8,7 @@ from PySide6.QtCore import QObject, Signal, QTimer
 from flowkit import Dimension, gates
 
 from honeychrome.controller_components.functions import timer, sample_from_fcs
-from honeychrome.controller_components.spectral_functions import get_best_channel, get_profile
+from honeychrome.controller_components.spectral_functions import get_best_channel, get_profile, get_profile_from_events
 from honeychrome.controller_components.spectral_librarian import SpectralLibrary
 from honeychrome.experiment_model import check_fcs_matches_experiment
 from honeychrome.view_components.busy_cursor import with_busy_cursor
@@ -41,7 +41,7 @@ class ProfileUpdater:
         self.n_fluorophore_channels = None
         self.fluorescence_channels_pnn = []
         self.unstained_negative = None          # legacy mean-vector cache — kept for existing generate() path
-        self._negative_events_cache: dict[str, np.ndarray] = {}  # Stage 1+: raw event arrays keyed by tube name
+        self._negative_events_cache: dict[str, np.ndarray] = {}
         self.refresh()
 
     def refresh(self):
@@ -141,7 +141,7 @@ class ProfileUpdater:
         Resolve and return raw fluorescence event array for the negative of *control*.
 
         Priority order:
-          1. control["universal_negative_name"] — per-control assignment (Stage 1+)
+          1. control["universal_negative_name"] — per-control assignment
           2. Global unstained fallback (negative_type == "unstained")
           3. None — caller falls back to existing gate-mean path
 
@@ -204,19 +204,26 @@ class ProfileUpdater:
                         if not self.raw_gating.find_matching_gate_paths(positive_gate_label):
                             raise Exception(f'Positive gate label {positive_gate_label} not present in Raw Data. ')
 
-                        # Stage 2: use cleaned event pool when available and opted in
+                        # use cleaned event pool when available and opted in
                         cleaned_store = self.controller.experiment.process.get('cleaned_events', {})
                         cleaned = cleaned_store.get(control['label']) if control.get('use_cleaned') is not False else None
                         if cleaned is not None and len(cleaned.get('positive', [])) > 0:
-                            positive_profile = cleaned['positive'].mean(axis=0)
-                            negative_profile = cleaned['negative'].mean(axis=0)
-                            profile = positive_profile - negative_profile
+                            pos_events = cleaned['positive']
+                            neg_events = cleaned['negative']
+
+                            # RLM profile extraction
+                            peak_ch_name = control.get('gate_channel', '')
+                            try:
+                                peak_ch_idx = self.controller.filtered_raw_fluorescence_channel_ids.index(
+                                    self.event_channels_pnn.index(peak_ch_name)
+                                ) if peak_ch_name else int(np.argmax(pos_events.mean(axis=0)))
+                            except (ValueError, IndexError):
+                                peak_ch_idx = int(np.argmax(pos_events.mean(axis=0)))
+
+                            profile = get_profile_from_events(pos_events, neg_events, peak_ch_idx, label=control.get('label', ''))
+
                             if profile.sum() == 0:
-                                profile = positive_profile
-                            if profile.sum() > 0:
-                                profile = profile / profile.max()
-                            else:
-                                raise Exception(f'Cleaned profile for "{control["label"]}" is zero or negative.')
+                                raise Exception(f'RLM profile for "{control["label"]}" is zero — check event pool.')
                             control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
                             profile = profile.tolist()
                             self.profiles[control['label']] = profile
@@ -629,7 +636,7 @@ class SpectralAutoGenerator(QObject):
 
 
 # ---------------------------------------------------------------------------
-# SpectralCleaner — Stage 2
+# SpectralCleaner
 # Runs saturation exclusion + brightest-event selection for all cell controls
 # that have a universal_negative_name.  Stores CleanResult in
 # experiment.process["cleaned_events"][label].
@@ -641,7 +648,7 @@ INITIAL_N = 250   # starting cushion
 
 class SpectralCleaner(QObject):
     """
-    Runs the AutoSpectral cleaning pipeline (Stage 2: saturation exclusion +
+    Runs the AutoSpectral cleaning pipeline (saturation exclusion +
     brightest-event selection) for every eligible cell control.
 
     Instantiate, optionally move to a QThread, then call run().
@@ -786,12 +793,14 @@ class SpectralCleaner(QObject):
                 # Keep pos_scatter aligned with the selected positive rows
                 pos_scatter_sel = pos_scatter[sel_idx] if len(pos_scatter) == len(pos_events) else np.empty((0, 2))
 
+                af_remove = bool(control.get('af_remove', False))
                 result = clean_control(
                     pos_sel, neg_events, peak_ch_idx,
                     ceiling=self.ceiling,
                     positivity_quantile=quantile,
                     scatter_pos=pos_scatter_sel,
                     scatter_neg=neg_scatter,
+                    opts={'af_remove': af_remove},
                 )
 
                 if len(result.positive) >= TARGET_N or quantile <= 0.95:
@@ -817,9 +826,14 @@ class SpectralCleaner(QObject):
                 'scatter_neg': result.scatter_neg,
                 'hull_vertices': result.hull_vertices,
                 'n_removed_saturation': result.n_removed_saturation,
+                'n_removed_af': result.n_removed_af,
                 'n_scatter_matched': result.n_scatter_matched,
                 'n_surviving_positive': result.n_surviving_positive,
                 'positivity_quantile_used': result.positivity_quantile_used,
+                'af_boundary_neg': result.af_boundary_neg,
+                'af_boundary_pos': result.af_boundary_pos,
+                'af_ch_idx': result.af_ch_idx,
+                'af_peak_ch_idx': result.af_peak_ch_idx,
                 'warnings': result.warnings,
             }
 

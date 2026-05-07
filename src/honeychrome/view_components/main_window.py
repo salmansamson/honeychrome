@@ -23,6 +23,8 @@ from honeychrome.view_components.heatmap_viewedit import HeatmapViewEditor
 from honeychrome.view_components.nxn_grid import NxNGrid
 from honeychrome.view_components.profiles_viewer import ProfilesViewer
 from honeychrome.view_components.scatter_cleaning_viewer import ScatterCleaningViewer
+from honeychrome.view_components.af_cleaning_viewer import AfCleaningViewer
+from honeychrome.view_components.scatter_cleaning_viewer import ScatterCleaningViewer
 from honeychrome.view_components.spectral_model_editor import SpectralControlsEditor
 from honeychrome.view_components.cytometry_grid_widget import CytometryGridWidget
 from honeychrome.view_components.cytometry_toolbar import CytometryToolbar
@@ -87,6 +89,7 @@ class MainWindow(QMainWindow):
         self.spectral_controls_editor = SpectralControlsEditor(bus, self.controller, parent=self)
         self.profiles_viewer = ProfilesViewer(bus, self.controller, parent=self)
         self.scatter_cleaning_viewer = ScatterCleaningViewer(bus, self.controller, parent=self)
+        self.af_cleaning_viewer = AfCleaningViewer(bus, self.controller, parent=self)
         self.similarity_viewer = HeatmapViewEditor(bus, self.controller, 'similarity_matrix', is_dark, parent=self)
         self.hotspot_viewer = HeatmapViewEditor(bus, self.controller, 'hotspot_matrix', is_dark, parent=self)
         self.unmixing_viewer = HeatmapViewEditor(bus, self.controller, 'unmixing_matrix', is_dark, parent=self)
@@ -254,6 +257,7 @@ class MainWindow(QMainWindow):
         self.process_layout.addWidget(self.spectral_controls_editor)
         self.process_layout.addWidget(self.profiles_viewer)
         self.process_layout.addWidget(self.scatter_cleaning_viewer)
+        self.process_layout.addWidget(self.af_cleaning_viewer)
         self.process_layout.addWidget(self.similarity_viewer)
         self.process_layout.addWidget(self.hotspot_viewer)
         self.process_layout.addWidget(self.unmixing_viewer)

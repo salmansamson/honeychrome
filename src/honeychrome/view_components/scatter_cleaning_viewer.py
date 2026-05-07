@@ -161,7 +161,7 @@ class ScatterCleaningViewer(QFrame):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(2)
 
-        title = QLabel('Scatter-Matching Diagnostics')
+        title = QLabel('Scatter-matching Diagnostics')
         title.setStyleSheet(heading_style)
         outer.addWidget(title)
 

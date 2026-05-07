@@ -1,4 +1,5 @@
 import warnings
+import logging
 
 import numpy as np
 from flowkit import GatingStrategy
@@ -6,6 +7,7 @@ from flowkit import GatingStrategy
 
 import honeychrome.settings as settings
 
+logger = logging.getLogger(__name__)
 
 def get_best_channel(sample, gating_strategy, base_gate_label, fluorescence_channel_ids):
     from sklearn.decomposition import PCA
@@ -89,6 +91,88 @@ def get_profile(sample, gate_label, raw_gating, fluorescence_channel_ids):
         profile = np.zeros(len(fluorescence_channel_ids))
         warnings.warn('No events in gate')
 
+    return profile
+
+def get_profile_from_events(
+    positive_events: np.ndarray,   # (n, n_fluor_ch) — cleaned, scatter-matched
+    negative_events: np.ndarray,   # (n, n_fluor_ch) — scatter-matched negative
+    peak_ch_idx: int,
+    label: str = '',
+) -> np.ndarray:
+    """
+    Fit a robust linear model (RLM) for each channel regressed on the peak
+    channel, using the combined positive+negative event pool.
+
+    Each off-peak channel is modelled as:
+        other_ch ~ peak_ch
+    using sklearn's HuberRegressor (IRLS with Huber loss — equivalent to
+    MASS::rlm in R).  The slope is the spectral coefficient for that channel.
+    IRLS down-weighting means saturated outliers or residual AF events
+    have minimal influence even if they survive cleaning.
+
+    Returns an L-infinity normalised profile vector.
+    """
+    from sklearn.linear_model import HuberRegressor
+
+    combined = np.vstack([positive_events, negative_events])
+    n_pos = len(positive_events)
+    n_neg = len(negative_events)
+    if n_neg > n_pos:
+        rng = np.random.default_rng(42)
+        neg_idx = rng.choice(n_neg, n_pos, replace=False)
+        combined = np.vstack([positive_events, negative_events[neg_idx]])
+    x = combined[:, peak_ch_idx]
+    n_ch = positive_events.shape[1]
+    profile = np.zeros(n_ch)
+    profile[peak_ch_idx] = 1.0
+
+    # Vectorised IRLS: fit all channels simultaneously using a single shared
+    # weight vector derived from the peak-channel residuals.
+    x_c = x - x.mean()
+    # Exclude peak channel from regression — hardcoded to 1.0 as in R
+    off_peak = [ch for ch in range(n_ch) if ch != peak_ch_idx]
+    Y = combined[:, off_peak] - combined[:, off_peak].mean(axis=0)
+
+    # Per-channel OLS initialisation for delta (one value per channel)
+    slopes_ols = (x_c @ Y) / (x_c @ x_c + 1e-9)
+    residuals_ols = Y - x_c[:, None] * slopes_ols
+    mad_per_ch = np.median(np.abs(residuals_ols - np.median(residuals_ols, axis=0)), axis=0)
+    delta = 1.345 * np.where(mad_per_ch > 1e-9, mad_per_ch, residuals_ols.std(axis=0))
+
+    # Per-channel weight matrix: W is (n_events, n_ch)
+    n_off = len(off_peak)
+    W = np.ones((len(x_c), n_off))
+    prev_slopes = np.zeros(n_off)
+    for i in range(50):
+        # Weighted regression per channel: slope_ch = sum(w_ch * x * y_ch) / sum(w_ch * x^2)
+        wx = W * x_c[:, None]
+        slopes = (wx * Y).sum(axis=0) / ((wx * x_c[:, None]).sum(axis=0) + 1e-9)
+        residuals = Y - x_c[:, None] * slopes
+        # Huber weights independently per channel
+        W = np.where(np.abs(residuals) <= delta, 1.0, delta / (np.abs(residuals) + 1e-9))
+        slope_change = np.max(np.abs(slopes - prev_slopes))
+        prev_slopes[:] = slopes
+        if slope_change < 1e-6:
+            logger.info(f'get_profile_from_events: "{label}": IRLS converged at iteration {i+1} (slope_change={slope_change:.2e})')
+            break
+    else:
+        logger.info(f'get_profile_from_events: "{label}": IRLS reached max iterations (slope_change={slope_change:.2e}) — falling back to mean-difference profile')
+        pos_mean = positive_events.mean(axis=0)
+        neg_mean = negative_events.mean(axis=0)
+        peak_denom = pos_mean[peak_ch_idx] - neg_mean[peak_ch_idx]
+        if abs(peak_denom) > 1e-9:
+            slopes = (pos_mean - neg_mean) / peak_denom
+        else:
+            slopes = pos_mean
+
+    full_slopes = np.zeros(n_ch)
+    full_slopes[off_peak] = slopes
+    full_slopes[peak_ch_idx] = 1.0
+    profile = np.clip(full_slopes, 0, None)
+
+    profile = np.clip(profile, 0, None)
+    if profile.max() > 0:
+        profile /= profile.max()
     return profile
 
 def calculate_spectral_process(raw_settings, spectral_model, profiles, existing_spillover=None):

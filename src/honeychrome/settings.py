@@ -104,6 +104,7 @@ spectral_model_column_labels = {
     "gate_label": "Positive Gate",
     "universal_negative_name": "Universal Negative",
     "use_cleaned": "Use Cleaned",
+    "af_remove": "Exclude noise",
 }
 
 # Sentinel value stored in universal_negative_name when the user explicitly
@@ -207,6 +208,7 @@ process_default = {
     'spillover': None,
     'af_profiles': {},
     'cleaned_events': {},
+    'spectral_cleaning_opts': {},   # global fallback opts (currently unused; per-control af_remove preferred)
 }
 
 cytometry_default = {
