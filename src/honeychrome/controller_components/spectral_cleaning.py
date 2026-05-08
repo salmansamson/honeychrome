@@ -475,25 +475,19 @@ def clean_control(
     result_warnings: list[str] = []
 
     # --- saturation exclusion ---
-    pos_clean, n_sat_pos = exclude_saturated(positive_events, ceiling)
-    neg_clean, n_sat_neg = exclude_saturated(negative_events, ceiling)
+    sat_threshold = ceiling * 0.9995
+    pos_sat_mask = ~np.any(positive_events >= sat_threshold, axis=1)
+    neg_sat_mask = ~np.any(negative_events >= sat_threshold, axis=1)
+
+    pos_clean = positive_events[pos_sat_mask]
+    neg_clean = negative_events[neg_sat_mask]
+    n_sat_pos = int(np.sum(~pos_sat_mask))
+    n_sat_neg = int(np.sum(~neg_sat_mask))
     n_removed_saturation = n_sat_pos + n_sat_neg
 
-    # Keep scatter arrays aligned with their fluorescence counterparts after
-    # saturation exclusion.  We track which rows survive using boolean masks.
-    if scatter_pos is not None and len(scatter_pos) == len(positive_events):
-        sat_threshold = ceiling * 0.9995
-        pos_sat_mask = ~np.any(positive_events >= sat_threshold, axis=1)
-        scatter_pos_clean = scatter_pos[pos_sat_mask]
-    else:
-        scatter_pos_clean = np.empty((0, 2))
-
-    if scatter_neg is not None and len(scatter_neg) == len(negative_events):
-        sat_threshold = ceiling * 0.9995
-        neg_sat_mask = ~np.any(negative_events >= sat_threshold, axis=1)
-        scatter_neg_clean = scatter_neg[neg_sat_mask]
-    else:
-        scatter_neg_clean = np.empty((0, 2))
+    # Keep scatter arrays aligned using the same masks.
+    scatter_pos_clean = scatter_pos[pos_sat_mask] if (scatter_pos is not None and len(scatter_pos) == len(positive_events)) else np.empty((0, 2))
+    scatter_neg_clean = scatter_neg[neg_sat_mask] if (scatter_neg is not None and len(scatter_neg) == len(negative_events)) else np.empty((0, 2))
 
     # --- AF removal (optional, off by default) ---
     n_removed_af = 0
@@ -504,19 +498,15 @@ def clean_control(
         cleaned_pos, n_removed_af, af_boundary_neg, af_ch_idx_result = remove_af_contamination(
             pos_clean, neg_clean, peak_ch_idx
         )
-        # Store the same boundary polygon for the positive plot (same channel space)
         af_boundary_pos = af_boundary_neg
         if n_removed_af > 0:
-            # Keep scatter_pos_clean aligned after AF removal
-            if scatter_pos_clean.shape[0] == len(pos_clean):
-                af_keep_mask = np.ones(len(pos_clean), dtype=bool)
-                # Reconstruct which rows were removed for alignment
+            # Derive the keep mask from pos_clean before reassigning it,
+            # so scatter_pos_clean stays aligned with cleaned_pos.
+            if scatter_pos_clean.shape[0] == len(pos_clean) and af_boundary_neg is not None:
                 from matplotlib.path import Path as _Path
-                if af_boundary_neg is not None:
-                    pos_2d = pos_clean[:, [af_ch_idx_result, peak_ch_idx]]
-                    inside = _Path(af_boundary_neg).contains_points(pos_2d)
-                    af_keep_mask = ~inside
-                scatter_pos_clean = scatter_pos_clean[af_keep_mask]
+                pos_2d = pos_clean[:, [af_ch_idx_result, peak_ch_idx]]
+                inside = _Path(af_boundary_neg).contains_points(pos_2d)
+                scatter_pos_clean = scatter_pos_clean[~inside]
             pos_clean = cleaned_pos
 
     # --- scatter matching ---
