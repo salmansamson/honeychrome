@@ -8,6 +8,7 @@ from PySide6.QtCore import QObject, Signal, QTimer, QSettings
 from flowkit import Sample
 
 from honeychrome.controller_components.functions import apply_transfer_matrix, export_unmixed_sample
+from honeychrome.controller_components.autospectral_functions import precompute_af_matrices, combine_af_precomputed, apply_af_transfer
 import honeychrome.settings as settings
 from honeychrome.view_components.busy_cursor import with_busy_cursor
 
@@ -75,7 +76,38 @@ class UnmixedExporter(QObject):
                 n_events = sample.event_count
 
                 if n_events > 0:
-                    unmixed_event_data_without_fine_tuning = apply_transfer_matrix(transfer_matrix, raw_event_data)
+                    # Check whether this sample has AutoSpectral AF profiles assigned
+                    sample_af_profiles = self.controller.experiment.samples.get('sample_af_profiles', {})
+                    assigned_profile_names = sample_af_profiles.get(sample_path, [])
+                    all_af_profiles = self.controller.experiment.process.get('af_profiles', {})
+                    active_profiles = [all_af_profiles[name] for name in assigned_profile_names if name in all_af_profiles]
+
+                    if active_profiles:
+                        # Build combined AF precomputed matrices for this sample's assigned profiles
+                        fluor_spectra = self.controller._build_fluor_spectra()
+                        precomputed_list = [
+                            precompute_af_matrices(
+                                fluor_spectra,
+                                np.array(p['spectra'])
+                            )
+                            for p in active_profiles
+                        ]
+                        af_precomputed = combine_af_precomputed(precomputed_list)
+                        # Stack all AF spectra row-wise across assigned profiles
+                        af_spectra = np.vstack([np.array(p['spectra']) for p in active_profiles])
+
+                        unmixed_event_data_without_fine_tuning = apply_af_transfer(
+                            raw_event_data,
+                            transfer_matrix,
+                            af_precomputed,
+                            af_spectra,
+                            self.controller.experiment.settings,
+                            filtered_fl_ids_raw=list(fl_channel_ids_raw),
+                        )
+                        logger.info(f'UnmixedExporter: using AF unmixing for {sample_path} ({len(active_profiles)} profile(s))')
+                    else:
+                        unmixed_event_data_without_fine_tuning = apply_transfer_matrix(transfer_matrix, raw_event_data)
+
                     export_unmixed_sample(sample_name, full_unmixed_sample_path.parent, unmixed_event_data_without_fine_tuning, pnn_unmixed, spillover, subsample=self.subsample)
 
             logger.info(f'UnmixedExporter: finished')
@@ -97,6 +129,7 @@ if __name__ == "__main__":
 
     kc = Controller()
     base_directory = Path.home() / 'spectral_cytometry'
+    # is this a test set-up?
     experiment_name = base_directory / '20240620 Spectral Symposium-poor cell unmixed'
     experiment_path = experiment_name.with_suffix('.kit')
     kc.load_experiment(experiment_path) # note this loads first sample too and runs calculate all histograms and statistics
