@@ -187,11 +187,14 @@ class AfCleaningViewer(QFrame):
 
     def refresh_combo(self):
         cleaned = self.controller.experiment.process.get('cleaned_events', {})
-        # Only show controls that actually had AF removal run (af_ch_idx is set)
-        labels = sorted(
-            label for label, data in cleaned.items()
-            if data.get('af_ch_idx') is not None
-        )
+        spectral_model = self.controller.experiment.process.get('spectral_model', [])
+        # Only show controls that actually had AF removal run (af_ch_idx is set),
+        # ordered as they appear in the spectral model.
+        model_order = [c['label'] for c in spectral_model if 'label' in c]
+        labels = [
+            label for label in model_order
+            if label in cleaned and cleaned[label].get('af_ch_idx') is not None
+        ]
         current = self._combo.currentText()
         self._combo.blockSignals(True)
         self._combo.clear()
