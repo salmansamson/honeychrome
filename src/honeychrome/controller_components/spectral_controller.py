@@ -488,12 +488,14 @@ class SpectralAutoGenerator(QObject):
         nevents = self.samples['all_sample_nevents'][sample_path]
         tubename = self.samples['all_samples'][sample_path]
         if nevents > 0:
-            # Skip samples whose name or path contains "Unstained" or "Negative" —
-            # these are used as reference negatives, not as single-stain controls.
+            # Skip samples whose name or path contains "Unstained" or "Negative",
+            # or that have been manually marked as unstained by the user.
             # Users can still add them manually via the +Add Control button.
+            manually_unstained = set(self.samples.get('unstained_samples', []))
             if re.search(r'(unstained|negative)', tubename, re.IGNORECASE) or \
-               re.search(r'(unstained|negative)', sample_path, re.IGNORECASE):
-                logger.info(f'generate_spectral_control: skipping "{tubename}" (matches unstained/negative pattern)')
+               re.search(r'(unstained|negative)', sample_path, re.IGNORECASE) or \
+               sample_path in manually_unstained:
+                logger.info(f'generate_spectral_control: skipping "{tubename}" (matches unstained/negative pattern or manually marked as unstained)')
                 return True
 
             particle_type = 'Cells'
