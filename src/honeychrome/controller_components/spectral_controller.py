@@ -217,8 +217,9 @@ class ProfileUpdater:
 
                             # RLM profile extraction
                             peak_ch_name = control.get('gate_channel', '')
+                            cleaned_fluor_ch_ids = cleaned.get('fluor_ch_ids') or self.controller.filtered_raw_fluorescence_channel_ids
                             try:
-                                peak_ch_idx = self.controller.filtered_raw_fluorescence_channel_ids.index(
+                                peak_ch_idx = cleaned_fluor_ch_ids.index(
                                     self.event_channels_pnn.index(peak_ch_name)
                                 ) if peak_ch_name else int(np.argmax(pos_events.mean(axis=0)))
                             except (ValueError, IndexError):
@@ -396,11 +397,11 @@ class SpectralAutoGenerator(QObject):
         for n in range(self.progress_target):
             if self.bus:
                 self.bus.progress.emit(n, self.progress_target)
-            success = self.generate_spectral_control(n)   # do your expensive work here
+            success = self.generate_spectral_control(n)
             if not success:
                 if self.bus:
                     QTimer.singleShot(100, lambda: self.bus.statusMessage.emit(f'Failed to generate profile of spectral control {n}.'))
-                break # is this necessary?
+                continue
             if self.bus:
                 self.bus.spectralControlAdded.emit()
 
@@ -487,6 +488,14 @@ class SpectralAutoGenerator(QObject):
         nevents = self.samples['all_sample_nevents'][sample_path]
         tubename = self.samples['all_samples'][sample_path]
         if nevents > 0:
+            # Skip samples whose name or path contains "Unstained" or "Negative" —
+            # these are used as reference negatives, not as single-stain controls.
+            # Users can still add them manually via the +Add Control button.
+            if re.search(r'(unstained|negative)', tubename, re.IGNORECASE) or \
+               re.search(r'(unstained|negative)', sample_path, re.IGNORECASE):
+                logger.info(f'generate_spectral_control: skipping "{tubename}" (matches unstained/negative pattern)')
+                return True
+
             particle_type = 'Cells'
             match = re.findall('([Cc]ells|[Bb]eads)', tubename)
             if match:
@@ -499,6 +508,9 @@ class SpectralAutoGenerator(QObject):
 
             match = re.findall(r'^(.*?)(?=\(|cell|bead)', tubename, re.IGNORECASE)
             raw_label = match[0].strip() if match else tubename
+
+            # Strip leading plate-position prefixes like "A1 ", "B12 " before label matching
+            raw_label = re.sub(r'^[A-H]\d{1,2}\s+', '', raw_label).strip()
 
             canonical_fluor = match_fluorophore(raw_label, get_fluorophore_db())
             label = canonical_fluor if canonical_fluor else raw_label
@@ -629,7 +641,7 @@ class SpectralAutoGenerator(QObject):
                         warnings.warn(text)
                         if self.bus:
                             self.bus.warningMessage.emit(text)
-                            return False
+                        return False
 
                     # add control and profile if there wasn't a warning / exception above
                     self.spectral_model.append(control)
@@ -699,23 +711,43 @@ class SpectralCleaner(QObject):
 
     @with_busy_cursor
     def run(self):
-        eligible = [
+        from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
+
+        eligible_external = [
             c for c in self.spectral_model
             if c.get('control_type') == 'Single Stained Spectral Control'
-            and c.get('particle_type') in ('Cells', 'Beads')
+            and c.get('particle_type') == 'Cells'
             and c.get('universal_negative_name')
+            and c.get('universal_negative_name') != INTERNAL_NEGATIVE_SENTINEL
         ]
 
-        total = len(eligible)
-        for n, control in enumerate(eligible):
+        eligible_internal = [
+            c for c in self.spectral_model
+            if c.get('control_type') == 'Single Stained Spectral Control'
+            and (
+                c.get('particle_type') == 'Beads'
+                or c.get('universal_negative_name') == INTERNAL_NEGATIVE_SENTINEL
+            )
+        ]
+
+        all_eligible = eligible_external + eligible_internal
+        total = len(all_eligible)
+
+        for n, control in enumerate(eligible_external):
             if self.bus:
                 self.bus.progress.emit(n, total)
+            self._clean_one(control)
+
+        for n, control in enumerate(eligible_internal):
+            if self.bus:
+                self.bus.progress.emit(len(eligible_external) + n, total)
             self._clean_one(control)
 
         if self.bus:
             self.bus.progress.emit(total, total)
 
-        logger.info(f'SpectralCleaner: cleaned {total} cell controls.')
+        logger.info(f'SpectralCleaner: cleaned {len(eligible_external)} cell controls '
+                    f'and {len(eligible_internal)} internal/bead controls.')
         self.cleaningFinished.emit()
 
     def _clean_one(self, control: dict):
@@ -763,34 +795,50 @@ class SpectralCleaner(QObject):
             
             pos_scatter = _fsc_ssc_cols(pos_scatter_all) if pos_scatter_all.shape[1] > 2 else pos_scatter_all
 
-            # --- load negative fluorescence + scatter events via ProfileUpdater helper ---
-            neg_events = self._profile_updater._get_negative_events(control)
-            if neg_events is None or len(neg_events) == 0:
-                logger.warning(f'SpectralCleaner: no negative events for "{label}" — skipping.')
-                return
-
-            # --- load negative fluorescence + scatter events ---
-            tube_name = control.get('universal_negative_name') or ''
-            if not tube_name:
-                logger.warning(f'SpectralCleaner: no negative assigned for "{label}" — skipping.')
-                return
-            all_samples_rev2 = {v: k for k, v in self.samples['all_samples'].items()}
-            neg_rel_path = all_samples_rev2.get(tube_name)
-            if not neg_rel_path:
-                logger.warning(f'SpectralCleaner: negative tube "{tube_name}" not found — skipping.')
-                return
-            neg_full_path = str(self.experiment_dir / neg_rel_path)
-            neg_sample = sample_from_fcs(neg_full_path)
-            neg_events, neg_scatter_all = get_raw_events(
-                neg_sample, self.fluor_ch_ids,
-                gate_label=None,
-                gating_strategy=self.raw_gating,
-                extra_channel_ids=scatter_ch_ids,
+            # --- load negative events ---
+            # Beads and [Internal Negative] controls: use the bottom of the positive
+            # sample's own peak-channel distribution as the negative.
+            # No external file, no scatter matching (empty scatter arrays cause
+            # scatter_match_negative to be skipped inside clean_control).
+            from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
+            use_internal = (
+                control.get('particle_type') == 'Beads'
+                or control.get('universal_negative_name') == INTERNAL_NEGATIVE_SENTINEL
             )
-            if len(neg_events) == 0:
-                logger.warning(f'SpectralCleaner: no negative events for "{label}" — skipping.')
-                return
-            neg_scatter = _fsc_ssc_cols(neg_scatter_all) if neg_scatter_all.shape[1] > 2 else neg_scatter_all
+
+            logger.info(
+                f'_clean_one: "{label}" particle_type={control.get("particle_type")!r} '
+                f'universal_negative_name={control.get("universal_negative_name")!r} '
+                f'use_internal={use_internal}'
+            )
+
+            if use_internal:
+                neg_events = np.empty((0, pos_events.shape[1]))  # kept empty so select_positive_events does top-N only
+                neg_events_internal = np.empty((0, pos_events.shape[1]))  # populated after peak channel resolved
+                neg_scatter = np.empty((0, 2))
+            else:
+                neg_events_internal = None
+                tube_name = control.get('universal_negative_name') or ''
+                if not tube_name:
+                    logger.warning(f'SpectralCleaner: no negative assigned for "{label}" — skipping.')
+                    return
+                all_samples_rev2 = {v: k for k, v in self.samples['all_samples'].items()}
+                neg_rel_path = all_samples_rev2.get(tube_name)
+                if not neg_rel_path:
+                    logger.warning(f'SpectralCleaner: negative tube "{tube_name}" not found — skipping.')
+                    return
+                neg_full_path = str(self.experiment_dir / neg_rel_path)
+                neg_sample = sample_from_fcs(neg_full_path)
+                neg_events, neg_scatter_all = get_raw_events(
+                    neg_sample, self.fluor_ch_ids,
+                    gate_label=None,
+                    gating_strategy=self.raw_gating,
+                    extra_channel_ids=scatter_ch_ids,
+                )
+                if len(neg_events) == 0:
+                    logger.warning(f'SpectralCleaner: no negative events for "{label}" — skipping.')
+                    return
+                neg_scatter = _fsc_ssc_cols(neg_scatter_all) if neg_scatter_all.shape[1] > 2 else neg_scatter_all
 
             # --- determine peak channel index ---
             peak_ch_name = control.get('gate_channel', '')
@@ -800,6 +848,13 @@ class SpectralCleaner(QObject):
                 )
             except (ValueError, IndexError):
                 peak_ch_idx = int(np.argmax(pos_events.mean(axis=0)))
+
+            # For internal-negative controls the negative is the bottom-N events of the positive sample.
+            if use_internal:
+                peak_vals = pos_events[:, peak_ch_idx]
+                n_neg = min(INITIAL_N, len(peak_vals))
+                bot_idx = np.argsort(peak_vals)[:n_neg]
+                neg_events_internal = pos_events[bot_idx]
 
             # --- adaptive top-up loop ---
             quantile  = 0.995
@@ -816,7 +871,9 @@ class SpectralCleaner(QObject):
 
                 af_remove = bool(control.get('af_remove', False))
                 result = clean_control(
-                    pos_sel, neg_events, peak_ch_idx,
+                    pos_sel,
+                    neg_events_internal if use_internal else neg_events,
+                    peak_ch_idx,
                     ceiling=self.ceiling,
                     positivity_quantile=quantile,
                     scatter_pos=pos_scatter_sel,
@@ -832,17 +889,27 @@ class SpectralCleaner(QObject):
                 initial_n = min(500, int(initial_n * 1.5))
 
             if len(result.positive) < TARGET_N:
-                msg = (f'SpectralCleaner: only {len(result.positive)} events '
-                       f'available for "{label}" after cleaning; '
-                       f'profile may be unreliable.')
-                logger.warning(msg)
-                if self.bus:
-                    self.bus.warningMessage.emit(msg)
+                    msg = (f'SpectralCleaner: only {len(result.positive)} events '
+                        f'available for "{label}" after cleaning; '
+                        f'profile may be unreliable.')
+                    logger.warning(msg)
+                    if self.bus:
+                        self.bus.warningMessage.emit(msg)
+
+            # For internal-negative controls, clear scatter arrays so the viewer
+            # does not display them as if scatter matching against an external
+            # negative had occurred.
+            if use_internal:
+                result.scatter_pos = np.empty((0, 2))
+                result.scatter_neg = np.empty((0, 2))
+                result.hull_vertices = None
+                result.n_scatter_matched = 0    
 
             # --- store result (runtime only — not serialised) ---
             self.cleaned_events[label] = {
                 'positive': result.positive,
                 'negative': result.negative,
+                'fluor_ch_ids': list(self.fluor_ch_ids),
                 'scatter_pos': result.scatter_pos,
                 'scatter_neg': result.scatter_neg,
                 'hull_vertices': result.hull_vertices,
