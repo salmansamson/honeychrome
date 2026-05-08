@@ -161,9 +161,9 @@ def get_profile_from_events(
         neg_mean = negative_events.mean(axis=0)
         peak_denom = pos_mean[peak_ch_idx] - neg_mean[peak_ch_idx]
         if abs(peak_denom) > 1e-9:
-            slopes = (pos_mean - neg_mean) / peak_denom
+            slopes = (pos_mean - neg_mean)[off_peak] / peak_denom
         else:
-            slopes = pos_mean
+            slopes = pos_mean[off_peak]
 
     full_slopes = np.zeros(n_ch)
     full_slopes[off_peak] = slopes
