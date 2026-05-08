@@ -255,10 +255,17 @@ class ScatterCleaningViewer(QFrame):
 
     def refresh_combo(self):
         cleaned = self.controller.experiment.process.get('cleaned_events', {})
+        spectral_model = self.controller.experiment.process.get('spectral_model', [])
+        # Only include controls that actually underwent scatter matching,
+        # ordered as they appear in the spectral model.
+        model_order = [c['label'] for c in spectral_model if 'label' in c]
+        labels = [
+            label for label in model_order
+            if label in cleaned and cleaned[label].get('n_scatter_matched', 0) > 0
+        ]
         current = self._combo.currentText()
         self._combo.blockSignals(True)
         self._combo.clear()
-        labels = sorted(cleaned.keys())
         self._combo.addItems(labels)
         if current in labels:
             self._combo.setCurrentText(current)
@@ -394,7 +401,11 @@ class ScatterCleaningViewer(QFrame):
                 and stored_scatter_neg.shape[0] > 0):
             neg_scatter_matched = stored_scatter_neg[:, :2].astype(float)
 
-        if neg_name:
+        # Only load and display the external negative background if scatter matching
+        # actually took place (i.e. n_scatter_matched > 0). For internal-negative
+        # and bead controls the universal_negative_name may still be populated but
+        # is irrelevant — do not display it.
+        if neg_name and cleaned.get('n_scatter_matched', 0) > 0:
             neg_rel = all_samples_rev.get(neg_name)
             if neg_rel:
                 try:
