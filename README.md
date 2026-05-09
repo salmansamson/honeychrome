@@ -49,6 +49,8 @@ You have the following options, depending on whether you want to use the Python 
 code or just download an executable. For most users, it is sufficient to download
 an executable for your platform (Windows/Linux/MacOS).
 
+This project uses the SignPath Foundation for code signing.
+
 Note that the plugin system is only available if Honeychrome is run from the Python source code.
 
 ### For non-programmers: download and run executable
@@ -67,7 +69,7 @@ A set of compressed binary packages are available in the releases section.
 (For other Linux systems, please use the Python instructions below.)
 
 #### MacOs
-1. Download [Honeychrome for MacOS (arm64)](https://github.com/salmansamson/honeychrome/releases/download/v0.7.3/honeychrome-v0.7.3-macos-arm64.dmg) or [Honeychrome for MacOS (intel)](https://github.com/salmansamson/honeychrome/releases/download/v0.7.3/honeychrome-v0.7.3-macos-intel.dmg)
+1. Download [Honeychrome for MacOS (arm64)](https://github.com/salmansamson/honeychrome/releases/download/v0.7.3/honeychrome-v0.7.3-macos-arm64.dmg)
 2. Open the disk image and drag honeychrome.app to your Applications folder.
 3. Double click the app in your Applications folder to run 
 
