@@ -34,6 +34,7 @@ import warnings
 from honeychrome.controller_components.functions import (
     sample_from_fcs,
     apply_transfer_matrix,
+    build_display_label_map,
 )
 from honeychrome.controller_components.autospectral_functions import (
     get_af_spectra,
@@ -359,10 +360,14 @@ class AfComparisonPlotWidget(QWidget):
         pnn = self.controller.experiment.settings['unmixed'].get('event_channels_pnn', [])
         fl_ids = self.controller.experiment.settings['unmixed'].get('fluorescence_channel_ids', [])
         fl_names = [pnn[i] for i in fl_ids] if pnn and fl_ids else []
+        pnn_labels = build_display_label_map(
+            pnn, self.controller.experiment.process.get('spectral_model')
+        )
+        fl_display = [pnn_labels.get(n, n) for n in fl_names]
 
         # X axis
-        self.label_x.setText(self._channel_x)
-        self.label_x.leftClickMenuItems = fl_names
+        self.label_x.setText(pnn_labels.get(self._channel_x, self._channel_x))
+        self.label_x.leftClickMenuItems = fl_display
         self.label_x.leftItemSelected = (
             fl_names.index(self._channel_x) if self._channel_x in fl_names else 0
         )
@@ -374,8 +379,8 @@ class AfComparisonPlotWidget(QWidget):
         self.vb.setXRange(*tr_x.limits, padding=0)
 
         # Y axis
-        self.label_y.setText(self._channel_y)
-        self.label_y.leftClickMenuItems = fl_names
+        self.label_y.setText(pnn_labels.get(self._channel_y, self._channel_y))
+        self.label_y.leftClickMenuItems = fl_display
         self.label_y.leftItemSelected = (
             fl_names.index(self._channel_y) if self._channel_y in fl_names else 0
         )

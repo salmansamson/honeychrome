@@ -26,6 +26,7 @@ class HeatmapGridModel(QAbstractTableModel):
         self.controller = controller
 
         self._pixmap_cache = {}
+        self.pnn_labels = {}
         self._pixmap_size = QSize(settings.tile_size_nxn_grid_retrieved, settings.tile_size_nxn_grid_retrieved)
 
         self.colormap = self.get_colorcet_colormap(settings.colourmap_name_retrieved)
@@ -53,12 +54,13 @@ class HeatmapGridModel(QAbstractTableModel):
         return qt_colors
 
 
-    def update_data(self, data, horizontal_headers, vertical_headers):
+    def update_data(self, data, horizontal_headers, vertical_headers, pnn_labels=None):
         self.beginResetModel()  # Notify view that model is about to be reset
         self._data = data
         self._pixmap_cache = {}
         self.horizontal_headers = horizontal_headers
         self.vertical_headers = vertical_headers
+        self.pnn_labels = pnn_labels if pnn_labels is not None else {}
         self.endResetModel()  # Notify view that model has been reset
 
     def rowCount(self, parent=QModelIndex()):
@@ -152,9 +154,11 @@ class HeatmapGridModel(QAbstractTableModel):
 
         if role == Qt.DisplayRole:
             if orientation == Qt.Horizontal:
-                return self.horizontal_headers[section]
+                ch = self.horizontal_headers[section]
+                return self.pnn_labels.get(ch, ch)
             elif orientation == Qt.Vertical:
-                return self.vertical_headers[section]
+                ch = self.vertical_headers[section]
+                return self.pnn_labels.get(ch, ch)
         return None
 
 
@@ -443,7 +447,8 @@ class NxNGrid(QFrame):
                             selected_row_chan = self.vertical_headers[index.row()]
                             selected_col_chan = self.horizontal_headers[index.column()]
 
-                        self.model.update_data(self.heatmaps, self.horizontal_headers, self.vertical_headers)
+                        pnn_labels = self.controller.data_for_cytometry_plots_process.get('pnn_labels') or {}
+                        self.model.update_data(self.heatmaps, self.horizontal_headers, self.vertical_headers, pnn_labels=pnn_labels)
 
                         if index.isValid():
                             QTimer.singleShot(0, lambda : self.set_selected_cell(selected_row_chan, selected_col_chan))
@@ -452,8 +457,8 @@ class NxNGrid(QFrame):
                         self.setVisible(False)
                 else:
                     self.setVisible(False)
-        except:
-            self._process_spillover_change()
+        except Exception as e:
+            logger.warning(f'NxN Grid: refresh_heatmaps failed ({e}), skipping update.')
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Wheel:

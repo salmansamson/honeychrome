@@ -558,3 +558,19 @@ def rename_label_offset(plot, old_gate_name, gate_name):
         if old_gate_name in plot['label_offsets']:
             plot['label_offsets'][gate_name] = plot['label_offsets'][old_gate_name]
             plot['label_offsets'].pop(old_gate_name)
+
+def build_display_label_map(pnn, spectral_model):
+    """
+    Returns a dict {pnn_name: display_label} for all channels.
+    Fluorophore channels with a non-empty antigen get "Antigen Label";
+    all other channels map to themselves.
+    """
+    label_to_antigen = {
+        control['label']: control.get('antigen', '')
+        for control in (spectral_model or [])
+    }
+    result = {}
+    for name in pnn:
+        antigen = label_to_antigen.get(name, '')
+        result[name] = f'{antigen} {name}'.strip() if antigen else name
+    return result

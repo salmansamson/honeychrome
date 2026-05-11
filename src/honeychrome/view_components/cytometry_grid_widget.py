@@ -241,6 +241,8 @@ class CytometryGridWidget(QScrollArea):
             self.debounce_timer.start(300)
 
     def init_grid(self):
+        if self.data_for_cytometry_plots is None:
+            return
         # called every time width changes
         if self.data_for_cytometry_plots['plots']:
             old_n_columns = self.n_columns

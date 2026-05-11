@@ -40,7 +40,7 @@ from multiprocessing import shared_memory
 import time
 
 from honeychrome.experiment_model import ExperimentModel, check_fcs_matches_experiment
-from honeychrome.controller_components.functions import apply_gates_in_place, apply_transfer_matrix, generate_transformations, update_transforms, initialise_hists, calc_hists, calc_stats, initialise_stats, assign_default_transforms, define_quad_gates, define_range_gate, define_polygon_gate, define_rectangle_gate, define_ellipse_gate, add_recent_file, empty_queue_nowait, define_process_plots, get_set_or_initialise_label_offset, sample_from_fcs
+from honeychrome.controller_components.functions import apply_gates_in_place, apply_transfer_matrix, generate_transformations, update_transforms, initialise_hists, calc_hists, calc_stats, initialise_stats, assign_default_transforms, define_quad_gates, define_range_gate, define_polygon_gate, define_rectangle_gate, define_ellipse_gate, add_recent_file, empty_queue_nowait, define_process_plots, get_set_or_initialise_label_offset, sample_from_fcs, build_display_label_map
 from honeychrome.controller_components.gml_functions_mod_from_flowkit import from_gml, to_gml
 from honeychrome.settings import traces_cache_size, traces_cache_dtype, adc_rate
 import honeychrome.settings as settings
@@ -65,6 +65,7 @@ logger = logging.getLogger(__name__)
 # raw, spectral process, unmixed, statistics, etc.
 cytometry_data_dictionary = {
     'pnn': None, # list of channel names
+    'pnn_labels': None, # antigen dye labels
     'fluoro_indices': None, # list of fluorescence channel indices to the list of channel names
     'lookup_tables': None, # dictionary of boolean lookup tables for each gate on the 1D or 2D plot on which the gate is defined (for fast gating)
     'event_data': None, # event data (which may be raw or unmixed depending on the copy of the dictionary)
@@ -441,9 +442,15 @@ class Controller(QObject):
                 self.unmixed_lookup_tables = {}
                 process_plots = []
 
+            unmixed_pnn = self.experiment.settings['unmixed']['event_channels_pnn']
+            unmixed_pnn_labels = build_display_label_map(
+                unmixed_pnn, self.experiment.process.get('spectral_model')
+            )
+
             self.data_for_cytometry_plots_process.update(
                 {
                     'pnn': self.experiment.settings['unmixed']['event_channels_pnn'],
+                    'pnn_labels': unmixed_pnn_labels,
                     'fluoro_indices': self.experiment.settings['unmixed']['fluorescence_channel_ids'],
                     'transformations': self.unmixed_transformations,
                     'gating': self.unmixed_gating,
@@ -455,6 +462,7 @@ class Controller(QObject):
             self.data_for_cytometry_plots_unmixed.update(
                 {
                     'pnn': self.experiment.settings['unmixed']['event_channels_pnn'],
+                    'pnn_labels': unmixed_pnn_labels,
                     'fluoro_indices': self.experiment.settings['unmixed']['fluorescence_channel_ids'],
                     'transformations': self.unmixed_transformations,
                     'gating': self.unmixed_gating,
@@ -798,12 +806,6 @@ class Controller(QObject):
 
             self.clear_data_for_cytometry_plots()
             self.initialise_data_for_cytometry_plots()
-            # ensure unmixed data is always updated, histograms recalculated
-            if self.experiment.process['unmixing_matrix'] is not None and self.current_mode != 'unmixed':
-                saved = self.data_for_cytometry_plots
-                self.data_for_cytometry_plots = self.data_for_cytometry_plots_unmixed
-                self.initialise_data_for_cytometry_plots(force_recalc_histograms=True)
-                self.data_for_cytometry_plots = saved
         else:
             if self.bus:
                 self.bus.openImportFCSWidget.emit(True)
@@ -830,10 +832,14 @@ class Controller(QObject):
     def reapply_fine_tuning(self):
         self.initialise_transfer_matrix()
         # ensure AutoSpectral AF applies to Unmixed Data tab
+        ### note: this overwrites any fine tuning--changes to apply_af_transfer are required
         import threading
         threading.Thread(target=self.cache_all_af_profiles, daemon=True).start()
         if self.raw_event_data is not None:
             self.unmixed_event_data = apply_transfer_matrix(self.transfer_matrix, self.raw_event_data)
+            # Keep unmixed event_data dict pointers current so plots render correctly
+            self.data_for_cytometry_plots_unmixed.update({'event_data': self.unmixed_event_data})
+            self.data_for_cytometry_plots_process.update({'event_data': self.unmixed_event_data})
 
     @Slot()
     def on_gain_change(self, ch_name, value):
@@ -1060,14 +1066,31 @@ class Controller(QObject):
         if self.current_mode == 'process':
             self.data_for_cytometry_plots.update({'event_data': self.unmixed_event_data})
             self.data_for_cytometry_plots['histograms'] = initialise_hists(self.data_for_cytometry_plots['plots'], self.data_for_cytometry_plots)
-            self.data_for_cytometry_plots['gate_membership'] = {}
+            # Seed gate_membership with root so calc_hists_and_stats enters the correct branch
+            # and calc_stats never encounters a missing gate key.
+            if self.unmixed_event_data is not None:
+                self.data_for_cytometry_plots['gate_membership'] = {
+                    'root': np.ones(len(self.unmixed_event_data), dtype=np.bool_)
+                }
+            else:
+                self.data_for_cytometry_plots['gate_membership'] = {}
+            # Capture the dict reference now — protects the thread if set_mode switches later
+            process_data_snapshot = self.data_for_cytometry_plots
             threading.Thread(
                 target=self._reinitialise_process_plots_worker,
+                args=(process_data_snapshot,),
                 daemon=True,
             ).start()
 
-    def _reinitialise_process_plots_worker(self):
-        self.calc_hists_and_stats()
+    def _reinitialise_process_plots_worker(self, data_snapshot):
+        # Use the snapshot captured at slot-fire time, not self.data_for_cytometry_plots
+        # which may have been redirected to a different dict by set_mode on the main thread.
+        original = self.data_for_cytometry_plots
+        self.data_for_cytometry_plots = data_snapshot
+        try:
+            self.calc_hists_and_stats()
+        finally:
+            self.data_for_cytometry_plots = original
         logger.info(f'Controller: prepared hists for process plots')
 
     @Slot(str, str)

@@ -160,6 +160,7 @@ class CytometryPlotWidget(QFrame):
 
         # initialise configuration
         self.pnn = self.data_for_cytometry_plots['pnn']
+        self.pnn_labels = self.data_for_cytometry_plots.get('pnn_labels') or {}
         self.fluoro_indices = self.data_for_cytometry_plots['fluoro_indices']
         self.transformations = self.data_for_cytometry_plots['transformations']
         self.statistics = self.data_for_cytometry_plots['statistics']
@@ -319,14 +320,14 @@ class CytometryPlotWidget(QFrame):
 
         elif self.plot['type'] == 'hist1d':
             # set labels and view
-            self.label_x.setText(self.plot['channel_x'])
+            self.label_x.setText(self.pnn_labels.get(self.plot['channel_x'], self.plot['channel_x']))
             self.label_y.setText('Count')
             self.img.setVisible(False)
             self.hist.setVisible(True)
             self.vb.enableAutoRange(axis=self.vb.YAxis, enable=True)
 
             # set menus
-            self.label_x.leftClickMenuItems = self.pnn + ['All Fluorescence']
+            self.label_x.leftClickMenuItems = [self.pnn_labels.get(ch, ch) for ch in self.pnn] + ['All Fluorescence']
             if self.transformations[self.plot['channel_x']].id == 'default':
                 self.label_x.rightItemSelected = 'default'
                 self.label_x.rightClickMenuItems = []
@@ -335,7 +336,7 @@ class CytometryPlotWidget(QFrame):
                 self.label_x.rightItemSelected = self.transformations[self.plot['channel_x']].id
                 self.label_x.rightClickMenuItems = transforms_menu_items
                 self.vb.setMouseEnabled(x=False, y=False)
-            self.label_y.leftClickMenuItems = self.pnn + ['Count']
+            self.label_y.leftClickMenuItems = [self.pnn_labels.get(ch, ch) for ch in self.pnn] + ['Count']
             self.label_y.leftItemSelected = len(self.pnn)
             self.label_y.rightItemSelected = 'default'
             self.label_y.rightClickMenuItems = []
@@ -354,16 +355,16 @@ class CytometryPlotWidget(QFrame):
 
         elif self.plot['type'] == 'hist2d':
             # set labels and view
-            self.label_x.setText(self.plot['channel_x'])
-            self.label_y.setText(self.plot['channel_y'])
+            self.label_x.setText(self.pnn_labels.get(self.plot['channel_x'], self.plot['channel_x']))
+            self.label_y.setText(self.pnn_labels.get(self.plot['channel_y'], self.plot['channel_y']))
             self.img.setVisible(True)
             self.hist.setVisible(False)
 
             # set menus
-            self.label_x.leftClickMenuItems = self.pnn + ['All Fluorescence']
+            self.label_x.leftClickMenuItems = [self.pnn_labels.get(ch, ch) for ch in self.pnn] + ['All Fluorescence']
             self.label_x.leftItemSelected = self.pnn.index(self.plot['channel_x'])
             self.label_x.rightItemSelected = self.transformations[self.plot['channel_x']].id
-            self.label_y.leftClickMenuItems = self.pnn + ['Count']
+            self.label_y.leftClickMenuItems = [self.pnn_labels.get(ch, ch) for ch in self.pnn] + ['Count']
             self.label_y.leftItemSelected = self.pnn.index(self.plot['channel_y'])
             self.label_y.rightItemSelected = self.transformations[self.plot['channel_y']].id
             self.label_x.rightClickMenuItems = transforms_menu_items
