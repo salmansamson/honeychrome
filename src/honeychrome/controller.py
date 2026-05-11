@@ -829,6 +829,9 @@ class Controller(QObject):
 
     def reapply_fine_tuning(self):
         self.initialise_transfer_matrix()
+        # ensure AutoSpectral AF applies to Unmixed Data tab
+        import threading
+        threading.Thread(target=self.cache_all_af_profiles, daemon=True).start()
         if self.raw_event_data is not None:
             self.unmixed_event_data = apply_transfer_matrix(self.transfer_matrix, self.raw_event_data)
 
@@ -989,6 +992,7 @@ class Controller(QObject):
         elif tab_name == 'Unmixed Data':
             self.current_mode = 'unmixed'
             self.data_for_cytometry_plots = self.data_for_cytometry_plots_unmixed
+            self.initialise_data_for_cytometry_plots(force_recalc_histograms=True)
         elif tab_name == 'Statistics':
             self.current_mode = 'statistics'
             self.data_for_cytometry_plots = self.data_for_cytometry_plots_unmixed
