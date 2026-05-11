@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 import colorcet as cc
-from PySide6.QtCore import Qt, QThread, Signal, QObject, QRectF, QSettings, QTimer
+from PySide6.QtCore import Qt, QThread, Signal, QObject, QRectF, QSettings, QTimer, QEvent
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QLabel,
     QPushButton, QSpinBox, QComboBox, QGroupBox,
@@ -123,6 +123,13 @@ class ComparisonWorker(QObject):
             self.finished.emit(ols_data, af_data)
         except Exception as e:
             self.error.emit(str(e))
+
+class WheelBlocker(QObject):
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Wheel:
+            event.ignore()
+            return True
+        return super().eventFilter(obj, event)
 
 
 # ---------------------------------------------------------------------------
@@ -812,7 +819,9 @@ class AutoSpectralTab(QWidget):
         self._profile_plot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         # Disable mouse wheel rescaling
         self._profile_plot.setMouseEnabled(x=False, y=False)
-        self._profile_plot.getViewBox().wheelEvent = lambda ev: None
+        # prevent mouse scroll catching
+        self._wheel_blocker = WheelBlocker(self)
+        self._profile_plot.viewport().installEventFilter(self._wheel_blocker)
         layout.addWidget(self._profile_plot)
 
         self._profile_list = QListWidget()
