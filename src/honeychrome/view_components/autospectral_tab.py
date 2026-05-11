@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 import colorcet as cc
-from PySide6.QtCore import Qt, QThread, Signal, QObject, QRectF, QSettings
+from PySide6.QtCore import Qt, QThread, Signal, QObject, QRectF, QSettings, QTimer
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QLabel,
     QPushButton, QSpinBox, QComboBox, QGroupBox,
@@ -950,6 +950,9 @@ class AutoSpectralTab(QWidget):
     def _on_mode_change(self, mode):
         if mode == TAB_NAME:
             self._refresh_ui()
+            if self.controller.raw_event_data is not None:
+                self._clear_comparison_plots()
+                QTimer.singleShot(0, self._run_comparison)
 
     def _on_sample_loaded(self, _sample_path):
         # Rebuild grid and controls immediately, then defer the comparison run
@@ -959,7 +962,6 @@ class AutoSpectralTab(QWidget):
             self._rebuild_assignment_grid()
             self._refresh_comparison_controls()
             self._clear_comparison_plots()
-            from PySide6.QtCore import QTimer
             QTimer.singleShot(0, self._run_comparison)
 
     def _on_process_refreshed(self):
