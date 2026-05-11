@@ -175,14 +175,6 @@ class Controller(QObject):
         self.current_mode = 'raw'
         self.initialise_ephemeral_data()
 
-        ### SSR: this addition causes a bug - it wipes the spillover matrix
-        ### OTB: now updated to only update the unmixing matrix, retaining any existing spillover matrix
-        # # Recompute unmixing matrix from profiles to fix any column-ordering
-        # # inconsistency in the stored matrix (e.g. from pre-fix .kit files).
-        # ssr review: are you sure this is necessary? this clobbers initialise_ephemeral_data
-        if self.experiment.process.get('unmixing_matrix'):
-            self.refresh_spectral_process()
-
         logger.info(f'Controller: experiment loaded {self.experiment_dir}')
 
         # # load first sample in order: #legacy: consider reinstate autoload of first sample
