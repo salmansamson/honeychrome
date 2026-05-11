@@ -798,6 +798,12 @@ class Controller(QObject):
 
             self.clear_data_for_cytometry_plots()
             self.initialise_data_for_cytometry_plots()
+            # ensure unmixed data is always updated, histograms recalculated
+            if self.experiment.process['unmixing_matrix'] is not None and self.current_mode != 'unmixed':
+                saved = self.data_for_cytometry_plots
+                self.data_for_cytometry_plots = self.data_for_cytometry_plots_unmixed
+                self.initialise_data_for_cytometry_plots(force_recalc_histograms=True)
+                self.data_for_cytometry_plots = saved
         else:
             if self.bus:
                 self.bus.openImportFCSWidget.emit(True)
