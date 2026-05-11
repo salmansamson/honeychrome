@@ -305,6 +305,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.statistics_tab, "Statistics")
 
         # --- Plugin tabs (placeholders + background load) ---
+        # ssr review: I hope you are sure about this working!
         self._plugin_placeholders = {}
         self._bus_ref = bus
         self._controller_ref = controller

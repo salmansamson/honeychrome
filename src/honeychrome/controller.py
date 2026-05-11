@@ -179,6 +179,7 @@ class Controller(QObject):
         ### OTB: now updated to only update the unmixing matrix, retaining any existing spillover matrix
         # # Recompute unmixing matrix from profiles to fix any column-ordering
         # # inconsistency in the stored matrix (e.g. from pre-fix .kit files).
+        # ssr review: are you sure this is necessary? this clobbers initialise_ephemeral_data
         if self.experiment.process.get('unmixing_matrix'):
             self.refresh_spectral_process()
 
@@ -1051,6 +1052,8 @@ class Controller(QObject):
                     self.thread = threading.Thread(target=self.update_hists_and_stats, args=(), daemon=True)
                     self.thread.start()
 
+    # ssr review: why remove with_busy_cursor?
+    # note original intention of this method was to reinitialise only the minimal data for process plots
     @Slot()
     def reinitialise_data_for_process_plots(self):
         if self.current_mode == 'process':

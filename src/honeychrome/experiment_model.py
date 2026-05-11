@@ -147,6 +147,7 @@ class ExperimentModel:
         self.settings = file_data['settings']
         self.samples = file_data['samples']
         self.process = file_data['process']
+        # ssr review: preferably put these variables in controller ephemeral data
         self.process.setdefault('cleaned_events', {})   # runtime-only; not in older files
         self.samples.setdefault('unstained_samples', [])  # not present in older .kit files
         self.cytometry = file_data['cytometry']
@@ -157,6 +158,7 @@ class ExperimentModel:
             raise ValueError("No file path set for saving")
         # cleaned_events holds numpy arrays at runtime and must not be serialised.
         # It is recomputed on demand by SpectralCleaner when the user clicks "Clean Controls".
+        # ssr review: preferably put this logic in controller
         process_to_save = {k: v for k, v in self.process.items() if k != 'cleaned_events'}
         file_data = {
             'settings':self.settings,

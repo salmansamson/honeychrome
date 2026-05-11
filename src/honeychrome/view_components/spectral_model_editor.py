@@ -264,6 +264,7 @@ class SpectralControlsEditor(QFrame):
         # Column 4: sample_name
         # Column 5: gate_label
         # Column 6: universal_negative_name
+        # ssr review: we have a problem here with width. consider adding horizontal scrollbar
         header = self.view.horizontalHeader()
         header.setMinimumSectionSize(100)
         header.setStretchLastSection(True)
@@ -406,6 +407,7 @@ class SpectralControlsEditor(QFrame):
         # Defer recalculation until after the signal handler returns and the Qt
         # event loop is back in a clean state — calling _on_force_recalc() directly
         # here causes a hard crash via the busy cursor thread mechanism.
+        # ssr review: are you sure this is necessary? the original intention was only to recalc if the recalc button pressed after changing this selection
         QTimer.singleShot(0, self._on_force_recalc)
 
     def set_fluorescence_channel_filter(self):
@@ -451,7 +453,7 @@ class SpectralControlsEditor(QFrame):
 
         self._update_universal_negative_column_visibility()
 
-
+    # ssr review: should use_cleaned and af_remove also be hidden if internal neg?
     def _update_universal_negative_column_visibility(self):
         """Hide the Universal Negative column when using internal negatives.
         The underlying data is preserved — hiding is purely visual."""
@@ -802,6 +804,7 @@ class SpectralControlsEditor(QFrame):
         self._pending_update_col = col # track cosmetic vs functional changes
         self._update_timer.start()  # restarts timer on each rapid edit
 
+    # ssr review: cosmetic changes still cause break between spectral model and unmixed data channels
     def _do_update_control(self):
         index = self._pending_update_index
         col = self._pending_update_col

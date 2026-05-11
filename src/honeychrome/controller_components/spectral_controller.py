@@ -74,6 +74,7 @@ class ProfileUpdater:
         #         self.bus.warningMessage.emit('Selected number of fluorophores has changed. Previous controls have been flushed.')
 
     ### OTB: changed so it finds the unstained sample when a universal negative is selected
+    # ssr review: is the pos unstained required here?
     def get_unstained_negative(self):
         try:
             sample_path = None
@@ -93,6 +94,8 @@ class ProfileUpdater:
                 # data_for_cytometry_plots_raw['plots'] may be None if no sample is loaded.
                 raw_plots = self.controller.experiment.cytometry['raw_plots']
 
+
+                # ssr review: I think there is a problem here: if either pos or neg gates missing, then a plot is added with both, possibly causing duplication
                 for target_gate_label in [positive_gate_label, negative_gate_label]:
                     if not self.raw_gating.find_matching_gate_paths(target_gate_label):
                         channel_x = 'FSC-A'
@@ -293,7 +296,7 @@ class ProfileUpdater:
 
                             if not self.raw_gating.find_matching_gate_paths(negative_gate_label):
                                 raise Exception(f'Internal negative gate "{negative_gate_label}" not present in Raw Data. '
-                                                f'Please run Auto-Generate to recreate spectral gates.')
+                                                f'Please run Auto-Generate to recreate spectral gates.') # ssr review: could they not do this manually if they wish?
 
                             negative_profile = get_profile(sample, negative_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
 
@@ -491,6 +494,7 @@ class SpectralAutoGenerator(QObject):
             # Skip samples whose name or path contains "Unstained" or "Negative",
             # or that have been manually marked as unstained by the user.
             # Users can still add them manually via the +Add Control button.
+            # ssr review: would users not potentially use unstained for af if not doing af with autospectral?
             manually_unstained = set(self.samples.get('unstained_samples', []))
             if re.search(r'(unstained|negative)', tubename, re.IGNORECASE) or \
                re.search(r'(unstained|negative)', sample_path, re.IGNORECASE) or \
