@@ -151,5 +151,5 @@ autospectral_cleaning_help_text = '''
 <li><b>Use Cleaned profiles:</b> Once cleaning is complete, each eligible control will show a "Use Cleaned" checkbox. This is ticked by default. Cleaned controls use robust linear model (RLM) profile extraction for improved accuracy. Uncheck to revert to the standard gate-mean method for a specific control.</li>
 <li><b>Recalculate:</b> The spectral model is automatically recalculated after cleaning. If you change any settings, click "Recalculate" to update.</li>
 </ol>
-<p>Documentation: <a href="https://github.com/DrCytometer/AutoSpectral">AutoSpectral package on Github</a></p>
+<p>Documentation: <a href="https://drcytometer.github.io/AutoSpectral/articles/09_Cleaning.html">AutoSpectral package on Github</a></p>
 '''
