@@ -817,9 +817,22 @@ class SpectralCleaner(QObject):
             )
 
             if use_internal:
-                neg_events = np.empty((0, pos_events.shape[1]))  # kept empty so select_positive_events does top-N only
-                neg_events_internal = np.empty((0, pos_events.shape[1]))  # populated after peak channel resolved
-                neg_scatter = np.empty((0, 2))
+                # Load the negative gate from the same positive sample file.
+                neg_gate_lbl = f'Neg {label}'
+                try:
+                    if (self.raw_gating and
+                            self.raw_gating.find_matching_gate_paths(neg_gate_lbl)):
+                        neg_events_internal, _ = get_raw_events(
+                            sample, self.fluor_ch_ids,
+                            gate_label=neg_gate_lbl,
+                            gating_strategy=self.raw_gating,
+                        )
+                    else:
+                        neg_events_internal = np.empty((0, pos_events.shape[1]))
+                except Exception:
+                    neg_events_internal = np.empty((0, pos_events.shape[1]))
+                neg_events = neg_events_internal   # used by select_positive_events
+                neg_scatter = np.empty((0, 2))     # no scatter matching for internal
             else:
                 neg_events_internal = None
                 tube_name = control.get('universal_negative_name') or ''
@@ -853,13 +866,6 @@ class SpectralCleaner(QObject):
             except (ValueError, IndexError):
                 peak_ch_idx = int(np.argmax(pos_events.mean(axis=0)))
 
-            # For internal-negative controls the negative is the bottom-N events of the positive sample.
-            if use_internal:
-                peak_vals = pos_events[:, peak_ch_idx]
-                n_neg = min(INITIAL_N, len(peak_vals))
-                bot_idx = np.argsort(peak_vals)[:n_neg]
-                neg_events_internal = pos_events[bot_idx]
-
             # --- adaptive top-up loop ---
             quantile  = 0.995
             initial_n = INITIAL_N
@@ -876,7 +882,7 @@ class SpectralCleaner(QObject):
                 af_remove = bool(control.get('af_remove', False))
                 result = clean_control(
                     pos_sel,
-                    neg_events_internal if use_internal else neg_events,
+                    neg_events,
                     peak_ch_idx,
                     ceiling=self.ceiling,
                     positivity_quantile=quantile,
