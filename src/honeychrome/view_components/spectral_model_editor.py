@@ -12,6 +12,7 @@ from honeychrome.controller_components.spectral_controller import SpectralAutoGe
 from honeychrome.controller_components.spectral_functions import sanitise_control_in_place, _find_default_unstained
 from honeychrome.view_components.icon_loader import icon
 from honeychrome.settings import spectral_model_column_labels, heading_style, INTERNAL_NEGATIVE_SENTINEL
+from honeychrome.controller_components.gml_functions_mod_from_flowkit import _rename_channel_in_gml
 
 import logging
 logger = logging.getLogger(__name__)
@@ -804,24 +805,64 @@ class SpectralControlsEditor(QFrame):
         self._pending_update_col = col # track cosmetic vs functional changes
         self._update_timer.start()  # restarts timer on each rapid edit
 
-    # ssr review: cosmetic changes still cause break between spectral model and unmixed data channels
     def _do_update_control(self):
         index = self._pending_update_index
         col = self._pending_update_col
-        label_only = (COLUMNS[col] in ('label', 'antigen')) # track cosmetic changes
+        changed_col = COLUMNS[col]
         if index is None:
             return
-        if label_only:
+        if changed_col in ('label', 'antigen'):
             control = self.model._data[index]
-            # Keep the profiles dict key in sync with the (possibly renamed) label.
-            # ProfileUpdater.flush() would do this on the next functional edit anyway,
-            # but doing it here keeps profiles consistent immediately.
+
+            if changed_col in ('label', 'antigen'):
+                control = self.model._data[index]
+
+                if changed_col == 'label':
+                    attempted_label = control['label']
+                    # Check for duplicate labels before mutating anything.
+                    all_labels = [c['label'] for c in self.model._data if c['label']]
+                    if len(all_labels) != len(set(all_labels)):
+                        # Revert by restoring the old label from the profiles dict —
+                        # the profiles key for this row hasn't been renamed yet so it
+                        # still holds the pre-edit value.
+                        old_label = next(
+                            (k for k in self.profile_updater.profiles
+                            if k not in [c['label'] for c in self.model._data]),
+                            None
+                        )
+                        if old_label is not None:
+                            control['label'] = old_label
+                        self.model.dataChanged.emit(
+                            self.model.index(index, col),
+                            self.model.index(index, col),
+                            [Qt.DisplayRole, Qt.EditRole]
+                        )
+                        self.bus.warningMessage.emit(
+                            f'Label "{attempted_label}" is already in use. '
+                            f'Each control must have a unique label.'
+                        )
+                        return
+            
+            # Rename the profiles dict key to match the new label.
             old_labels = [k for k in self.profile_updater.profiles if k not in [c['label'] for c in self.model._data]]
             new_labels = [c['label'] for c in self.model._data if c['label'] not in self.profile_updater.profiles]
             for old, new in zip(old_labels, new_labels):
                 self.profile_updater.profiles[new] = self.profile_updater.profiles.pop(old)
+
+            if changed_col == 'label' and old_labels and new_labels:
+                # A label rename leaves four downstream structures stale.
+                # Propagate atomically without recalculating the unmixing matrix.
+                for old, new in zip(old_labels, new_labels):
+                    self._propagate_label_rename(old, new)
+                # Rebuild ephemeral gating/transform objects from the updated experiment
+                # state and refresh the UI. Does not touch the unmixing matrix,
+                # spillover, fine-tuning, or AF cache.
+                self.controller.initialise_ephemeral_data(scope=['unmixed'])
+                if self.bus:
+                    self.bus.spectralProcessRefreshed.emit()
+
             self.bus.showSelectedProfiles.emit([control['label']])
-            logger.info(f'SpectralModelEditor: cosmetic edit on row {index}, col "{COLUMNS[col]}" — skipping regeneration')
+            logger.info(f'SpectralModelEditor: cosmetic edit on row {index}, col "{changed_col}" — skipping regeneration')
             return
         self.setEnabled(False)  # block further interaction during generate
         control = self.model._data[index]
@@ -838,6 +879,71 @@ class SpectralControlsEditor(QFrame):
             if not label_only:
                 self.bus.spectralModelUpdated.emit()
         logger.info(f'SpectralModelEditor: updated {"valid" if control_valid else "invalid"} control {control}')
+
+    def _propagate_label_rename(self, old: str, new: str):
+        """
+        Rename a fluorescence channel label in all experiment structures that
+        reference it by name, without touching the unmixing matrix or any
+        computed numerical state.
+
+        Structures updated:
+          - experiment.settings['unmixed']['fluorescence_channels']
+          - experiment.settings['unmixed']['event_channels_pnn']
+          - experiment.cytometry['transforms']  (dict keyed by channel name)
+          - experiment.cytometry['gating']      (GML string — replace as text)
+        """
+        exp = self.controller.experiment
+
+        # 1. fluorescence_channels list
+        fl = exp.settings['unmixed'].get('fluorescence_channels', [])
+        exp.settings['unmixed']['fluorescence_channels'] = [
+            new if ch == old else ch for ch in fl
+        ]
+
+        # 2. event_channels_pnn list
+        pnn = exp.settings['unmixed'].get('event_channels_pnn', [])
+        exp.settings['unmixed']['event_channels_pnn'] = [
+            new if ch == old else ch for ch in pnn
+        ]
+
+        # 3. cytometry transforms dict (rename the key)
+        transforms = exp.cytometry.get('transforms') or {}
+        if old in transforms:
+            transforms[new] = transforms.pop(old)
+
+        # 4. GML gating string — parse as XML and rename only the fcs-dimension
+        #    name attributes that match exactly, avoiding substring corruption
+        #    (e.g. renaming "PE" must not touch "PE-Cy7", "PE-CF594", etc.)
+        gating_gml = exp.cytometry.get('gating')
+        if gating_gml:
+            exp.cytometry['gating'] = _rename_channel_in_gml(gating_gml, old, new)
+
+        # 5. cytometry plots list — channel_x and channel_y are stored by name
+        for plot in exp.cytometry.get('plots') or []:
+            if plot.get('channel_x') == old:
+                plot['channel_x'] = new
+            if plot.get('channel_y') == old:
+                plot['channel_y'] = new
+
+            # 6. Update the live ephemeral dicts immediately so any widget that
+        #    re-renders before spectralProcessRefreshed is handled sees
+        #    consistent channel names. initialise_ephemeral_data will
+        #    overwrite these properly afterwards.
+        for data_dict in (self.controller.data_for_cytometry_plots_process,
+                          self.controller.data_for_cytometry_plots_unmixed):
+            pnn = data_dict.get('pnn')
+            if pnn:
+                data_dict['pnn'] = [new if ch == old else ch for ch in pnn]
+            for plot in data_dict.get('plots') or []:
+                if plot.get('channel_x') == old:
+                    plot['channel_x'] = new
+                if plot.get('channel_y') == old:
+                    plot['channel_y'] = new
+            transformations = data_dict.get('transformations')
+            if transformations and old in transformations:
+                transformations[new] = transformations.pop(old)
+
+        logger.info(f'SpectralModelEditor: propagated label rename "{old}" -> "{new}"')
 
     @Slot()
     def _on_force_recalc(self):
