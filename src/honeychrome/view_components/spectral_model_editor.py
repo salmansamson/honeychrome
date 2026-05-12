@@ -5,14 +5,15 @@ from datetime import datetime
 from typing import List, Any, Dict
 from PySide6 import QtCore
 from PySide6.QtCore import Qt, QModelIndex, QTimer, QThread, Slot, QObject, QEvent, QSize, Signal
-from PySide6.QtWidgets import (QApplication, QFrame, QVBoxLayout, QHBoxLayout, QTableView, QPushButton, QStyledItemDelegate, QComboBox, QLineEdit, QMessageBox, QHeaderView, QLabel, QWidget, QCheckBox)
+from PySide6.QtWidgets import (QApplication, QFrame, QGroupBox, QVBoxLayout, QHBoxLayout, QTableView, QPushButton, QStyledItemDelegate, QComboBox, QLineEdit, QMessageBox, QHeaderView, QLabel, QWidget, QCheckBox)
 
 from honeychrome.controller_components.functions import raw_gates_list
 from honeychrome.controller_components.spectral_controller import SpectralAutoGenerator, ProfileUpdater, SpectralCleaner, spectral_library
 from honeychrome.controller_components.spectral_functions import sanitise_control_in_place, _find_default_unstained
 from honeychrome.view_components.icon_loader import icon
 from honeychrome.settings import spectral_model_column_labels, heading_style, INTERNAL_NEGATIVE_SENTINEL
-from honeychrome.view_components.help_toggle_widget import WheelBlocker
+from honeychrome.view_components.help_toggle_widget import WheelBlocker, HelpToggleWidget
+from honeychrome.view_components.help_texts import autospectral_cleaning_help_text
 from honeychrome.controller_components.gml_functions_mod_from_flowkit import _rename_channel_in_gml
 
 import logging
@@ -314,7 +315,7 @@ class SpectralControlsEditor(QFrame):
             '  • Saturation exclusion\n'
             '  • Brightest-event selection\n'
             '  • Scatter matching\n'
-            '  • AF removal (per-control, if "Remove AF" is ticked)\n'
+            '  • Noise exclusion (per-control, if "Exclude noise" is ticked)\n'
             'Once complete, each control will have a "Use Cleaned" checkbox.\n'
             'Cleaned controls use RLM profile extraction by default.'
         )
@@ -662,10 +663,11 @@ class SpectralControlsEditor(QFrame):
             current_af = self.model._data[row].get('af_remove')
             af_cb.setChecked(bool(current_af))   # None / False → unchecked; True → checked
             af_cb.setToolTip(
-                'Remove intrusive autofluorescence (AF) contamination from this control.\n'
-                'Uses PCA on the matched unstained to identify the AF signature,\n'
-                'fits an exclusion boundary in (AF channel, peak channel) space,\n'
+                'Enable noise exclusion for this control.\n'
+                'Uses PCA on the matched unstained to identify the noise signature,\n'
+                'fits an exclusion boundary in (noise channel, peak channel) space,\n'
                 'and removes positive events above that boundary before RLM fitting.\n'
+                'Tick this BEFORE running "Clean Controls".\n'
                 'Re-run "Clean Controls" after changing this setting.'
             )
 
