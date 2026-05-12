@@ -10,31 +10,76 @@ title: AutoSpectral in Honeychrome
 {% include menu.md %}
 
 # AutoSpectral in Honeychrome
-AutoSpectral is a set of tools to enhance spectral analysis by providing you with the best possible spectral signatures of your spectral controls, optimising the removal of autofluorescence, and providing reproducible mixing. See the Colibri Cytometry blog and the AutoSpectral Github repository for more information on AutoSpectral.
+AutoSpectral is an optimised unmixing workflow.
+
+Originally written in R, AutoSpectral is a set of tools to enhance spectral analysis by providing you with the best possible spectral signatures of your spectral controls, optimising the removal of autofluorescence, and providing reproducible mixing. See the Colibri Cytometry blog and the AutoSpectral Github repository for more information on AutoSpectral.
 - [AutoSpectral on the Colibri Cytometry blog](https://www.colibri-cytometry.com/post/introducing-autospectral-an-optimized-unmixing-workflow)
 - [AutoSpectral package on Github](https://github.com/DrCytometer/AutoSpectral)
 
-Honeychrome now provides a tab for AutoSpectral AF (the per-cell autofluorescence extraction part of AutoSpectral), which radically clears up artifacts due to variable autofluorescence, for example negative spreading. See [AutoSpectral AF on the Colibri Cytometry blog](https://www.colibri-cytometry.com/post/autospectral-single-cell-autofluorescence)
+Honeychrome now provides the following two major components of AutoSpectral natively as steps in the spectral process:
+- AutoSpectral Cleaning (optimisation of control profiles) 
+- AutoSpectral AF (per-cell autofluorescence extraction)
 
-## How to perform AutoSpectral AF (per-cell autofluorescence extraction)
+AutoSpectral Cleaning radically clears up artifacts due to poor single stain control profiles, for example hypernegative events, skewed data and diagonal correlations, by carrying out saturation exclusion, brightest-event selection, scatter matching and noise removal on the control profiles.
+
+AutoSpectral AF radically clears up artifacts due to variable autofluorescence, for example negative spreading, by pairing every event with its best matched autofluorescence spectrum. 
+
+See related articles on Colibri Cytometry: [AutoSpectral Cleaning](https://www.colibri-cytometry.com/post/autospectral-cleaning) and [AutoSpectral AF](https://www.colibri-cytometry.com/post/autospectral-single-cell-autofluorescence)
+
 This guide assumes you have already installed Honeychrome using the [executable installers (Windows/Mac/Linux) or Python (cross-platform)](/readme), that you have a set of FCS files to import, and that you are already familiar with the basic spectral unmixing process. If not, please go to  [Spectral Analysis](/docs/spectral_analysis) first. 
 
 We will be continuing use of AutoSpectral Full Workflow Example (a 9-colour panel from the 5-laser Cytek Aurora from the AutoSpectral Full Workflow Example as set up in the tutorial [Spectral Analysis](/docs/spectral_analysis).
 
-## Show the AutoSpectral AF process
+## How to perform AutoSpectral Cleaning (optimisation of control profiles)
+
+### Show the AutoSpectral Cleaning process and click "Clean Controls"
+
+First make sure that you have at least one unstained control (i.e. with "unstained" in the name) in the single stain controls folder. Preferably, you should have additional unstained controls if you are dealing with cell types that have variable autofluorescence. You can mark any additional samples as unstained in the Sample Browser (left pane) by right clicking them and checking "Mark as Unstained".
+
+![check_mark_unstained.png](/assets/check_mark_unstained.png)
+
+Now in the Spectral Process tab, generate your spectral controls (e.g. with the Autogenerate Spectral Controls button, see [Spectral Analysis](/docs/spectral_analysis)). Make sure you select "Using unstained negative" instead of "Using internal negatives". Then click "Clean Controls". The AutoSpectal cleaning pipeline will automatically proceed. Each control will be processed for:
+- Saturation exclusion
+- Brightest-event selection
+- Scatter matching (selection of the best-matching negative cells)
+- Noise removal (subtraction of matching autofluorescence per control event)
+
+Two new columns are shown: "Use cleaned" and "Exclude Noise". The cleaned profiles are applied by default. The noise removal must be manually inspected and applied as described below.
+
+![clean_controls_button.png](/assets/clean_controls_button.png)
+
+### Show peak channel event histograms
+There is now a checkbox below the spectral model table, "Show peak channel event histograms". Enable this and click on a line of the spectral model table to see the events selected for both positive and negative controls after control cleaning, against all events in that sample.
+
+![show_peak_channel_event_histograms.png](/assets/show_peak_channel_event_histograms.png)
+
+### Scatter-matching Diagnostics
+
+A further checkbox "Show scatter-matching plots" is shown. These show the unstained cells that best match the positive cells on the morphology plot, and are therefore the best choice to use for negatives of that profile.
+
+![show_scatter_matching_diagnostics.png](/assets/show_scatter_matching_diagnostics.png)
+
+### Noise Exclusion Diagnostics
+
+A further checkbox "Show noise exclusion plots" is shown.
+TBC
+
+## How to perform AutoSpectral AF (per-cell autofluorescence extraction)
+
+### Show the AutoSpectral AF process
 Go to the AutoSpectral tab and check the box "Show AutoSpectral AF process"
 ![show_autospectral_af.png](/assets/show_autospectral_af.png)
 
-## Extract AF profile from an unstained sample
+### Extract AF profile from an unstained sample
 Under Step 1, select your (first) unstained sample, and press the button Extract AF Profile. (Default number of clusters: 100.) You should see a set of spectra of clusters below. This step should be repeated for each unstained control that you have available, generating multiple AF profiles. After extraction, the clusters can be inspected by clicking on the Stored AF Profiles list.
 
 ![extract_af_step1.png](/assets/extract_af_step1.png)
 
-## Assign the AF profiles to samples
+### Assign the AF profiles to samples
 Under Step 2, select the AF profiles to apply to each sample. Multiple controls (columns) can be selected for each sample (row). Each cell in the sample is automatically assigned its nearest cluster from of the selected controls for a more accurate AF subtraction.
 ![assign_af_step2.png](/assets/assign_af_step2.png)
 
-## Inspect the AutoSpectral AF results against standard unmixing 
+### Inspect the AutoSpectral AF results against standard unmixing 
 Under Step 3, select a sample (from the sample browser, left pane), and select channels and a source gate on the side-by-side plots.
 
 Negative spread and other artifacts caused by inhomogeneous autofluorescence should be much improved.
