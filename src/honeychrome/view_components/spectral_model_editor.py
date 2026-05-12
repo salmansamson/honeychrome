@@ -651,8 +651,7 @@ class SpectralControlsEditor(QFrame):
 
         # "Use Cleaned" checkbox — visible only when cleaned data exist for this control
         label = self.model._data[row].get('label') or ''
-        cleaned_events = self.controller.experiment.process.get('cleaned_events', {})
-        cleaned_available = label in cleaned_events
+        cleaned_available = label in self.controller.cleaned_events
         uc_col = COLUMNS.index("use_cleaned")
         uc_idx = self.model.index(row, uc_col)
         proxy_uc_idx = self.proxy.mapFromSource(uc_idx)
@@ -1016,10 +1015,9 @@ class SpectralControlsEditor(QFrame):
     def _on_clean_controls_finished(self):
         """After SpectralCleaner.run() completes: mark controls as use_cleaned=True,
         recalculate profiles, refresh UI."""
-        cleaned_events = self.controller.experiment.process.get('cleaned_events', {})
         for control in self.model._data:
             label = control.get('label') or ''
-            if label in cleaned_events:
+            if label in self.controller.cleaned_events:
                 # Only set the default if not already explicitly set by the user
                 if control.get('use_cleaned') is None:
                     control['use_cleaned'] = True

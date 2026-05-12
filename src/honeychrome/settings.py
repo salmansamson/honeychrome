@@ -213,7 +213,6 @@ process_default = {
     'unmixing_matrix': None,
     'spillover': None,
     'af_profiles': {},
-    'cleaned_events': {},
     'spectral_cleaning_opts': {},   # global fallback opts (currently unused; per-control af_remove preferred)
 }
 

@@ -212,7 +212,7 @@ class ProfileUpdater:
                             raise Exception(f'Positive gate label {positive_gate_label} not present in Raw Data. ')
 
                         # use cleaned event pool when available and opted in
-                        cleaned_store = self.controller.experiment.process.get('cleaned_events', {})
+                        cleaned_store = self.controller.cleaned_events
                         cleaned = cleaned_store.get(control['label']) if control.get('use_cleaned') is not False else None
                         if cleaned is not None and len(cleaned.get('positive', [])) > 0:
                             pos_events = cleaned['positive']
@@ -678,7 +678,7 @@ class SpectralAutoGenerator(QObject):
 # SpectralCleaner
 # Runs saturation exclusion + brightest-event selection for all cell controls
 # that have a universal_negative_name.  Stores CleanResult in
-# experiment.process["cleaned_events"][label].
+# controller.cleaned_events[label].
 # ---------------------------------------------------------------------------
 
 TARGET_N  = 50   # minimum events needed for a reliable profile
@@ -703,9 +703,7 @@ class SpectralCleaner(QObject):
         self.experiment_dir  = controller.experiment_dir
         self.samples         = controller.experiment.samples
         self.spectral_model  = controller.experiment.process['spectral_model']
-        if 'cleaned_events' not in controller.experiment.process:
-            controller.experiment.process['cleaned_events'] = {}
-        self.cleaned_events  = controller.experiment.process['cleaned_events']
+        self.cleaned_events  = controller.cleaned_events
         self.raw_gating      = controller.raw_gating
         self.event_channels_pnn = controller.experiment.settings['raw']['event_channels_pnn']
         controller.filter_raw_fluorescence_channels()

@@ -321,7 +321,7 @@ class ProfilesViewer(QFrame):
             return
 
         spectral_model   = self.controller.experiment.process.get('spectral_model', [])
-        cleaned_store    = self.controller.experiment.process.get('cleaned_events', {})
+        cleaned_store    = self.controller.cleaned_events
         event_channels_pnn = self.controller.experiment.settings['raw']['event_channels_pnn']
         fluor_ch_ids     = self.controller.filtered_raw_fluorescence_channel_ids
         experiment_dir   = self.controller.experiment_dir

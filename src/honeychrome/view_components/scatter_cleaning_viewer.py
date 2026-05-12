@@ -259,7 +259,7 @@ class ScatterCleaningViewer(QFrame):
     # ------------------------------------------------------------------
 
     def refresh_combo(self):
-        cleaned = self.controller.experiment.process.get('cleaned_events', {})
+        cleaned = self.controller.cleaned_events
         spectral_model = self.controller.experiment.process.get('spectral_model', [])
         # Only include controls that actually underwent scatter matching,
         # ordered as they appear in the spectral model.
@@ -330,7 +330,7 @@ class ScatterCleaningViewer(QFrame):
         self._neg_plot.clear_vb()
         self._pos_plot.clear_vb()
 
-        cleaned_store = self.controller.experiment.process.get('cleaned_events', {})
+        cleaned_store = self.controller.cleaned_events
         cleaned = cleaned_store.get(label)
         if cleaned is None:
             self._status.setText('No cleaned data for this control.')

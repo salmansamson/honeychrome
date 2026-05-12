@@ -384,6 +384,7 @@ class Controller(QObject):
         self.unmixed_transformations = None
         self.raw_gating = None
         self.unmixed_gating = None
+        self.cleaned_events: dict = {}   # runtime-only; numpy arrays; not serialised
         self.data_for_cytometry_plots = {'pnn': None, 'fluoro_indices': None, 'lookup_tables': None, 'event_data': None, 'transformations': None, 'statistics': {}, 'gating': GatingStrategy(), 'plots': [], 'histograms': [], 'gate_membership': {}}
         self.data_for_cytometry_plots_raw = deepcopy(self.data_for_cytometry_plots)
         self.data_for_cytometry_plots_process = deepcopy(self.data_for_cytometry_plots)
