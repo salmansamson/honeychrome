@@ -4,7 +4,7 @@ from deepdiff import DeepDiff
 
 from honeychrome.experiment_model import ExperimentModel
 
-mp.set_start_method("spawn")
+mp.set_start_method("spawn", force=True)
 from honeychrome.controller import Controller
 
 '''
