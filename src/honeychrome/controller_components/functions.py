@@ -62,13 +62,16 @@ def add_recent_file(path):
     recent.insert(0, path)
     q_settings.setValue("recent_files", recent)  # store full history
 
-def export_unmixed_sample(sample_name, unmixed_folder, unmixed_event_data_without_fine_tuning, unmixed_event_channels_pnn, spillover, subsample=None):
+def export_unmixed_sample(sample_name, unmixed_folder, unmixed_event_data_without_fine_tuning, unmixed_event_channels_pnn, spillover, subsample=None, extra_null_channels=None):
     # note that FlowKit compensation matrix is actually spillover matrix
+    null_channels = ['event_id']
+    if extra_null_channels:
+        null_channels = null_channels + extra_null_channels
     unmixed_sample_name = sample_name + ' (Unmixed).fcs'
     unmixed_sample = Sample(unmixed_event_data_without_fine_tuning,
                                     channel_labels=unmixed_event_channels_pnn,
-                                    null_channel_list=['event_id'],
-                                    compensation=spillover,
+                                    null_channel_list=null_channels,
+                                    compensation=spillover.T, # was previously incorrect, but not noticeable when identity matrix
                                     sample_id=sample_name)
     unmixed_sample.export(unmixed_sample_name, subsample=subsample, directory=unmixed_folder, source='comp', include_metadata=True)
 

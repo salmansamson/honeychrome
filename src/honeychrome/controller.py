@@ -96,6 +96,7 @@ class Controller(QObject):
         self.live_sample_path = None
         self.raw_event_data = None
         self.unmixed_event_data = None
+        self.af_sidecar_data = None   # (n_cells, 2) float64: col 0 = af_scale, col 1 = af_idx; None when OLS
 
         # ephemeral data on top of experiment
         self.filtered_raw_fluorescence_channel_ids = None
@@ -372,6 +373,7 @@ class Controller(QObject):
         self.live_sample_path = None
         self.raw_event_data = None
         self.unmixed_event_data = None
+        self.af_sidecar_data = None
 
         # ephemeral data on top of experiment
         self.raw_lookup_tables = {}
@@ -692,9 +694,16 @@ class Controller(QObject):
 
 
     def _apply_unmixing(self, raw_event_data):
-        """Apply unmixing — AF-corrected if matrices are set, otherwise plain OLS."""
+        """Apply unmixing — AF-corrected if matrices are set, otherwise plain OLS.
+
+        Always returns the unmixed event array (same shape contract as before).
+        As a side-effect, populates self.af_sidecar_data with a (n_cells, 2)
+        array [af_scale, af_idx] when AF correction is active, or sets it to
+        None when plain OLS is used.  Callers must not rely on af_sidecar_data
+        until after this method returns.
+        """
         if self.af_precomputed is not None and self.af_spectra is not None:
-            return apply_af_transfer(
+            result = apply_af_transfer(
                 raw_event_data,
                 self.transfer_matrix,
                 self.af_precomputed,
@@ -703,7 +712,13 @@ class Controller(QObject):
                 filtered_fl_ids_raw=self.filtered_raw_fluorescence_channel_ids,
                 spillover=self.experiment.process.get('spillover'),
             )
+            # result is now a dict; store the sidecar columns
+            self.af_sidecar_data = np.column_stack(
+                [result['af_scale'], result['af_idx'].astype(np.float64)]
+            )
+            return result['unmixed']
         else:
+            self.af_sidecar_data = None
             return apply_transfer_matrix(self.transfer_matrix, raw_event_data)
 
     @Slot(str, str)
@@ -824,6 +839,7 @@ class Controller(QObject):
         self.current_sample = None
         self.raw_event_data = None
         self.unmixed_event_data = None
+        self.af_sidecar_data = None
         self.clear_data_for_cytometry_plots()
         self.initialise_data_for_cytometry_plots()
         logger.info(f"Controller: unloaded sample")
@@ -1455,6 +1471,7 @@ class Controller(QObject):
             self.experiment.cytometry['transforms'] = None
             self.experiment.cytometry['gating'] = None
             self.unmixed_event_data = None
+            self.af_sidecar_data = None
 
         # Rebuild AF cache synchronously before reinitialising ephemeral data.
         self.cache_all_af_profiles()

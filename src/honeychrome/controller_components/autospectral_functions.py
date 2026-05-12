@@ -238,11 +238,15 @@ def apply_af_transfer(raw_event_data, transfer_matrix, af_precomputed, af_spectr
 
     if spillover is not None:
         compensation = np.linalg.inv(np.array(spillover))
-        af_unmixed_fl = af_unmixed_fl @ compensation.T
+        af_unmixed_fl = (compensation @ af_unmixed_fl.T).T
 
     unmixed[:, fl_ids_unmixed] = af_unmixed_fl
 
-    return unmixed
+    return {
+        'unmixed': unmixed,
+        'af_scale': result['af_scale'],   # (n_cells,)
+        'af_idx':   result['af_idx'],     # (n_cells,)
+    }
 
 
 # ---------------------------------------------------------------------------

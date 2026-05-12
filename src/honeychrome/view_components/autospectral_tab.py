@@ -114,7 +114,7 @@ class ComparisonWorker(QObject):
             ols_data = apply_transfer_matrix(
                 self.transfer_matrix, self.raw_event_data
             )
-            af_data = apply_af_transfer(
+            af_result = apply_af_transfer(
                 self.raw_event_data,
                 self.transfer_matrix,
                 self.af_precomputed,
@@ -123,7 +123,7 @@ class ComparisonWorker(QObject):
                 filtered_fl_ids_raw=self.filtered_fl_ids_raw,
                 spillover=self.spillover,
             )
-            self.finished.emit(ols_data, af_data)
+            self.finished.emit(ols_data, af_result['unmixed'])
         except Exception as e:
             self.error.emit(str(e))
 

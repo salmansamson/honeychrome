@@ -96,19 +96,29 @@ class UnmixedExporter(QObject):
                         # Stack all AF spectra row-wise across assigned profiles
                         af_spectra = np.vstack([np.array(p['spectra']) for p in active_profiles])
 
-                        unmixed_event_data_without_fine_tuning = apply_af_transfer(
+                        af_result = apply_af_transfer(
                             raw_event_data,
                             transfer_matrix,
                             af_precomputed,
                             af_spectra,
                             self.controller.experiment.settings,
-                            filtered_fl_ids_raw=list(fl_channel_ids_raw),
+                            filtered_fl_ids_raw=self.controller.filtered_raw_fluorescence_channel_ids,
+                            spillover=None, # managed by flowkit at read-time
                         )
+                        unmixed_event_data_without_fine_tuning = af_result['unmixed']
+                        af_cols = np.column_stack([
+                            af_result['af_scale'],
+                            af_result['af_idx'].astype(np.float64),
+                        ])
+                        export_event_data = np.hstack([unmixed_event_data_without_fine_tuning, af_cols])
+                        export_pnn = pnn_unmixed + ['AF Abundance', 'AF Index']
                         logger.info(f'UnmixedExporter: using AF unmixing for {sample_path} ({len(active_profiles)} profile(s))')
                     else:
-                        unmixed_event_data_without_fine_tuning = apply_transfer_matrix(transfer_matrix, raw_event_data)
+                        export_event_data = apply_transfer_matrix(transfer_matrix, raw_event_data)
+                        export_pnn = pnn_unmixed
 
-                    export_unmixed_sample(sample_name, full_unmixed_sample_path.parent, unmixed_event_data_without_fine_tuning, pnn_unmixed, spillover, subsample=self.subsample)
+                    extra_null = ['AF Abundance', 'AF Index'] if active_profiles else None
+                    export_unmixed_sample(sample_name, full_unmixed_sample_path.parent, export_event_data, export_pnn, spillover, subsample=self.subsample, extra_null_channels=extra_null)
 
             logger.info(f'UnmixedExporter: finished')
 
