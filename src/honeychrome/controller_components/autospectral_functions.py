@@ -208,10 +208,15 @@ def combine_af_precomputed(precomputed_list: list) -> dict:
 # ---------------------------------------------------------------------------
 
 def apply_af_transfer(raw_event_data, transfer_matrix, af_precomputed, af_spectra, settings,
-                      filtered_fl_ids_raw=None):
+                      filtered_fl_ids_raw=None, spillover=None):
     """
     Assemble a full unmixed event array with AF-corrected fluorescence columns.
     Scatter, time, and event_id columns come from the standard transfer_matrix path.
+
+    The AF unmixing (apply_af_unmixing) produces abundances in plain OLS fluorophore
+    space. If a spillover matrix is provided, compensation (inv(spillover)) is applied
+    to those fluorescence columns so the result matches the compensated transfer_matrix
+    path.
     """
     from honeychrome.controller_components.functions import apply_transfer_matrix
 
@@ -229,7 +234,13 @@ def apply_af_transfer(raw_event_data, transfer_matrix, af_precomputed, af_spectr
 
     raw_fl = raw_event_data[:, fl_ids_raw]
     result = apply_af_unmixing(raw_fl, af_precomputed, af_spectra)
-    unmixed[:, fl_ids_unmixed] = result['unmixed']
+    af_unmixed_fl = result['unmixed']  # (n_cells, n_fluors) — plain OLS space
+
+    if spillover is not None:
+        compensation = np.linalg.inv(np.array(spillover))
+        af_unmixed_fl = af_unmixed_fl @ compensation.T
+
+    unmixed[:, fl_ids_unmixed] = af_unmixed_fl
 
     return unmixed
 

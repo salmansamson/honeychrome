@@ -175,6 +175,8 @@ class Controller(QObject):
 
         self.current_mode = 'raw'
         self.initialise_ephemeral_data()
+        self.cache_all_af_profiles()
+        self.initialise_af_matrices()
 
         logger.info(f'Controller: experiment loaded {self.experiment_dir}')
 
@@ -539,20 +541,15 @@ class Controller(QObject):
         ]
 
         if not cached:
-            # Cache empty — background rebuild after spectral process refresh
-            # is still in progress, or fluor_spectra are not yet available.
-            # AF correction will be activated on the next load_sample() call
-            # once the cache is ready. Do not call cache_all_af_profiles()
-            # here: that would block the main thread, which is exactly the
-            # race condition this change is designed to avoid.
-            logger.debug(
-                'initialise_af_matrices: cache empty for assigned profiles — '
-                'deferring AF activation to next load_sample().'
+            logger.warning(
+                f'initialise_af_matrices: no cache hit for sample "{self.current_sample_path}". '
+                f'profile_names={profile_names}, '
+                f'cache_keys={list(self.af_precomputed_cache.keys())}'
             )
             self.af_precomputed = None
             self.af_spectra = None
             return
-
+        
         if len(cached) == 1:
             combined = cached[0]
         else:
@@ -618,6 +615,7 @@ class Controller(QObject):
         self.af_precomputed_cache = {}
         af_profiles = self.experiment.process.get('af_profiles', {})
         if not af_profiles:
+            logger.warning(f'cache_all_af_profiles: experiment.process has no af_profiles — keys present: {list(self.experiment.process.keys())}')
             return
 
         fluor_spectra = self._build_fluor_spectra()
@@ -703,6 +701,7 @@ class Controller(QObject):
                 self.af_spectra,
                 self.experiment.settings,
                 filtered_fl_ids_raw=self.filtered_raw_fluorescence_channel_ids,
+                spillover=self.experiment.process.get('spillover'),
             )
         else:
             return apply_transfer_matrix(self.transfer_matrix, raw_event_data)
@@ -829,17 +828,15 @@ class Controller(QObject):
         self.initialise_data_for_cytometry_plots()
         logger.info(f"Controller: unloaded sample")
 
+    # added with busy cursor since with AF integration this may be noticeable
+    @with_busy_cursor
     def reapply_fine_tuning(self):
         self.initialise_transfer_matrix()
-        # ensure AutoSpectral AF applies to Unmixed Data tab
-        ### note: this overwrites any fine tuning--changes to apply_af_transfer are required
-        import threading
-        threading.Thread(target=self.cache_all_af_profiles, daemon=True).start()
         if self.raw_event_data is not None:
-            self.unmixed_event_data = apply_transfer_matrix(self.transfer_matrix, self.raw_event_data)
-            # Keep unmixed event_data dict pointers current so plots render correctly
-            self.data_for_cytometry_plots_unmixed.update({'event_data': self.unmixed_event_data})
-            self.data_for_cytometry_plots_process.update({'event_data': self.unmixed_event_data})
+            self.initialise_af_matrices()
+            self.unmixed_event_data = self._apply_unmixing(self.raw_event_data)
+            self.clear_data_for_cytometry_plots()
+            self.initialise_data_for_cytometry_plots()
 
     @Slot()
     def on_gain_change(self, ch_name, value):
@@ -1459,6 +1456,8 @@ class Controller(QObject):
             self.experiment.cytometry['gating'] = None
             self.unmixed_event_data = None
 
+        # Rebuild AF cache synchronously before reinitialising ephemeral data.
+        self.cache_all_af_profiles()
         # then reinitialise ephemeral data for process and unmixed tabs
         self.initialise_ephemeral_data(scope=['unmixed'])
         self.initialise_data_for_cytometry_plots(force_recalc_histograms=True)
@@ -1468,13 +1467,6 @@ class Controller(QObject):
             self.bus.spectralProcessRefreshed.emit()
             # self.bus.changedGatingHierarchy.emit('unmixed', 'root')
             self.bus.statusMessage.emit(f'Spectral process refreshed.')
-
-        # Rebuild the AF precomputed cache in a daemon thread so the main
-        # thread is not blocked.  initialise_af_matrices() has a synchronous
-        # fallback that fires on the next load_sample() if the cache is not
-        # yet ready, so there is no race condition for correctness.
-        import threading
-        threading.Thread(target=self.cache_all_af_profiles, daemon=True).start()
 
         logger.info(f'Controller: refreshed spectral process, unmixed settings, unmixed cytometry')
 

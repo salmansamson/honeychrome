@@ -99,7 +99,7 @@ class ComparisonWorker(QObject):
 
     def __init__(self, raw_event_data, transfer_matrix,
                  af_precomputed, af_spectra, exp_settings,
-                 filtered_fl_ids_raw):
+                 filtered_fl_ids_raw, spillover=None):
         super().__init__()
         self.raw_event_data = raw_event_data
         self.transfer_matrix = transfer_matrix
@@ -107,6 +107,7 @@ class ComparisonWorker(QObject):
         self.af_spectra = af_spectra
         self.exp_settings = exp_settings
         self.filtered_fl_ids_raw = filtered_fl_ids_raw
+        self.spillover = spillover
 
     def run(self):
         try:
@@ -120,6 +121,7 @@ class ComparisonWorker(QObject):
                 self.af_spectra,
                 self.exp_settings,
                 filtered_fl_ids_raw=self.filtered_fl_ids_raw,
+                spillover=self.spillover,
             )
             self.finished.emit(ols_data, af_data)
         except Exception as e:
@@ -965,7 +967,6 @@ class AutoSpectralTab(QWidget):
         if mode == TAB_NAME:
             self._refresh_ui()
             if self.controller.raw_event_data is not None:
-                self._clear_comparison_plots()
                 QTimer.singleShot(0, self._run_comparison)
 
     def _on_sample_loaded(self, _sample_path):
@@ -1544,10 +1545,16 @@ class AutoSpectralTab(QWidget):
         # Build a state key describing exactly what this run will compute.
         # If it matches the last completed run, the cached arrays are still
         # valid — skip the worker and just redraw.
+        spillover = self.controller.experiment.process.get('spillover')
+        spillover_key = tuple(np.array(spillover).ravel()) if spillover is not None else None
+        # Use a content hash of the precomputed P matrix rather than id()
+        p_matrix = af_precomputed.get('P') if af_precomputed is not None else None
+        af_key = bytes(p_matrix.data) if p_matrix is not None else None
         state_key = (
             self.controller.current_sample_path,
             profile_key,
-            id(af_precomputed),
+            af_key,
+            spillover_key,
         )
         if state_key == self._last_cmp_state and self._ols_data is not None:
             self._plot_ols.set_status('')
@@ -1569,6 +1576,7 @@ class AutoSpectralTab(QWidget):
             af_spectra,
             self.controller.experiment.settings,
             self.controller.filtered_raw_fluorescence_channel_ids,
+            spillover=self.controller.experiment.process.get('spillover'),
         )
         self._cmp_worker.moveToThread(self._cmp_thread)
         self._cmp_thread.started.connect(self._cmp_worker.run)
