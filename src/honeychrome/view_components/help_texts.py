@@ -131,3 +131,25 @@ autospectral_af_help_text = '''
 <li><a href="https://github.com/DrCytometer/AutoSpectral">AutoSpectral package on Github</a></li>
 </ul>
 '''
+
+autospectral_cleaning_help_text = '''
+<h3>AutoSpectral Control Cleaning — Workflow Guide</h3>
+<p><b>Important:</b> AutoSpectral Control Cleaning is designed for <b>spectral flow cytometry</b> single-stained cell controls. It will have less impact on bead controls and has not been tested on conventional flow samples.</p>
+<p><b>Note on unstained samples:</b> If you intend to use <b>AutoSpectral AF</b>, do <em>not</em> add unstained samples to the Spectral Process table. Unstained samples should only be used as the negative reference (assigned via the "Unstained Negative" column), not as spectral controls in their own right. Including them as controls will produce manual AF extraction profiles and can be used as an alternative to AutoSpectral AF.</p>
+<h4>Workflow</h4>
+<ol>
+<li><b>Assign unstained negatives:</b> Ensure each cell control has an "Unstained Negative" assigned in the table. Right-click a sample in the Sample panel and select "Mark as Unstained" to make it available as a negative reference.</li>
+<li><b>Tick "Exclude noise" if needed:</b> For controls where intrusive autofluorescence is expected (e.g. tissue-derived or highly autofluorescent cell types), tick the "Exclude noise" checkbox for that control <em>before</em> running Clean Controls. This step must be done first — it cannot be applied retrospectively without re-running the pipeline.</li>
+<li><b>Run "Clean Controls":</b> Click the "Clean Controls" button. The pipeline will run for all eligible cell controls (those with an unstained negative assigned). Steps performed per control:
+  <ul>
+    <li>Saturation exclusion — removes detector-saturated events.</li>
+    <li>Scatter matching — selects negative events whose scatter profile matches the positive control, reducing background due to cell size/granularity differences.</li>
+    <li>Noise exclusion (if ticked) — identifies and removes intrusive autofluorescent events from the positive control using PCA on the matched unstained.</li>
+  </ul>
+</li>
+<li><b>Inspect diagnostic plots:</b> After cleaning, use the scatter-matching and noise exclusion diagnostic plots (visible below when cleaning is active) to verify that the cleaning has worked as expected.</li>
+<li><b>Use Cleaned profiles:</b> Once cleaning is complete, each eligible control will show a "Use Cleaned" checkbox. This is ticked by default. Cleaned controls use robust linear model (RLM) profile extraction for improved accuracy. Uncheck to revert to the standard gate-mean method for a specific control.</li>
+<li><b>Recalculate:</b> The spectral model is automatically recalculated after cleaning. If you change any settings, click "Recalculate" to update.</li>
+</ol>
+<p>Documentation: <a href="https://github.com/DrCytometer/AutoSpectral">AutoSpectral package on Github</a></p>
+'''
