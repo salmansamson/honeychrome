@@ -51,6 +51,7 @@ from honeychrome.view_components.cytometry_plot_components import (
     TransparentGraphicsLayoutWidget,
 )
 from honeychrome.view_components.profiles_viewer import BottomAxisVerticalTickLabels
+from honeychrome.view_components.help_toggle_widget import WheelBlocker
 import honeychrome.settings as settings
 
 import logging
@@ -126,13 +127,6 @@ class ComparisonWorker(QObject):
             self.finished.emit(ols_data, af_result['unmixed'])
         except Exception as e:
             self.error.emit(str(e))
-
-class WheelBlocker(QObject):
-    def eventFilter(self, obj, event):
-        if event.type() == QEvent.Wheel:
-            event.ignore()
-            return True
-        return super().eventFilter(obj, event)
 
 
 # ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@ from honeychrome.controller_components.spectral_controller import SpectralAutoGe
 from honeychrome.controller_components.spectral_functions import sanitise_control_in_place, _find_default_unstained
 from honeychrome.view_components.icon_loader import icon
 from honeychrome.settings import spectral_model_column_labels, heading_style, INTERNAL_NEGATIVE_SENTINEL
+from honeychrome.view_components.help_toggle_widget import WheelBlocker
 from honeychrome.controller_components.gml_functions_mod_from_flowkit import _rename_channel_in_gml
 
 import logging
@@ -98,13 +99,6 @@ class _RecalcWorker(QObject):
         for control in self._controls:
             self._profile_updater.generate(control, self._search_results)
         self.finished.emit()
-
-class WheelBlocker(QObject):
-    def eventFilter(self, obj, event):
-        if event.type() == QEvent.Wheel:
-            event.ignore()
-            return True    # Block wheel event
-        return super().eventFilter(obj, event)
 
 class ListTableModel(QtCore.QAbstractTableModel):
     dataEditedSignal = QtCore.Signal(int, int) # changed to track cosmetic vs function changes

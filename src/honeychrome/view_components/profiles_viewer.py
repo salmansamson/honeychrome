@@ -8,6 +8,7 @@ from honeychrome.settings import heading_style, line_colors
 from honeychrome.view_components.cytometry_plot_components import (
     NoPanViewBox, ZoomAxis, TransparentGraphicsLayoutWidget,
 )
+from honeychrome.view_components.help_toggle_widget import WheelBlocker
 
 
 # --------------------- Flow Layout -------------------------
@@ -259,6 +260,8 @@ class ProfilesViewer(QFrame):
         # Left axis — plain count, no transform
         self._hist_axis_left.setTicks(None)
 
+        self._hist_wheel_blocker = WheelBlocker(self)
+        self._hist_glw.viewport().installEventFilter(self._hist_wheel_blocker)
         hist_panel_layout.addWidget(self._hist_glw)
         self._hist_panel.setVisible(False)
         self.layout.addWidget(self._hist_panel)

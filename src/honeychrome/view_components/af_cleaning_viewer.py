@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from honeychrome.settings import heading_style
+from honeychrome.view_components.help_toggle_widget import WheelBlocker
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +151,8 @@ class AfCleaningViewer(QFrame):
         self._neg_plot = _SquarePlotWidget()
         self._neg_plot.setMinimumSize(320, 320)
         self._neg_plot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._neg_wheel_blocker = WheelBlocker(self)
+        self._neg_plot.viewport().installEventFilter(self._neg_wheel_blocker)
         left_box.addWidget(self._neg_plot)
         left_w = QWidget(); left_w.setLayout(left_box)
         left_w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -164,6 +167,8 @@ class AfCleaningViewer(QFrame):
         self._pos_plot = _SquarePlotWidget()
         self._pos_plot.setMinimumSize(320, 320)
         self._pos_plot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._pos_wheel_blocker = WheelBlocker(self)
+        self._pos_plot.viewport().installEventFilter(self._pos_wheel_blocker)
         right_box.addWidget(self._pos_plot)
         right_w = QWidget(); right_w.setLayout(right_box)
         right_w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
