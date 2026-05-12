@@ -316,7 +316,7 @@ class SpectralControlsEditor(QFrame):
 
         self.clean_controls_btn = QPushButton(icon('sparkles'), "Clean Controls")
         self.clean_controls_btn.setToolTip(
-            'Run the cleaning pipeline for all cell controls that have a Universal Negative assigned:\n'
+            'Run the cleaning pipeline for all cell controls that have an Unstained Negative assigned:\n'
             '  • Saturation exclusion\n'
             '  • Brightest-event selection\n'
             '  • Scatter matching\n'
@@ -457,7 +457,7 @@ class SpectralControlsEditor(QFrame):
 
     # ssr review: should use_cleaned and af_remove also be hidden if internal neg?
     def _update_universal_negative_column_visibility(self):
-        """Hide the Universal Negative column when using internal negatives.
+        """Hide the Unstained Negative column when using internal negatives.
         The underlying data is preserved — hiding is purely visual."""
         col_idx = COLUMNS.index("universal_negative_name")
         using_unstained = self.controller.experiment.process.get('negative_type') == 'unstained'

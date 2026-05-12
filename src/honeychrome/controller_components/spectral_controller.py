@@ -73,7 +73,7 @@ class ProfileUpdater:
         #     if self.bus:
         #         self.bus.warningMessage.emit('Selected number of fluorophores has changed. Previous controls have been flushed.')
 
-    ### OTB: changed so it finds the unstained sample when a universal negative is selected
+    ### OTB: changed so it finds the unstained sample when an unstained negative is selected
     # ssr review: is the pos unstained required here?
     def get_unstained_negative(self):
         try:
@@ -270,9 +270,9 @@ class ProfileUpdater:
                                     if self.raw_gating.find_matching_gate_paths(neg_gate_label):
                                         resolved_unstained = get_profile(neg_sample, neg_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
                                     else:
-                                        warnings.warn(f'{control["label"]}: universal negative "{universal_neg_name}" has no "Neg Unstained" gate — using internal negative.')
+                                        warnings.warn(f'{control["label"]}: unstained negative "{universal_neg_name}" has no "Neg Unstained" gate — using internal negative.')
                                 else:
-                                    warnings.warn(f'{control["label"]}: universal negative "{universal_neg_name}" not found in samples — using internal negative.')
+                                    warnings.warn(f'{control["label"]}: unstained negative "{universal_neg_name}" not found in samples — using internal negative.')
                             else:
                                 # Global unstained fallback
                                 if self.unstained_negative is None:

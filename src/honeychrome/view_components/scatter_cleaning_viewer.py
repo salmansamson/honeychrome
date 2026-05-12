@@ -210,7 +210,7 @@ class ScatterCleaningViewer(QFrame):
 
         left_box = QVBoxLayout()
         left_box.setSpacing(2)
-        self._neg_title = QLabel('Universal Negative')
+        self._neg_title = QLabel('Unstained Negative')
         self._neg_title.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
         self._neg_title.setStyleSheet('font-weight: bold; padding: 2px;')
         self._neg_title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -273,7 +273,7 @@ class ScatterCleaningViewer(QFrame):
         has_data = bool(labels)
         self._toggle.setEnabled(has_data)
         self._toggle.setToolTip(
-            'Show FSC/SSC biplots for the selected control and its universal negative.'
+            'Show FSC/SSC biplots for the selected control and its unstained negative.'
             if has_data else
             'Run "Clean Controls" first to populate this panel.'
         )
@@ -356,7 +356,7 @@ class ScatterCleaningViewer(QFrame):
         self._neg_plot.set_channel_labels(ch_x, ch_y)
         self._pos_plot.set_channel_labels(ch_x, ch_y)
         self._neg_title.setText(
-            f'Universal Negative — {control.get("universal_negative_name", "—")}')
+            f'Unstained Negative — {control.get("universal_negative_name", "—")}')
         self._pos_title.setText(
             f'{label} — {control.get("sample_name", "—")}')
 

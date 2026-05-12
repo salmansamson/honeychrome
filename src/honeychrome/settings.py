@@ -104,7 +104,7 @@ spectral_model_column_labels = {
     "gate_channel": "Major Channel",
     "sample_name": "Sample Name",
     "gate_label": "Positive Gate",
-    "universal_negative_name": "Universal Negative",
+    "universal_negative_name": "Unstained Negative",
     "use_cleaned": "Use Cleaned",
     "af_remove": "Exclude noise",
 }
