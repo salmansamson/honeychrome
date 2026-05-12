@@ -728,6 +728,11 @@ class AutoSpectralTab(QWidget):
         scroll.setWidget(self._content)
         outer.addWidget(scroll)
 
+        from honeychrome.settings import heading_style
+        title_label = QLabel("AutoSpectral AF")
+        title_label.setStyleSheet(heading_style)
+        content_layout.addWidget(title_label)
+
         # Help text (rich text / HTML)
         self.help_label = QLabel(autospectral_af_help_text)
         self.help_label.setTextFormat(Qt.RichText)

@@ -115,7 +115,6 @@ nxn_help_text = '''
 '''
 
 autospectral_af_help_text = '''
-<h3>AutoSpectral AF</h3>
 <h5>This is an optional enhancement of the spectral process, which implements the autofluorescence (AF) extraction part of the AutoSpectral package (AutoSpectral AF).</h5>
 <p>By following the steps below, you can extract each cell’s individual autofluorescent background in a manner specific to that cell, producing better unmixing with less spread.</p>
 <ol>
