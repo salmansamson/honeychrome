@@ -1043,6 +1043,34 @@ class AutoSpectralTab(QWidget):
             self._extract_status.setText('Please select an unstained sample.')
             return
 
+        spectral_model = self.controller.experiment.process.get('spectral_model', [])
+        all_samples = self.controller.experiment.samples
+        unstained_paths = set(all_samples.get('unstained_samples', []))
+        all_sample_paths = all_samples.get('all_samples', {})
+
+        # Reverse map: sample display name → path
+        name_to_path = {v: k for k, v in all_sample_paths.items()}
+
+        # Check if any control in the spectral model points to an unstained sample
+        offending = [
+            c.get('label', '?')
+            for c in spectral_model
+            if name_to_path.get(c.get('sample_name', '')) in unstained_paths
+        ]
+
+        if offending:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "Unstained Sample in Spectral Model",
+                "Warning: the following spectral model controls appear to use an unstained sample:\n\n"
+                + "\n".join(f"  • {lbl}" for lbl in offending)
+                + "\n\nUnstained samples should not be added as spectral controls when using AutoSpectral AF. "
+                "They should only be used as the negative reference (Unstained Negative column). "
+                "Please remove these controls from the Spectral Process table before proceeding."
+            )
+            return
+        
         try:
             full_path = str(self.controller.experiment_dir / sample_path)
             sample = sample_from_fcs(full_path, self.bus)
