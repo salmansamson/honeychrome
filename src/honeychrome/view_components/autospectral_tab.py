@@ -60,7 +60,7 @@ from honeychrome.view_components.help_texts import autospectral_af_help_text
 
 logger = logging.getLogger(__name__)
 
-TAB_NAME = 'AutoSpectral'
+TAB_NAME = 'AutoSpectral AF'
 
 
 # ---------------------------------------------------------------------------
