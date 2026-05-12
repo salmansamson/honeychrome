@@ -1014,18 +1014,16 @@ class AutoSpectralTab(QWidget):
 
         samples = self.controller.experiment.samples
         all_samples = samples.get('all_samples', {})
-        controls = samples.get('single_stain_controls', [])
         manually_tagged = set(samples.get('unstained_samples', []))
 
-        # Restrict to cell controls that are either manually tagged or match the
-        # "Unstained" regex (but allow tagged files that haven't been marked as Beads)
+        # Search all samples for unstained negatives, excluding bead files.
         candidates = [
-            p for p in controls
-            if not re.search(r'[Bb]eads', all_samples.get(p, ''))
+            p for p in all_samples
+            if not re.search(r'[Bb]eads', all_samples.get(p, ''), re.IGNORECASE)
             and (
                 p in manually_tagged
-                or 'unstained' in all_samples.get(p, '').lower()
-                or 'unstained' in p.lower()
+                or re.search(r'unstained', all_samples.get(p, ''), re.IGNORECASE)
+                or re.search(r'unstained', p, re.IGNORECASE)
             )
         ]
 

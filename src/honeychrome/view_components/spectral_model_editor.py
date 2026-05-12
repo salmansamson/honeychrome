@@ -257,6 +257,7 @@ class SpectralControlsEditor(QFrame):
         self.view.setModel(self.proxy)
         self.bus.spectralModelUpdated.connect(self.view.resizeToFit)
         self.bus.spectralControlAdded.connect(self.view.resizeToFit) #extends the table as autogeneration runs... looks interesting but a bit wonky
+        self.bus.sampleTreeUpdated.connect(self.refresh_comboboxes) # check for changes to unstained samples
         self.view.selectionModel().selectionChanged.connect(self._show_selected_profiles)
 
         # Different resize modes for different columns
@@ -557,26 +558,21 @@ class SpectralControlsEditor(QFrame):
         # Build list of available FCS file names for the universal negative combobox.
         # The sentinel option lets users explicitly opt back into the internal negative
         # for a specific control even when the global toggle is "Using unstained negative".
-        ssc_paths = self.samples.get('single_stain_controls', [])
+        all_samples = self.samples.get('all_samples', {})
         manually_tagged = set(self.samples.get('unstained_samples', []))
         particle_type = self.model._data[row].get('particle_type', '')
 
-        # Restrict to samples that are unstained (manually tagged or regex) and
-        # match the particle type of this control (Cells or Beads)
+        # Restrict to samples from locations that are unstained (manually tagged
+        # or regex-matched) and match the particle type of this control.
         unstained_options = []
-        for p in ssc_paths:
-            if p not in self.samples['all_samples']:
-                continue
-            tube_name = self.samples['all_samples'][p]
+        for p, tube_name in all_samples.items():
             is_unstained = (
                 p in manually_tagged
-                or 'unstained' in tube_name.lower()
-                or 'unstained' in p.lower()
+                or bool(re.search(r'unstained', tube_name, re.IGNORECASE))
+                or bool(re.search(r'unstained', p, re.IGNORECASE))
             )
             if not is_unstained:
                 continue
-            # Match particle type: Beads tube for Beads control, non-Beads for Cells
-            import re
             is_bead = bool(re.search(r'[Bb]eads', tube_name))
             if particle_type == 'Beads' and not is_bead:
                 continue
@@ -876,8 +872,7 @@ class SpectralControlsEditor(QFrame):
         self.setEnabled(True)  # re-enable after generate completes
         if control_valid:
             self.bus.showSelectedProfiles.emit([control['label']])
-            if not label_only:
-                self.bus.spectralModelUpdated.emit()
+            self.bus.spectralModelUpdated.emit()
         logger.info(f'SpectralModelEditor: updated {"valid" if control_valid else "invalid"} control {control}')
 
     def _propagate_label_rename(self, old: str, new: str):

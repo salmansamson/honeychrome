@@ -237,9 +237,19 @@ class ExperimentModel:
 
         self.samples['all_sample_nevents'] = all_sample_nevents
 
-        # Prune any manually-tagged unstained samples that no longer exist on disk
+        import re as _re
+        # Auto-register any samples whose name matches 'unstained' (case-insensitive)
+        # into unstained_samples, alongside manually-tagged ones.
+        tagged = self.samples.setdefault('unstained_samples', [])
+        for p, tube_name in self.samples['all_samples'].items():
+            if p not in tagged:
+                if (_re.search(r'unstained', tube_name, _re.IGNORECASE)
+                        or _re.search(r'unstained', p, _re.IGNORECASE)):
+                    tagged.append(p)
+
+        # Prune any tagged unstained samples that no longer exist on disk
         self.samples['unstained_samples'] = [
-            p for p in self.samples.get('unstained_samples', [])
+            p for p in self.samples['unstained_samples']
             if p in self.samples['all_samples']
         ]
 
