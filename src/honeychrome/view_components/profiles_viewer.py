@@ -230,7 +230,6 @@ class ProfilesViewer(QFrame):
             'is ticked, the cleaned positive and negative pools are shown as filled overlays.\n'
             'Axis style matches the Raw Data tab (biexponential transform, real-value ticks).'
         )
-        self.layout.addWidget(self._hist_toggle)
 
         self._hist_panel = QWidget()
         hist_panel_layout = QVBoxLayout(self._hist_panel)
@@ -264,7 +263,6 @@ class ProfilesViewer(QFrame):
         self._hist_glw.viewport().installEventFilter(self._hist_wheel_blocker)
         hist_panel_layout.addWidget(self._hist_glw)
         self._hist_panel.setVisible(False)
-        self.layout.addWidget(self._hist_panel)
 
         self._hist_toggle.toggled.connect(self._hist_panel.setVisible)
         self._hist_toggle.toggled.connect(self._refresh_histogram)
@@ -272,13 +270,26 @@ class ProfilesViewer(QFrame):
         if self.controller.experiment.process['profiles']:
             self.plot_profiles([])
 
+    def set_hist_toggle_visible(self, visible: bool):
+        """Show or hide the peak-channel histogram toggle (controlled by cleaning activation)."""
+        self._hist_toggle.setVisible(visible)
+
     def _refresh_histogram(self, *_):
         """Redraw the peak-channel histogram for the currently-displayed profiles."""
         if not self._hist_toggle.isChecked():
             return
-        labels = list(self.plot_items.keys()) or list(
-            self.controller.experiment.process.get('profiles', {}).keys()
-        )
+        # Use explicitly selected profiles if exactly one is selected in the table,
+        # otherwise auto-select the first profile in spectral model order.
+        selected = list(self.plot_items.keys())
+        if len(selected) == 1:
+            labels = selected
+        else:
+            spectral_model = self.controller.experiment.process.get('spectral_model', [])
+            all_profile_keys = set(self.controller.experiment.process.get('profiles', {}).keys())
+            labels = [
+                c['label'] for c in spectral_model
+                if c.get('label') in all_profile_keys
+            ][:1]
         self._plot_peak_histograms(labels)
 
     def _plot_peak_histograms(self, labels: list):

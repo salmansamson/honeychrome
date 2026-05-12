@@ -71,6 +71,7 @@ class EventBus(QObject):
     showSelectedProfiles = Signal(list)
     spectralControlAdded = Signal()
     spectralModelUpdated = Signal()
+    cleaningActivated = Signal(bool)   # True = cleaning UI active, False = hidden
     spectralProcessRefreshed = Signal()
     requestUpdateProcessHists = Signal()
     spilloverSelectedCellChanged = Signal(str, str)

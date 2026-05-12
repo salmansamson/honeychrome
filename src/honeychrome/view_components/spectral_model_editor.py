@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Any, Dict
 from PySide6 import QtCore
 from PySide6.QtCore import Qt, QModelIndex, QTimer, QThread, Slot, QObject, QEvent, QSize, Signal
-from PySide6.QtWidgets import (QApplication, QFrame, QGroupBox, QVBoxLayout, QHBoxLayout, QTableView, QPushButton, QStyledItemDelegate, QComboBox, QLineEdit, QMessageBox, QHeaderView, QLabel, QWidget, QCheckBox)
+from PySide6.QtWidgets import (QApplication, QFrame, QVBoxLayout, QHBoxLayout, QTableView, QPushButton, QStyledItemDelegate, QComboBox, QLineEdit, QMessageBox, QHeaderView, QLabel, QWidget, QCheckBox)
 
 from honeychrome.controller_components.functions import raw_gates_list
 from honeychrome.controller_components.spectral_controller import SpectralAutoGenerator, ProfileUpdater, SpectralCleaner, spectral_library
@@ -325,7 +325,6 @@ class SpectralControlsEditor(QFrame):
         btn_top_layout.addWidget(self.negatives_combo)
         btn_top_layout.addWidget(self.fluorescence_channel_filter_combo)
         btn_top_layout.addWidget(self.force_recalc_btn)
-        btn_top_layout.addWidget(self.clean_controls_btn)
         btn_top_layout.addStretch()
 
         self.add_row_btn = QPushButton(icon('plus'), "Add Control")
@@ -349,12 +348,40 @@ class SpectralControlsEditor(QFrame):
         btn_layout.addWidget(self.delete_btn)
         btn_layout.addStretch()
 
+        # ---- AutoSpectral Cleaning activation ----
+        self.activate_cleaning_checkbox = QCheckBox("Activate AutoSpectral Cleaning")
+        self.activate_cleaning_checkbox.setStyleSheet("""
+            QCheckBox {
+                font-size: 13pt;
+                font-weight: bold;
+                spacing: 8px;
+                padding: 6px 0px;
+            }
+        """)
+        self.activate_cleaning_checkbox.setToolTip(
+            'Show AutoSpectral Control Cleaning options: "Clean Controls" button, '
+            '"Use Cleaned" and "Exclude noise" table columns, peak-channel histograms, '
+            'scatter-matching and noise exclusion diagnostic plots.'
+        )
+
+        self.cleaning_help_widget = HelpToggleWidget(
+            title="Show Cleaning Help",
+            text=autospectral_cleaning_help_text,
+        )
+        self.cleaning_help_widget.setVisible(False)
+
+        # ---- Wiring ----
+        self.activate_cleaning_checkbox.toggled.connect(self._on_activate_cleaning_toggled)
+
+        # ---- Main layout ----
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         title = QLabel("Spectral Model Editor")
         layout.addWidget(title)
         title.setStyleSheet(heading_style)
         layout.addWidget(QLabel("Note: editing this table resets unmixed cytometry (plots, gates and fine-tuning (spillover) matrix)"))
+        layout.addWidget(self.activate_cleaning_checkbox)
+        layout.addWidget(self.cleaning_help_widget)
         layout.addLayout(btn_top_layout)
         layout.addWidget(self.filter_edit)
         layout.addWidget(self.view)
@@ -363,11 +390,31 @@ class SpectralControlsEditor(QFrame):
 
         # Build combobox widgets after layout setup
         self.refresh_comboboxes()
+        # Hide cleaning columns by default
+        self._set_cleaning_columns_visible(False)
         self.thread = None
         self.spectral_auto_generator = None
         self.profile_updater = ProfileUpdater(self.controller, self.bus)
         self.spectral_library_search_results = None
 
+    def _set_cleaning_columns_visible(self, visible: bool):
+        """Show or hide the cleaning-only table columns."""
+        for col_name in ("use_cleaned", "af_remove"):
+            col_idx = COLUMNS.index(col_name)
+            header = self.view.horizontalHeader()
+            if visible:
+                header.showSection(col_idx)
+            else:
+                header.hideSection(col_idx)
+
+    def _on_activate_cleaning_toggled(self, checked: bool):
+        self.cleaning_help_widget.setVisible(checked)
+        self._set_cleaning_columns_visible(checked)
+        # Also propagate visibility to the peak histogram toggle and
+        # scatter/noise diagnostic viewers via signals so main_window can relay.
+        if self.bus:
+            self.bus.cleaningActivated.emit(checked)
+    
     def update_fluorescence_channels_pnn(self):
         event_channels_pnn = self.controller.experiment.settings['raw']['event_channels_pnn']
         fluorescence_channel_ids = self.controller.filtered_raw_fluorescence_channel_ids
