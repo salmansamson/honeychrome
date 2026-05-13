@@ -531,15 +531,10 @@ class ProfilesViewer(QFrame):
     def _draw_hist_gates(self, label: str, control: dict,
                          xform_obj, raw_gating) -> None:
         """
-        Draw movable Pos/Neg gate regions on the peak-channel histogram.
-        Connects each region's sigRegionChangeFinished to write the new
-        bounds back into raw_gating and emit bus.changedGatingHierarchy,
-        so that the gate change propagates to the Raw Data tab and the
-        full gating hierarchy exactly as a manual drag on the Raw Data tab
-        would do.
+        Draw read-only Pos/Neg gate regions on the peak-channel histogram,
+        reflecting the current gate positions from raw_gating.
+        Gates are modified via the Raw Data tab only.
         """
-        from flowkit import Dimension
-
         gate_specs = [
             (control.get('gate_label', ''),  pg.mkBrush(0, 200, 0, 40),     pg.mkPen('g', width=2)),
             (f'Neg {label}',                 pg.mkBrush(100, 100, 255, 40), pg.mkPen('b', width=2)),
@@ -564,11 +559,10 @@ class ProfilesViewer(QFrame):
                     values=(lo_t, hi_t),
                     brush=region_brush,
                     pen=region_pen,
-                    movable=True,
+                    movable=False,
                 )
                 self._hist_vb.addItem(region)
 
-                # Floating gate label that tracks the left edge of the region
                 label_line = pg.InfiniteLine(
                     pos=lo_t, angle=90,
                     pen=pg.mkPen(None),
@@ -577,40 +571,6 @@ class ProfilesViewer(QFrame):
                                'fill': pg.mkBrush(0, 0, 0, 120)},
                 )
                 self._hist_vb.addItem(label_line)
-
-                # Keep the floating label anchored at the left edge as the region moves
-                region.sigRegionChanged.connect(
-                    lambda r=region, ll=label_line: ll.setPos(r.getRegion()[0])
-                )
-
-                # --- Write-back: update raw_gating and broadcast the change ---
-                # _make_writeback captures region explicitly to avoid the closure
-                # over the loop variable pitfall.
-                # note: this does not update the Raw Data tab--that requires changes to the controller
-                def _make_writeback(g_lbl, g_path, rg, rgn):
-                    def _on_finished():
-                        lo_d, hi_d = rgn.getRegion()
-                        try:
-                            g = rg.get_gate(g_lbl, gate_path=g_path)
-                            ch = g.dimensions[0].id
-                            g.dimensions[0] = Dimension(
-                                ch,
-                                compensation_ref='uncompensated',
-                                transformation_ref=ch,
-                                range_min=lo_d,
-                                range_max=hi_d,
-                            )
-                            if self.bus is not None:
-                                self.bus.changedGatingHierarchy.emit('raw', g_lbl)
-                        except Exception as exc:
-                            logger.warning(
-                                f'ProfilesViewer: failed to write back gate "{g_lbl}": {exc}'
-                            )
-                    return _on_finished
-
-                region.sigRegionChangeFinished.connect(
-                    _make_writeback(gate_lbl, gate_path, raw_gating, region)
-                )
 
             except Exception:
                 pass
