@@ -432,7 +432,7 @@ class ProfilesViewer(QFrame):
                         try:
                             sample = sample_from_fcs(str(experiment_dir / rel_path))
                             all_ev = get_raw_events(sample, fluor_ch_ids)
-                            neg_gate_lbl = f'Neg {label}'
+                            neg_gate_lbl = control.get('neg_gate_label') or f'Neg {label}'
                             if raw_gating.find_matching_gate_paths(neg_gate_lbl):
                                 neg_mask = raw_gating.gate_sample(sample).get_gate_membership(neg_gate_lbl)
                                 neg_ev = all_ev[neg_mask]
@@ -538,8 +538,8 @@ class ProfilesViewer(QFrame):
         Gates are modified via the Raw Data tab only.
         """
         gate_specs = [
-            (control.get('gate_label', ''),  pg.mkBrush(0, 200, 0, 40),     pg.mkPen('g', width=2)),
-            (f'Neg {label}',                 pg.mkBrush(100, 100, 255, 40), pg.mkPen('b', width=2)),
+            (control.get('gate_label', ''),                     pg.mkBrush(0, 200, 0, 40),     pg.mkPen('g', width=2)),
+            (control.get('neg_gate_label') or f'Neg {label}',   pg.mkBrush(100, 100, 255, 40), pg.mkPen('b', width=2)),
         ]
 
         for gate_lbl, region_brush, region_pen in gate_specs:
