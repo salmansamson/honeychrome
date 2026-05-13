@@ -586,17 +586,27 @@ class SpectralControlsEditor(QFrame):
                 search_results = spectral_library.search_for_label(self.model._data[row]['label'].strip())
                 if search_results:
                     enable_sample_name_cb = True
-                    current_control_list = ['[Spectral Library] '
-                                            + search_results[index]['sample_name'] + ', '
-                                            + ('Major Channel: ' + search_results[index]['gate_channel'] + ', ' if search_results[index]['gate_channel'] else '')
-                                            + 'Experiment: ' + search_results[index]['experiment_root_directory'] + ', '
-                                             + datetime.fromtimestamp(search_results[index]['timestamp']).strftime('%Y-%m-%d %H:%M:%S') + ' '
-                                            for index in search_results
-                                            if list(json.loads(search_results[index]['profile_dict']).keys()) == self.fluorescence_channels_pnn]
-
+                    # Annotate each result with its display string (or None if channels
+                    # don't match this instrument), then derive the combobox list from
+                    # those annotations.  Using a single loop avoids the index-mismatch
+                    # that occurred when results were filtered but indices weren't remapped.
                     for index in search_results:
-                        search_results[index]['current_control_list'] = current_control_list[index]
+                        if list(json.loads(search_results[index]['profile_dict']).keys()) == self.fluorescence_channels_pnn:
+                            search_results[index]['current_control_list'] = (
+                                '[Spectral Library] '
+                                + search_results[index]['sample_name'] + ', '
+                                + ('Major Channel: ' + search_results[index]['gate_channel'] + ', ' if search_results[index]['gate_channel'] else '')
+                                + 'Experiment: ' + search_results[index]['experiment_root_directory'] + ', '
+                                + datetime.fromtimestamp(search_results[index]['timestamp']).strftime('%Y-%m-%d %H:%M:%S') + ' '
+                            )
+                        else:
+                            search_results[index]['current_control_list'] = None
 
+                    current_control_list = [
+                        search_results[index]['current_control_list']
+                        for index in search_results
+                        if search_results[index]['current_control_list'] is not None
+                    ]
                     self.spectral_library_search_results = search_results # store search_results for profile generator
                 else:
                     enable_sample_name_cb = False

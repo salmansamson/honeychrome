@@ -473,7 +473,11 @@ class NxNGrid(QFrame):
             if not self.vertical_headers:
                 return False
 
-            rr = self.horizontal_headers.index(self.vertical_headers[r])
+            # guard against uncalculated profiles
+            v_label = self.vertical_headers[r]
+            if v_label not in self.horizontal_headers:
+                return False
+            rr = self.horizontal_headers.index(v_label)
             c = index.column()
             # ignore diagonal cells
             if rr == c:
