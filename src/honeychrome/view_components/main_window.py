@@ -339,6 +339,19 @@ class MainWindow(QMainWindow):
         # --- visibility wiring ---
         self.bus.cleaningActivated.connect(self.cleaning_section.setVisible)
 
+        # Restore cleaning UI state
+        from PySide6.QtCore import QSettings as _QSettings
+        _qs = _QSettings("honeychrome", "app_configuration")
+        if _qs.value("show_autospectral_cleaning", False, type=bool):
+            _help_expanded = _qs.value("cleaning_help_expanded", True, type=bool)
+            self.spectral_controls_editor.activate_cleaning_checkbox.setChecked(True)
+            # Restore help expanded/collapsed state (setChecked auto-expands help;
+            # override here if the user had collapsed it last time)
+            self.spectral_controls_editor.cleaning_help_widget.help_label.setVisible(_help_expanded)
+            self.spectral_controls_editor.cleaning_help_widget.help_button.setText(
+                "Hide Help" if _help_expanded else "Show Cleaning Help"
+            )
+
         # --- Plugin tabs (placeholders + background load) ---
         self._plugin_placeholders = {}
         self._bus_ref = bus

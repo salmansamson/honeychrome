@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from typing import List, Any, Dict
 from PySide6 import QtCore
-from PySide6.QtCore import Qt, QModelIndex, QTimer, QThread, Slot, QObject, QEvent, QSize, Signal
+from PySide6.QtCore import Qt, QModelIndex, QTimer, QThread, Slot, QObject, QEvent, QSize, Signal, QSettings
 from PySide6.QtWidgets import (QApplication, QFrame, QVBoxLayout, QHBoxLayout, QTableView, QPushButton, QStyledItemDelegate, QComboBox, QLineEdit, QMessageBox, QHeaderView, QLabel, QWidget, QCheckBox)
 
 from honeychrome.controller_components.functions import raw_gates_list
@@ -379,6 +379,9 @@ class SpectralControlsEditor(QFrame):
         )
         self.cleaning_help_widget.setVisible(False)
 
+        # Persist cleaning help expanded/collapsed state whenever toggled
+        self.cleaning_help_widget.help_button.clicked.connect(self._save_cleaning_help_state)
+
         # ---- Wiring ----
         self.activate_cleaning_checkbox.toggled.connect(self._on_activate_cleaning_toggled)
 
@@ -418,11 +421,22 @@ class SpectralControlsEditor(QFrame):
 
     def _on_activate_cleaning_toggled(self, checked: bool):
         self.cleaning_help_widget.setVisible(checked)
+        if checked:
+            # Auto-expand help text when cleaning section is first shown
+            self.cleaning_help_widget.help_label.setVisible(True)
+            self.cleaning_help_widget.help_button.setText("Hide Help")
         self._set_cleaning_columns_visible(checked)
-        # Also propagate visibility to the peak histogram toggle and
-        # scatter/noise diagnostic viewers via signals so main_window can relay.
+        QSettings("honeychrome", "app_configuration").setValue("show_autospectral_cleaning", checked)
         if self.bus:
             self.bus.cleaningActivated.emit(checked)
+
+    def _save_cleaning_help_state(self):
+        # Called after toggle_help has already flipped the label, so isVisible()
+        # reflects the new state at the time this fires.
+        QSettings("honeychrome", "app_configuration").setValue(
+            "cleaning_help_expanded",
+            self.cleaning_help_widget.help_label.isVisible()
+        )
     
     def update_fluorescence_channels_pnn(self):
         event_channels_pnn = self.controller.experiment.settings['raw']['event_channels_pnn']
@@ -476,9 +490,7 @@ class SpectralControlsEditor(QFrame):
             if reply == QMessageBox.Yes:
                 self.model.delete_rows_by_indices(list(range(len(self.model._data))))
             else:
-                self.fluorescence_channel_filter_combo.blockSignals(True)
                 self.update_combos()
-                self.fluorescence_channel_filter_combo.blockSignals(False)
                 return
 
         if self.fluorescence_channel_filter_combo.currentText() == 'Using all fluorescence channels':
@@ -494,24 +506,31 @@ class SpectralControlsEditor(QFrame):
             self.bus.showSelectedProfiles.emit(None)
 
     def update_combos(self):
-        if self.controller.experiment.process['negative_type'] == 'unstained':
-            self.negatives_combo.setCurrentText('Using unstained negative')
-            self.negatives_combo.setToolTip('Negative set to "Neg Unstained" gate on Unstained sample')
-        elif self.controller.experiment.process['negative_type'] == 'internal':
-            self.negatives_combo.setCurrentText('Using internal negatives')
-            self.negatives_combo.setToolTip('Negative set to bottom percentile of each control sample')
+        # Block signals so that programmatic sync does not fire set_negative_type
+        # or set_fluorescence_channel_filter, which would clear profiles and
+        # trigger unnecessary recalculation.
+        self.negatives_combo.blockSignals(True)
+        self.fluorescence_channel_filter_combo.blockSignals(True)
+        try:
+            if self.controller.experiment.process['negative_type'] == 'unstained':
+                self.negatives_combo.setCurrentText('Using unstained negative')
+                self.negatives_combo.setToolTip('Negative set to "Neg Unstained" gate on Unstained sample')
+            elif self.controller.experiment.process['negative_type'] == 'internal':
+                self.negatives_combo.setCurrentText('Using internal negatives')
+                self.negatives_combo.setToolTip('Negative set to bottom percentile of each control sample')
 
-        if self.controller.experiment.process['fluorescence_channel_filter'] == 'area_only':
-            self.fluorescence_channel_filter_combo.setCurrentText('Using area channels only')
-            self.fluorescence_channel_filter_combo.setToolTip('Ignoring height channels in spectral model')
-        elif self.controller.experiment.process['fluorescence_channel_filter'] == 'all_fluorescence':
-            self.fluorescence_channel_filter_combo.setCurrentText('Using all fluorescence channels')
-            self.fluorescence_channel_filter_combo.setToolTip('Including both area and height channels in spectral model')
+            if self.controller.experiment.process['fluorescence_channel_filter'] == 'area_only':
+                self.fluorescence_channel_filter_combo.setCurrentText('Using area channels only')
+                self.fluorescence_channel_filter_combo.setToolTip('Ignoring height channels in spectral model')
+            elif self.controller.experiment.process['fluorescence_channel_filter'] == 'all_fluorescence':
+                self.fluorescence_channel_filter_combo.setCurrentText('Using all fluorescence channels')
+                self.fluorescence_channel_filter_combo.setToolTip('Including both area and height channels in spectral model')
 
-        self._update_universal_negative_column_visibility()
+            self._update_universal_negative_column_visibility()
+        finally:
+            self.negatives_combo.blockSignals(False)
+            self.fluorescence_channel_filter_combo.blockSignals(False)
 
-    # ssr review: should use_cleaned and af_remove also be hidden if internal neg?
-    # otb: yes, I think they are now
     def _update_universal_negative_column_visibility(self):
         using_unstained = self.controller.experiment.process.get('negative_type') == 'unstained'
         header = self.view.horizontalHeader()
@@ -1078,12 +1097,16 @@ class SpectralControlsEditor(QFrame):
             # that would invalidate it).  This avoids unnecessary re-extraction
             # when only one or two controls have changed.
             if label and label in self.profile_updater.profiles:
+                # Library controls depend on spectral_library_search_results which is
+                # only populated after refresh_comboboxes runs — always regenerate them
+                # so the search_results lookup is performed with current data.
+                is_library = control.get('control_type') == 'Single Stained Spectral Control from Library'
                 gate_label = control.get('gate_label', '')
                 gate_still_valid = (
-                    not gate_label                                              # Channel Assignment — no gate needed
+                    not gate_label
                     or bool(self.raw_gating.find_matching_gate_paths(gate_label))
                 )
-                if gate_still_valid:
+                if gate_still_valid and not is_library:
                     logger.info(f'SpectralModelEditor: skipping recalc for "{label}" — profile present and gate valid')
                     continue
 

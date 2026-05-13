@@ -470,7 +470,7 @@ class NxNGrid(QFrame):
 
             # note that row number is not the same as the index of the fluorescence pnn if profiles have been selected. convert to the right row rr
             r = index.row()
-            if not self.vertical_headers:
+            if not self.vertical_headers or r >= len(self.vertical_headers):
                 return False
 
             # guard against uncalculated profiles

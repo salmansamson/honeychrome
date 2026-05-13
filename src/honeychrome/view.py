@@ -274,6 +274,10 @@ class View(QObject):
             self.main_window.tip_unmixed.setVisible(True)
             self.main_window.statistical_comparison_widget.setVisible(False)
 
+        # Restore profile display for all controls (including library controls) whose profiles were saved in the kit file.
+        if self.controller.experiment.process.get('profiles'):
+            QTimer.singleShot(100, lambda: self.bus.showSelectedProfiles.emit([]))
+
 
     @Slot(str)
     def popup_message(self, message):
