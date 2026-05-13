@@ -1149,17 +1149,15 @@ class SpectralControlsEditor(QFrame):
 
         self.clean_controls_btn.setText("Clean Controls")
 
+        # Rebuild comboboxes now so that spectral_library_search_results is populated before the recalc worker runs
+        self.refresh_comboboxes()
+
         # Run profile regeneration in a background thread so the main thread
         # stays responsive. _on_force_recalc is not thread-safe (it touches Qt
         # widgets directly), so we do only the pure computation here and defer
         # the UI update to the main thread via a signal.
         self._recalc_thread = QThread()
         self._recalc_worker = _RecalcWorker(self.profile_updater, self.model._data, self.spectral_library_search_results)
-        self._recalc_worker.moveToThread(self._recalc_thread)
-        self._recalc_thread.started.connect(self._recalc_worker.run)
-        self._recalc_worker.finished.connect(self._recalc_thread.quit)
-        self._recalc_thread.finished.connect(self._on_recalc_finished)
-        self._recalc_thread.start()
 
     @Slot()
     def _on_recalc_finished(self):
