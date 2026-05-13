@@ -775,12 +775,18 @@ class SpectralCleaner(QObject):
         for n, control in enumerate(eligible_external):
             if self.bus:
                 self.bus.progress.emit(n, total)
-            self._clean_one(control)
+            if not self._is_cleaning_current(control):
+                self._clean_one(control)
+            else:
+                logger.info(f'SpectralCleaner: skipping "{control["label"]}" — result already current.')
 
         for n, control in enumerate(eligible_internal):
             if self.bus:
                 self.bus.progress.emit(len(eligible_external) + n, total)
-            self._clean_one(control)
+            if not self._is_cleaning_current(control):
+                self._clean_one(control)
+            else:
+                logger.info(f'SpectralCleaner: skipping "{control["label"]}" — result already current.')
 
         if self.bus:
             self.bus.progress.emit(total, total)
@@ -789,6 +795,30 @@ class SpectralCleaner(QObject):
                     f'and {len(eligible_internal)} internal/bead controls.')
         self.cleaningFinished.emit()
 
+    def _cleaning_fingerprint(self, control: dict) -> dict:
+        """Return a dict of all inputs that determine what _clean_one will produce.
+        If this matches what is stored in cleaned_events, the result is still current."""
+        return {
+            'sample_name': control.get('sample_name'),
+            'gate_label': control.get('gate_label'),
+            'universal_negative_name': control.get('universal_negative_name'),
+            'af_remove': bool(control.get('af_remove', False)),
+            'particle_type': control.get('particle_type'),
+            'fluor_ch_ids': list(self.fluor_ch_ids),
+        }
+
+    def _is_cleaning_current(self, control: dict) -> bool:
+        """Return True if a valid cleaned result already exists for this control
+        and its fingerprint matches the current control configuration."""
+        label = control.get('label') or ''
+        existing = self.cleaned_events.get(label)
+        if not existing:
+            return False
+        stored_fp = existing.get('_fingerprint')
+        if stored_fp is None:
+            return False
+        return stored_fp == self._cleaning_fingerprint(control)
+    
     def _clean_one(self, control: dict):
         from honeychrome.controller_components.spectral_functions import get_raw_events
         from honeychrome.controller_components.spectral_cleaning import (
@@ -968,6 +998,7 @@ class SpectralCleaner(QObject):
                 'af_ch_idx': result.af_ch_idx,
                 'af_peak_ch_idx': result.af_peak_ch_idx,
                 'warnings': result.warnings,
+                '_fingerprint': self._cleaning_fingerprint(control),
             }
 
             logger.info(
