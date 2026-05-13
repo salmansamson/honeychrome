@@ -289,12 +289,14 @@ class ProfilesViewer(QFrame):
         self._hist_toggle.setVisible(visible)
 
     def _refresh_hist_combo(self):
-        """Repopulate the control combo from profiles in spectral model order."""
+        """Repopulate the control combo from profiles in spectral model order.
+        Library controls are excluded — they have no FCS file to load events from."""
         spectral_model = self.controller.experiment.process.get('spectral_model', [])
         all_profile_keys = set(self.controller.experiment.process.get('profiles', {}).keys())
         labels = [
             c['label'] for c in spectral_model
             if c.get('label') in all_profile_keys
+            and c.get('control_type') != 'Single Stained Spectral Control from Library'
         ]
         current = self._hist_combo.currentText()
         self._hist_combo.blockSignals(True)
