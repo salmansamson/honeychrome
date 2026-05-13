@@ -96,9 +96,6 @@ class ProfileUpdater:
                 # data_for_cytometry_plots_raw['plots'] may be None if no sample is loaded.
                 raw_plots = self.controller.experiment.cytometry['raw_plots']
 
-
-                # ssr review: I think there is a problem here: if either pos or neg gates missing, then a plot is added with both, possibly causing duplication
-                # otb: should be fixed now
                 for target_gate_label in [positive_gate_label, negative_gate_label]:
                     if not self.raw_gating.find_matching_gate_paths(target_gate_label):
                         channel_x = 'FSC-A'
@@ -529,8 +526,6 @@ class SpectralAutoGenerator(QObject):
             # Skip samples whose name or path contains "Unstained" or "Negative",
             # or that have been manually marked as unstained by the user.
             # Users can still add them manually via the +Add Control button.
-            # ssr review: would users not potentially use unstained for af if not doing af with autospectral?
-            # otb: yes, by adding them manually. we can incorporate multi-AF later, if people want its
             manually_unstained = set(self.samples.get('unstained_samples', []))
             if re.search(r'(unstained|negative)', tubename, re.IGNORECASE) or \
                re.search(r'(unstained|negative)', sample_path, re.IGNORECASE) or \
