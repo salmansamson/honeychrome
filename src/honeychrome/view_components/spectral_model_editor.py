@@ -358,7 +358,7 @@ class SpectralControlsEditor(QFrame):
         btn_layout.addStretch()
 
         # ---- AutoSpectral Cleaning activation ----
-        self.activate_cleaning_checkbox = QCheckBox("Activate AutoSpectral Cleaning")
+        self.activate_cleaning_checkbox = QCheckBox("Show AutoSpectral Cleaning")
         self.activate_cleaning_checkbox.setStyleSheet("""
             QCheckBox {
                 font-size: 13pt;
