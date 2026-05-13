@@ -215,13 +215,10 @@ class ProfileUpdater:
                     nevents = self.samples['all_sample_nevents'][sample_path]
                     if nevents > 0:
                         full_sample_path = str(self.experiment_dir / sample_path)
-                        sample = sample_from_fcs(full_sample_path)
                         control['sample_path'] = full_sample_path
 
                         positive_gate_label = control['gate_label']
-                        if not self.raw_gating.find_matching_gate_paths(positive_gate_label):
-                            raise Exception(f'Positive gate label {positive_gate_label} not present in Raw Data. ')
-
+                        
                         # use cleaned event pool when available and opted in
                         cleaned_store = self.controller.cleaned_events
                         cleaned = cleaned_store.get(control['label']) if control.get('use_cleaned') is not False else None
@@ -249,6 +246,11 @@ class ProfileUpdater:
                             profile_dict = dict(zip(self.fluorescence_channels_pnn, profile))
                             spectral_library.deposit_control_with_profile_and_experiment_dir(control, profile_dict, str(self.experiment_dir))
                             return True
+
+                        # FCS load only needed for non-cleaned path
+                        if not self.raw_gating.find_matching_gate_paths(positive_gate_label):
+                            raise Exception(f'Positive gate label {positive_gate_label} not present in Raw Data. ')
+                        sample = sample_from_fcs(full_sample_path)
 
                         positive_profile = get_profile(sample, positive_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
 
