@@ -340,8 +340,6 @@ class MainWindow(QMainWindow):
         self.bus.cleaningActivated.connect(self.cleaning_section.setVisible)
 
         # --- Plugin tabs (placeholders + background load) ---
-        # ssr review: I hope you are sure about this working!
-        # otb: so far, so good. lots more to do on this bit
         self._plugin_placeholders = {}
         self._bus_ref = bus
         self._controller_ref = controller
