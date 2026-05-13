@@ -404,7 +404,7 @@ class ProfilesViewer(QFrame):
                     pct = count / peak * 100 if peak > 0 else count
                     return edges, pct
 
-            use_cleaned = control.get('use_cleaned', False)
+            use_cleaned = control.get('use_cleaned') is not False
             cleaned     = cleaned_store.get(label) if use_cleaned else None
 
             from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL

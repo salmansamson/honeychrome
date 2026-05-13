@@ -338,6 +338,7 @@ class MainWindow(QMainWindow):
 
         # --- visibility wiring ---
         self.bus.cleaningActivated.connect(self.cleaning_section.setVisible)
+        self.bus.cleaningResultsReady.connect(self._on_cleaning_results_ready)
 
         # Restore cleaning UI state
         from PySide6.QtCore import QSettings as _QSettings
@@ -572,6 +573,14 @@ class MainWindow(QMainWindow):
         for name, widget in {"gains": self.gains_widget, "acquisition": self.acquisition_widget}.items():
             visible = self.settings.value(f"{name}_visible", True, type=bool)
             widget.setVisible(visible)
+
+    @Slot()
+    def _on_cleaning_results_ready(self):
+        """Refresh the peak-channel histogram immediately after Clean Controls finishes."""
+        if self.profiles_viewer._hist_toggle.isChecked():
+            logger.info(f'MainWindow: calling _refresh_hist_combo and _refresh_histogram')
+            self.profiles_viewer._refresh_hist_combo()
+            self.profiles_viewer._refresh_histogram()
 
 if __name__ == "__main__":
     import sys

@@ -1158,11 +1158,18 @@ class SpectralControlsEditor(QFrame):
         # the UI update to the main thread via a signal.
         self._recalc_thread = QThread()
         self._recalc_worker = _RecalcWorker(self.profile_updater, self.model._data, self.spectral_library_search_results)
+        self._recalc_worker.moveToThread(self._recalc_thread)
+        self._recalc_thread.started.connect(self._recalc_worker.run)
+        self._recalc_worker.finished.connect(self._recalc_thread.quit)
+        self._recalc_thread.finished.connect(self._on_recalc_finished)
+        self._recalc_thread.start()
 
     @Slot()
     def _on_recalc_finished(self):
         self.bus.spectralModelUpdated.emit()
         self.refresh_table_and_enable()
+        if self.bus:
+            self.bus.cleaningResultsReady.emit()
         logger.info('SpectralControlsEditor: Clean Controls run complete.')
 
 

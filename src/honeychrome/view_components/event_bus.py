@@ -72,6 +72,7 @@ class EventBus(QObject):
     spectralControlAdded = Signal()
     spectralModelUpdated = Signal()
     cleaningActivated = Signal(bool)   # True = cleaning UI active, False = hidden
+    cleaningResultsReady = Signal()    # emitted after Clean Controls recalc finishes
     spectralProcessRefreshed = Signal()
     requestUpdateProcessHists = Signal()
     spilloverSelectedCellChanged = Signal(str, str)
