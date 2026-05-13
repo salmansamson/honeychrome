@@ -409,9 +409,11 @@ class HeatmapViewEditor(QFrame):
             col_chan = self.model.horizontal_headers[current.column()]
             self.bus.spilloverSelectedCellChanged.emit(row_chan, col_chan)
 
+    # guard against header changes and missing headers by checking if row_chan and col_chan are still in the model's headers before trying to find their indices. If not, clear selection.
     @Slot(str, str)
-    def set_selected_cell(self, row_chan, col_chan):#
-        if row_chan in self.model.vertical_headers and col_chan in self.model.horizontal_headers:
+    def set_selected_cell(self, row_chan, col_chan):
+        if (self.model.vertical_headers and self.model.horizontal_headers
+                and row_chan in self.model.vertical_headers and col_chan in self.model.horizontal_headers):
             self.view.selectionModel().setCurrentIndex(
                 self.model.index(self.model.vertical_headers.index(row_chan),
                                  self.model.horizontal_headers.index(col_chan)

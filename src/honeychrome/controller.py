@@ -449,7 +449,7 @@ class Controller(QObject):
 
             unmixed_pnn = self.experiment.settings['unmixed']['event_channels_pnn']
             unmixed_pnn_labels = build_display_label_map(
-                unmixed_pnn, self.experiment.process.get('spectral_model')
+                unmixed_pnn or [], self.experiment.process.get('spectral_model') # guard in case unmixed_pnn is None
             )
 
             self.data_for_cytometry_plots_process.update(

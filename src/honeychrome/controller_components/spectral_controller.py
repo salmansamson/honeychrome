@@ -438,7 +438,7 @@ class SpectralAutoGenerator(QObject):
             # self.bus.changedGatingHierarchy.emit('raw', 'root')
             self.bus.progress.emit(self.progress_target, self.progress_target)
             self.bus.spectralModelUpdated.emit()
-            self.bus.showSelectedProfiles.emit(None)
+            self.bus.showSelectedProfiles.emit([]) # refresh everything
 
     def get_unstained_negative(self):
         try:

@@ -577,7 +577,7 @@ def build_display_label_map(pnn, spectral_model):
         for control in (spectral_model or [])
     }
     result = {}
-    for name in pnn:
+    for name in (pnn or []): # guard against None
         antigen = label_to_antigen.get(name, '')
         result[name] = f'{antigen} {name}'.strip() if antigen else name
     return result
