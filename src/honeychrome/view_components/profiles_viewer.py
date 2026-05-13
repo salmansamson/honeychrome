@@ -243,6 +243,8 @@ class ProfilesViewer(QFrame):
         self._hist_combo = QComboBox()
         self._hist_combo.setMinimumWidth(220)
         self._hist_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._hist_combo.installEventFilter(WheelBlocker(self._hist_combo))
+        self._hist_combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         hist_ctrl_row.addWidget(self._hist_combo)
         hist_ctrl_row.addStretch()
         hist_panel_layout.addLayout(hist_ctrl_row)

@@ -183,6 +183,8 @@ class ScatterCleaningViewer(QFrame):
         self._combo = QComboBox()
         self._combo.setMinimumWidth(220)
         self._combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._combo.installEventFilter(WheelBlocker(self._combo))
+        self._combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         ctrl_row.addWidget(self._combo)
         ctrl_row.addStretch()
         self._status = QLabel('')

@@ -302,8 +302,12 @@ class SpectralControlsEditor(QFrame):
 
         self.negatives_combo = QComboBox()
         self.negatives_combo.addItems(['Using unstained negative', 'Using internal negatives'])
+        self.negatives_combo.installEventFilter(WheelBlocker(self.negatives_combo))
+        self.negatives_combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self.fluorescence_channel_filter_combo = QComboBox()
         self.fluorescence_channel_filter_combo.addItems(['Using area channels only', 'Using all fluorescence channels'])
+        self.fluorescence_channel_filter_combo.installEventFilter(WheelBlocker(self.fluorescence_channel_filter_combo))
+        self.fluorescence_channel_filter_combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self.update_combos()
         self.bus.spectralModelUpdated.connect(self.update_combos)
 

@@ -794,6 +794,8 @@ class AutoSpectralTab(QWidget):
 
         self._sample_combo = QComboBox()
         self._sample_combo.setToolTip('Select the unstained control sample.')
+        self._sample_combo.installEventFilter(WheelBlocker(self._sample_combo))
+        self._sample_combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         layout.addRow('Unstained sample:', self._sample_combo)
 
         self._n_clusters_spin = QSpinBox()
@@ -802,6 +804,8 @@ class AutoSpectralTab(QWidget):
         self._n_clusters_spin.setToolTip(
             'KMeans cluster count (equivalent to som.dim² in R AutoSpectral).'
         )
+        self._n_clusters_spin.installEventFilter(WheelBlocker(self._n_clusters_spin))
+        self._n_clusters_spin.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         layout.addRow('AF clusters:', self._n_clusters_spin)
 
         self._extract_btn = QPushButton('Extract AF Profile')
@@ -917,6 +921,8 @@ class AutoSpectralTab(QWidget):
         ctrl_row = QHBoxLayout()
         ctrl_row.addWidget(QLabel('AF profile (right plot):'))
         self._cmp_profile_combo = QComboBox()
+        self._cmp_profile_combo.installEventFilter(WheelBlocker(self._cmp_profile_combo))
+        self._cmp_profile_combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self._cmp_profile_combo.setToolTip(
             '"Assigned to sample" uses the profiles assigned in Step 2. '
             'Select an individual profile to preview it without changing assignments.'
