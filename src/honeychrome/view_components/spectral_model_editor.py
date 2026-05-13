@@ -338,7 +338,11 @@ class SpectralControlsEditor(QFrame):
         self.delete_btn = QPushButton("Delete Selected")
 
         self.auto_generate_button.clicked.connect(self.auto_generate)
-        self.negatives_combo.currentTextChanged.connect(self.set_negative_type)
+        self._negative_type_timer = QTimer()
+        self._negative_type_timer.setSingleShot(True)
+        self._negative_type_timer.setInterval(250)
+        self._negative_type_timer.timeout.connect(self.set_negative_type)
+        self.negatives_combo.currentTextChanged.connect(self._negative_type_timer.start)
         self.fluorescence_channel_filter_combo.currentTextChanged.connect(self.set_fluorescence_channel_filter)
         self.force_recalc_btn.clicked.connect(self._on_force_recalc)
         self.add_row_btn.clicked.connect(self.add_row)
@@ -427,6 +431,8 @@ class SpectralControlsEditor(QFrame):
         self.fluorescence_channels_pnn.extend([event_channels_pnn[i] for i in fluorescence_channel_ids])
 
     def set_negative_type(self):
+        # Cancel any pending per-control update — the full refresh below supersedes it
+        self._update_timer.stop()
         if self.negatives_combo.currentText() == 'Using unstained negative':
             self.controller.experiment.process['negative_type'] = 'unstained'
             self.negatives_combo.setToolTip('Negative set to "Neg Unstained" gate on Unstained sample')
@@ -442,14 +448,13 @@ class SpectralControlsEditor(QFrame):
                             control['universal_negative_name'] = default_unstained
                         else:
                             control['universal_negative_name'] = INTERNAL_NEGATIVE_SENTINEL
-            self.model.layoutChanged.emit()
         else:
             self.controller.experiment.process['negative_type'] = 'internal'
             self.negatives_combo.setCurrentText('Using internal negatives')
             self.negatives_combo.setToolTip('Negative set to bottom percentile of each control sample')
         logger.info(f'SpectralModelEditor: set negative type to {self.controller.experiment.process["negative_type"]}')
         self._update_universal_negative_column_visibility()
-        self.refresh_comboboxes()  # show/hide neg_gate_label column per row
+        self.refresh_comboboxes()  # rebuilds all comboboxes, making layoutChanged redundant
 
         # Changing the negative type invalidates all existing profiles. Clear them
         # so that when the user presses Recalculate, the skip-if-valid logic in
@@ -525,8 +530,14 @@ class SpectralControlsEditor(QFrame):
 
 
     def refresh_comboboxes(self):
-        for row in range(self.model.rowCount()):
-            self._add_comboboxes_to_row(row)
+        if getattr(self, '_refreshing_comboboxes', False):
+            return
+        self._refreshing_comboboxes = True
+        try:
+            for row in range(self.model.rowCount()):
+                self._add_comboboxes_to_row(row)
+        finally:
+            self._refreshing_comboboxes = False
 
     def _add_or_replace_combobox_if_enabled(self, idx, should_have_combobox, items):
         proxy_index = self.proxy.mapFromSource(idx)
@@ -534,8 +545,9 @@ class SpectralControlsEditor(QFrame):
         # remove existing index widget (if any)
         old_widget = self.view.indexWidget(proxy_index)
         if old_widget is not None:
-            old_widget.deleteLater()
-            self.view.setIndexWidget(proxy_index, None)
+            self.view.setIndexWidget(proxy_index, None)  # unparents and hides immediately
+            old_widget.hide()
+            old_widget.setParent(None)                   # synchronous destruction path
 
         # now safely create and add a new combobox (if needed)
         if should_have_combobox:
@@ -688,8 +700,9 @@ class SpectralControlsEditor(QFrame):
 
         old = self.view.indexWidget(proxy_uc_idx)
         if old is not None:
-            old.deleteLater()
             self.view.setIndexWidget(proxy_uc_idx, None)
+            old.hide()
+            old.setParent(None)
 
         if cleaned_available:
             cb = QCheckBox()
@@ -730,8 +743,9 @@ class SpectralControlsEditor(QFrame):
 
         old_af = self.view.indexWidget(proxy_af_idx)
         if old_af is not None:
-            old_af.deleteLater()
             self.view.setIndexWidget(proxy_af_idx, None)
+            old_af.hide()
+            old_af.setParent(None)
 
         if af_remove_eligible:
             af_cb = QCheckBox()
