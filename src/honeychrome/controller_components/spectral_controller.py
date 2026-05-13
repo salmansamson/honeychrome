@@ -73,17 +73,19 @@ class ProfileUpdater:
         #     if self.bus:
         #         self.bus.warningMessage.emit('Selected number of fluorophores has changed. Previous controls have been flushed.')
 
-    ### OTB: changed so it finds the unstained sample when an unstained negative is selected
-    # ssr review: is the pos unstained required here?
     def get_unstained_negative(self):
         try:
             sample_path = None
-            for path in self.samples['all_samples']:
-                match_path = re.findall('([Uu]nstained)', path)
-                match_tubename = re.findall('([Uu]nstained)', self.samples['all_samples'][path])
-                if match_path or match_tubename:
+            for path in self.samples.get('unstained_samples', []):
+                if path in self.samples['all_samples']:
                     sample_path = path
                     break
+            if sample_path is None:
+                for path in self.samples['all_samples']:
+                    if re.search(r'(unstained|negative)', path, re.IGNORECASE) or \
+                    re.search(r'(unstained|negative)', self.samples['all_samples'][path], re.IGNORECASE):
+                        sample_path = path
+                        break
             if sample_path:
                 full_sample_path = str(self.experiment_dir / sample_path)
                 sample = sample_from_fcs(full_sample_path)
@@ -96,6 +98,7 @@ class ProfileUpdater:
 
 
                 # ssr review: I think there is a problem here: if either pos or neg gates missing, then a plot is added with both, possibly causing duplication
+                # otb: should be fixed now
                 for target_gate_label in [positive_gate_label, negative_gate_label]:
                     if not self.raw_gating.find_matching_gate_paths(target_gate_label):
                         channel_x = 'FSC-A'
@@ -105,7 +108,18 @@ class ProfileUpdater:
                                                     range_max=(0.7 if target_gate_label == positive_gate_label else 0.9),
                                                     transformation_ref=channel_y)
                         target_gate = gates.RectangleGate(target_gate_label, dimensions=[dim_x, dim_y])
-                        self.raw_gating.add_gate(target_gate, gate_path=('root',))
+                        base_gate_priority = self.controller.experiment.process.get('base_gate_priority_order', [])
+                        raw_gate_names = [g[0].lower() for g in self.controller.raw_gating.get_gate_ids()]
+                        base_gate_label = 'root'
+                        for gate in base_gate_priority:
+                            if gate.lower() in raw_gate_names:
+                                base_gate_label = gate
+                                break
+                        if base_gate_label != 'root' and self.raw_gating.find_matching_gate_paths(base_gate_label):
+                            base_path = tuple(list(self.raw_gating.find_matching_gate_paths(base_gate_label)[0]) + [base_gate_label])
+                        else:
+                            base_path = ('root',)
+                        self.raw_gating.add_gate(target_gate, gate_path=base_path)
 
                         target_plot = None
                         for plot in raw_plots:
@@ -292,11 +306,18 @@ class ProfileUpdater:
                             if 'unstained' in control['label'].lower():
                                 negative_gate_label = positive_gate_label
                             else:
-                                negative_gate_label = f'Neg {control["label"]}'
+                                # Prefer an explicitly set neg_gate_label; fall back to
+                                # the auto-constructed name for backwards compatibility
+                                # with experiments generated before this field existed.
+                                negative_gate_label = (
+                                    control.get('neg_gate_label')
+                                    or f'Neg {control["label"]}'
+                                )
 
                             if not self.raw_gating.find_matching_gate_paths(negative_gate_label):
                                 raise Exception(f'Internal negative gate "{negative_gate_label}" not present in Raw Data. '
-                                                f'Please run Auto-Generate to recreate spectral gates.') # ssr review: could they not do this manually if they wish?
+                                                f'Please run Auto-Generate to recreate spectral gates, '
+                                                f'or select the correct Negative Gate in the Spectral Model Editor.')
 
                             negative_profile = get_profile(sample, negative_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
 
@@ -433,49 +454,63 @@ class SpectralAutoGenerator(QObject):
             # 2. Fall back to filename/tubename regex
             if sample_path is None:
                 for path in self.samples['all_samples']:
-                    match_path = re.findall('([Uu]nstained)', path)
-                    match_tubename = re.findall('([Uu]nstained)', self.samples['all_samples'][path])
-                    if match_path or match_tubename:
+                    if re.search(r'(unstained|negative)', path, re.IGNORECASE) or \
+                       re.search(r'(unstained|negative)', self.samples['all_samples'][path], re.IGNORECASE):
                         sample_path = path
                         break
             if sample_path:
                 full_sample_path = str(self.experiment_dir / sample_path)
                 sample = sample_from_fcs(full_sample_path)
 
-                # using unstained negative, define Pos and Neg Unstained if they don't already exist
-                positive_gate_label = 'Pos Unstained'
+                # Only Neg Unstained is needed
                 negative_gate_label = 'Neg Unstained'
 
-                for target_gate_label in [positive_gate_label, negative_gate_label]:
-                    if not self.raw_gating.find_matching_gate_paths(target_gate_label):
-                        channel_x = 'FSC-A'
-                        channel_y = 'SSC-A'
-                        dim_x = Dimension(channel_x, range_min=0.2, range_max=0.8, transformation_ref=channel_x)
-                        dim_y = Dimension(channel_y, range_min=(0.1 if target_gate_label==positive_gate_label else 0.3), range_max=(0.7 if target_gate_label==positive_gate_label else 0.9), transformation_ref=channel_y)
-                        target_gate = gates.RectangleGate(target_gate_label, dimensions=[dim_x, dim_y])
-                        self.raw_gating.add_gate(target_gate, gate_path=('root',))
+                # Resolve gate path: place under base gate (e.g. Singlets), not at root
+                if self.base_gate_label != 'root' and self.raw_gating.find_matching_gate_paths(self.base_gate_label):
+                    base_path = tuple(list(self.raw_gating.find_matching_gate_paths(self.base_gate_label)[0]) + [self.base_gate_label])
+                else:
+                    base_path = ('root',)
 
-                        #### if raw_plots contains a 2D hist on channel_x and channel_y with no child gates except for pos and neg, add gate to it, otherwise create it
-                        target_plot = None
-                        for n, plot in enumerate(self.raw_plots):
-                            if (plot['type'] == 'hist2d'
-                                    and plot['channel_x'] == channel_x
-                                    and plot['channel_y'] == channel_y
-                                    and plot['source_gate'] == 'root'
-                                    and not set(plot['child_gates']) - {positive_gate_label, negative_gate_label}):
-                                target_plot = plot
-                        if not target_plot:
-                            # append plot
-                            target_plot = {'type': 'hist2d', 'channel_x': channel_x, 'channel_y': channel_y, 'source_gate': 'root', 'child_gates': [positive_gate_label, negative_gate_label]}
-                            self.raw_plots.append(target_plot)
+                # Only create the gate if it does not already exist — avoids duplicate-gate
+                # errors if one gate exists but the other does not (Issue 5).
+                if not self.raw_gating.find_matching_gate_paths(negative_gate_label):
+                    # Use the first fluorescence channel as a broad 1D gate
+                    # covering all events — the gate exists only to anchor the profile extraction
+                    # in the gating hierarchy; its range covers the full transformed space.
+                    channel_x = self.fluorescence_channels_pnn[0]
+                    dim_x = Dimension(channel_x, range_min=0.0, range_max=1.0, transformation_ref=channel_x)
+                    neg_gate = gates.RectangleGate(negative_gate_label, dimensions=[dim_x])
+                    self.raw_gating.add_gate(neg_gate, gate_path=base_path)
+                    if self.bus:
+                        self.bus.changedGatingHierarchy.emit('raw', negative_gate_label)  # Issue 3
+
+                    # Add or update the plot for this gate
+                    # Look for an existing 1D hist on channel_x sourced from base gate.
+                    target_plot = None
+                    for plot in self.raw_plots:
+                        if (plot['type'] == 'hist1d'
+                                and plot['channel_x'] == channel_x
+                                and plot['source_gate'] == self.base_gate_label
+                                and not set(plot['child_gates']) - {negative_gate_label}):
+                            target_plot = plot
+                    if not target_plot:
+                        target_plot = {'type': 'hist1d', 'channel_x': channel_x,
+                                       'source_gate': self.base_gate_label, 'child_gates': []}
+                        self.raw_plots.append(target_plot)
+                        if self.bus:
                             self.bus.showNewPlot.emit('raw')
-                        if target_gate_label not in target_plot['child_gates']:
-                            target_plot['child_gates'].append(target_gate_label)
+                    if negative_gate_label not in target_plot['child_gates']:
+                        target_plot['child_gates'].append(negative_gate_label)
 
-                self.unstained_negative = get_profile(sample, negative_gate_label, self.raw_gating, self.fluorescence_channel_ids)
+                # All events within the base gate of the unstained sample form the negative reference.
+                self.unstained_negative = get_profile(sample, self.base_gate_label, self.raw_gating,
+                                                      self.fluorescence_channel_ids)
                 return True
             else:
-                raise Exception(f'No sample in Single Stain Controls is named "Unstained". ')
+                raise Exception(
+                    'No unstained sample found. Name a control "Unstained", or right-click '
+                    'any sample in the sample panel and choose "Mark as Unstained".'
+                )
         except Exception as e:
             text = f'Failed to generate profile of unstained negative. {e} Setting negative type to "internal".'
             warnings.warn(text)
@@ -495,6 +530,7 @@ class SpectralAutoGenerator(QObject):
             # or that have been manually marked as unstained by the user.
             # Users can still add them manually via the +Add Control button.
             # ssr review: would users not potentially use unstained for af if not doing af with autospectral?
+            # otb: yes, by adding them manually. we can incorporate multi-AF later, if people want its
             manually_unstained = set(self.samples.get('unstained_samples', []))
             if re.search(r'(unstained|negative)', tubename, re.IGNORECASE) or \
                re.search(r'(unstained|negative)', sample_path, re.IGNORECASE) or \
@@ -539,8 +575,9 @@ class SpectralAutoGenerator(QObject):
                         if self.controller.experiment.process['negative_type'] == 'internal': # using internal negatives, just use base gate for unstained
                             positive_gate_label = self.base_gate_label
                             negative_gate_label = self.base_gate_label
-                        else: # using unstained negative, use Pos and Neg Unstained that have already been created
-                            positive_gate_label = 'Pos Unstained'
+                        else: # using unstained negative: all events in base gate are the positive,
+                              # Neg Unstained (created by get_unstained_negative) is the reference
+                            positive_gate_label = self.base_gate_label
                             negative_gate_label = 'Neg Unstained'
 
                     else:
@@ -621,6 +658,7 @@ class SpectralAutoGenerator(QObject):
                         'sample_name': tubename,
                         'sample_path': full_sample_path, 
                         'gate_label': positive_gate_label,
+                        'neg_gate_label': negative_gate_label,
                         'universal_negative_name': default_unstained or '',
                     }
 

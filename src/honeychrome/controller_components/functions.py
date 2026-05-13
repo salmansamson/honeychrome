@@ -447,6 +447,10 @@ def calc_stats(data_for_cytometry_plots, initialise=True):
                         parent_id = parent_id[1][-1]
 
                 n_events_gate_old = statistics_old[gate_id]['n_events_gate']
+                if gate_id not in gate_membership:
+                    logger.warning(f'calc_stats: gate "{gate_id}" not in gate_membership — skipping.')
+                    statistics[gate_id] = {'n_events_gate': 0, 'p_gate_total': 0, 'p_gate_parent': 0, 'event_conc': np.nan}
+                    continue
                 n_events_gate_new = gate_membership[gate_id].sum()
                 n_events_gate = int(n_events_gate_old + n_events_gate_new)
                 p_gate_total = n_events_gate / n_events_total if n_events_total != 0 else 0

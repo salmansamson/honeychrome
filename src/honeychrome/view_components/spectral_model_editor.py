@@ -253,6 +253,7 @@ class SpectralControlsEditor(QFrame):
         self.bus.spectralModelUpdated.connect(self.view.resizeToFit)
         self.bus.spectralControlAdded.connect(self.view.resizeToFit) #extends the table as autogeneration runs... looks interesting but a bit wonky
         self.bus.sampleTreeUpdated.connect(self.refresh_comboboxes) # check for changes to unstained samples
+        self.bus.rawGateRenamed.connect(self._on_raw_gate_renamed)
         self.view.selectionModel().selectionChanged.connect(self._show_selected_profiles)
 
         # Different resize modes for different columns
@@ -425,11 +426,7 @@ class SpectralControlsEditor(QFrame):
         if self.negatives_combo.currentText() == 'Using unstained negative':
             self.controller.experiment.process['negative_type'] = 'unstained'
             self.negatives_combo.setToolTip('Negative set to "Neg Unstained" gate on Unstained sample')
-            # Pre-populate universal_negative_name for any control that has none set.
-            # Beads get the sentinel unconditionally; cells get it only if no Unstained
-            # sample exists to auto-assign.
             default_unstained = _find_default_unstained(self.samples['all_samples'])
-            # Also check manually-tagged unstained samples as a fallback
             if not default_unstained:
                 unstained_paths = self.samples.get('unstained_samples', [])
                 if unstained_paths:
@@ -446,13 +443,20 @@ class SpectralControlsEditor(QFrame):
             self.controller.experiment.process['negative_type'] = 'internal'
             self.negatives_combo.setCurrentText('Using internal negatives')
             self.negatives_combo.setToolTip('Negative set to bottom percentile of each control sample')
-        logger.info(f'SpectralModelEditor: set negative type to {self.controller.experiment.process['negative_type']}')
+        logger.info(f'SpectralModelEditor: set negative type to {self.controller.experiment.process["negative_type"]}')
         self._update_universal_negative_column_visibility()
-        # Defer recalculation until after the signal handler returns and the Qt
-        # event loop is back in a clean state — calling _on_force_recalc() directly
-        # here causes a hard crash via the busy cursor thread mechanism.
-        # ssr review: are you sure this is necessary? the original intention was only to recalc if the recalc button pressed after changing this selection
-        QTimer.singleShot(0, self._on_force_recalc)
+        self.refresh_comboboxes()  # show/hide neg_gate_label column per row
+
+        # Changing the negative type invalidates all existing profiles. Clear them
+        # so that when the user presses Recalculate, the skip-if-valid logic in
+        # _on_force_recalc cannot retain stale profiles computed with the old
+        # negative type. Do not trigger recalculation automatically — the user
+        # must press Recalculate to recompute with the new setting.
+        self.profile_updater.profiles.clear()
+        if self.bus:
+            self.bus.statusMessage.emit(
+                'Negative type changed — press Recalculate to update spectral profiles.'
+            )
 
     def set_fluorescence_channel_filter(self):
         if self.model.rowCount():
@@ -498,15 +502,22 @@ class SpectralControlsEditor(QFrame):
         self._update_universal_negative_column_visibility()
 
     # ssr review: should use_cleaned and af_remove also be hidden if internal neg?
+    # otb: yes, I think they are now
     def _update_universal_negative_column_visibility(self):
-        """Hide the Unstained Negative column when using internal negatives.
-        The underlying data is preserved — hiding is purely visual."""
-        col_idx = COLUMNS.index("universal_negative_name")
         using_unstained = self.controller.experiment.process.get('negative_type') == 'unstained'
+        header = self.view.horizontalHeader()
+        # Unstained Negative column — visible only when using unstained negatives
+        col_unstained = COLUMNS.index("universal_negative_name")
         if using_unstained:
-            self.view.horizontalHeader().showSection(col_idx)
+            header.showSection(col_unstained)
         else:
-            self.view.horizontalHeader().hideSection(col_idx)
+            header.hideSection(col_unstained)
+        # Negative Gate column — visible only when using internal negatives
+        col_neg = COLUMNS.index("neg_gate_label")
+        if using_unstained:
+            header.hideSection(col_neg)
+        else:
+            header.showSection(col_neg)
 
 
     def refresh_comboboxes(self):
@@ -633,7 +644,10 @@ class SpectralControlsEditor(QFrame):
         )
         enable_universal_negative_cb = is_cell_single_stain or is_bead_single_stain
 
-        for col_name in ["control_type", "particle_type", "gate_channel", "sample_name", "gate_label", "universal_negative_name"]:
+        using_internal = self.controller.experiment.process.get('negative_type') == 'internal'
+        enable_neg_gate_label_cb = enable_gate_label_cb and using_internal
+
+        for col_name in ["control_type", "particle_type", "gate_channel", "sample_name", "gate_label", "neg_gate_label", "universal_negative_name"]:
             idx = self.model.index(row, COLUMNS.index(col_name))
             if col_name == "control_type":
                 self._add_or_replace_combobox_if_enabled(idx, True, [""] + CONTROL_TYPES)
@@ -646,6 +660,8 @@ class SpectralControlsEditor(QFrame):
                 self._add_or_replace_combobox_if_enabled(idx, enable_sample_name_cb, [""] + current_control_list)
             elif col_name == "gate_label":
                 self._add_or_replace_combobox_if_enabled(idx, enable_gate_label_cb, [""] + raw_gates_list(self.raw_gating))
+            elif col_name == "neg_gate_label":
+                self._add_or_replace_combobox_if_enabled(idx, enable_neg_gate_label_cb, [""] + raw_gates_list(self.raw_gating))
             elif col_name == "universal_negative_name":
                 self._add_or_replace_combobox_if_enabled(idx, enable_universal_negative_cb, universal_negative_options)
 
@@ -982,18 +998,76 @@ class SpectralControlsEditor(QFrame):
 
         logger.info(f'SpectralModelEditor: propagated label rename "{old}" -> "{new}"')
 
+    @Slot(str, str)
+    def _on_raw_gate_renamed(self, old_name: str, new_name: str):
+        """
+        A gate in raw gating was renamed by the user via the plot ROI label.
+        Update any spectral model control whose gate_label matches the old name,
+        so that generate() can still locate the gate without requiring Auto-Generate.
+        Also updates raw_plots source_gate references in case the renamed gate is
+        used as a plot source.
+        """
+        changed = False
+        for control in self.model._data:
+            if control.get('gate_label') == old_name:
+                control['gate_label'] = new_name
+                changed = True
+                logger.info(
+                    f'SpectralModelEditor: gate rename propagated to spectral model '
+                    f'"{old_name}" -> "{new_name}" for control "{control["label"]}"'
+                )
+            if control.get('neg_gate_label') == old_name:
+                control['neg_gate_label'] = new_name
+                changed = True
+                logger.info(
+                    f'SpectralModelEditor: gate rename propagated to neg_gate_label '
+                    f'"{old_name}" -> "{new_name}" for control "{control["label"]}"'
+                )
+
+        # Also fix any raw_plots that use the old name as source_gate
+        for plot in self.controller.experiment.cytometry.get('raw_plots') or []:
+            if plot.get('source_gate') == old_name:
+                plot['source_gate'] = new_name
+                changed = True
+
+        if changed:
+            self.model.dataChanged.emit(
+                self.model.index(0, 0),
+                self.model.index(self.model.rowCount() - 1, self.model.columnCount() - 1),
+            )
+
+    # AFTER
     @Slot()
     def _on_force_recalc(self):
         self.setEnabled(False)
         self.profile_updater.flush()  # remove profiles that are not in the model
+
         for index, control in enumerate(self.model._data):
-            control_valid = self.profile_updater.generate(control, self.spectral_library_search_results) # generate profile, pass in search results in case control is from library
+            label = control.get('label', '')
+
+            # Skip this control if its profile is already present and the gate
+            # it references still exists in raw gating (i.e. nothing has changed
+            # that would invalidate it).  This avoids unnecessary re-extraction
+            # when only one or two controls have changed.
+            if label and label in self.profile_updater.profiles:
+                gate_label = control.get('gate_label', '')
+                gate_still_valid = (
+                    not gate_label                                              # Channel Assignment — no gate needed
+                    or bool(self.raw_gating.find_matching_gate_paths(gate_label))
+                )
+                if gate_still_valid:
+                    logger.info(f'SpectralModelEditor: skipping recalc for "{label}" — profile present and gate valid')
+                    continue
+
+            control_valid = self.profile_updater.generate(control, self.spectral_library_search_results)
             if not control_valid:
-                break
+                logger.warning(f'SpectralModelEditor: recalc failed for control at index {index}')
+                # Do not break — attempt remaining controls so the user sees all
+                # failures at once rather than stopping at the first one.
 
         self.bus.spectralModelUpdated.emit()
         self.refresh_table_and_enable()
-        logger.info(f'SpectralModelEditor: forced recalculation')
+        logger.info(f'SpectralModelEditor: forced recalculation complete')
 
     @Slot()
     def _on_clean_controls(self):
