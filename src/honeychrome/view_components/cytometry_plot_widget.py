@@ -18,6 +18,7 @@ import warnings
 
 from honeychrome.view_components.cytometry_plot_components import InteractiveLabel, NoPanViewBox, ZoomAxis, TransparentGraphicsLayoutWidget
 from honeychrome.view_components.regions_of_interest import RangeROI, EllipseROI, RectangleROI, QuadROI, PolygonROI, PolygonROIConstructor
+from scripts_and_development_sandboxes import logger
 
 warnings.filterwarnings("ignore", message="t.core.qobject.connect: QObject::connect(QStyleHints, QStyleHints): unique connections require a pointer to member function of a QObject subclass")
 
@@ -566,7 +567,11 @@ class CytometryPlotWidget(QFrame):
             self.rois.clear()
 
             for gate_name in self.plot['child_gates']:
-                gate = self.gating.get_gate(gate_name)
+                try:
+                    gate = self.gating.get_gate(gate_name)
+                except Exception:
+                    logger.warning(f'configure_rois: gate "{gate_name}" not found in gating strategy — skipping ROI.')
+                    continue
                 label_offset = get_set_or_initialise_label_offset(self.plot, gate_name)
 
                 if gate.gate_type == 'PolygonGate':
