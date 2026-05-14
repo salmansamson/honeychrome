@@ -282,7 +282,8 @@ class ProfilesViewer(QFrame):
         self._hist_combo.currentTextChanged.connect(self._refresh_histogram)
         if self.bus:
             # refresh the histogram in case gates were changed on the raw tab
-            self.bus.modeChangeRequested.connect(lambda mode: mode=="Spectral Process" and self._refresh_histogram())
+            self._mode_change_handler = lambda mode: mode == "Spectral Process" and self._refresh_histogram()
+            self.bus.modeChangeRequested.connect(self._mode_change_handler)
 
         if self.controller.experiment.process['profiles']:
             self.plot_profiles([])
@@ -318,11 +319,13 @@ class ProfilesViewer(QFrame):
 
     def _refresh_histogram(self, *_):
         """Redraw the peak-channel histogram for the control selected in the combo."""
-        if self._hist_toggle:
+        try:
             if not self._hist_toggle.isChecked():
                 return
-            label = self._hist_combo.currentText()
-            self._plot_peak_histograms([label] if label else [])
+        except RuntimeError:
+            return
+        label = self._hist_combo.currentText()
+        self._plot_peak_histograms([label] if label else [])
 
     def _plot_peak_histograms(self, labels: list):
         """
