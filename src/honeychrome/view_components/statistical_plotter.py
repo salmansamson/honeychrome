@@ -269,7 +269,7 @@ class StatisticalComparisonWidget(QWidget):
         elif text == 'Mean Intensity' or text == 'Intensity':
             self.channel_combo.clear()
             self.channel_combo.addItem("Select Channel:")  # placeholder for "no selection"
-            self.channel_combo.addItems(self.controller.data_for_cytometry_plots_unmixed['pnn'])
+            self.channel_combo.addItems(self.controller.data_for_cytometry_plots_unmixed['pnn_labels'].values())
             self.channel_combo.setVisible(True)
             self.create_button.setVisible(False)
         else:
@@ -289,9 +289,10 @@ class StatisticalComparisonWidget(QWidget):
         statistics_comparison = {'sample_set': sample_set, 'plot_type': plot_type, 'gate': gate, 'data':None}
         statistic = self.statistic_combo.currentText()
         if statistic == 'Mean Intensity' or statistic == 'Intensity':
-            channel = self.channel_combo.currentText()
-            statistic += ' ' + channel
+            channel = [k for k, v in self.controller.data_for_cytometry_plots_unmixed['pnn_labels'].items() if v == self.channel_combo.currentText()][0]
+            statistic += ' ' + self.channel_combo.currentText()
             statistics_comparison['channel'] = channel
+            statistics_comparison['antigen channel'] = self.channel_combo.currentText()
         statistics_comparison['statistic'] = statistic
 
         # add to statistics specification

@@ -280,6 +280,9 @@ class ProfilesViewer(QFrame):
         self._hist_toggle.toggled.connect(self._hist_panel.setVisible)
         self._hist_toggle.toggled.connect(self._on_hist_toggle)
         self._hist_combo.currentTextChanged.connect(self._refresh_histogram)
+        if self.bus:
+            # refresh the histogram in case gates were changed on the raw tab
+            self.bus.modeChangeRequested.connect(lambda mode: mode=="Spectral Process" and self._refresh_histogram())
 
         if self.controller.experiment.process['profiles']:
             self.plot_profiles([])
@@ -532,17 +535,18 @@ class ProfilesViewer(QFrame):
             self._hist_panel.layout().addWidget(lbl)
             self._hist_legend_label = lbl
 
-    def _draw_hist_gates(self, label: str, control: dict,
-                         xform_obj, raw_gating) -> None:
+    def _draw_hist_gates(self, label: str, control: dict, xform_obj, raw_gating) -> None:
         """
-        Draw read-only Pos/Neg gate regions on the peak-channel histogram,
-        reflecting the current gate positions from raw_gating.
-        Gates are modified via the Raw Data tab only.
+        Draw movable Pos/Neg gate regions on the peak-channel histogram.
+        Connects each region's sigRegionChangeFinished to write the new
+        bounds back into raw_gating and emit bus.changedGatingHierarchy,
+        so that the gate change propagates to the Raw Data tab and the
+        full gating hierarchy exactly as a manual drag on the Raw Data tab
+        would do.
         """
-        gate_specs = [
-            (control.get('gate_label', ''),                     pg.mkBrush(0, 200, 0, 40),     pg.mkPen('g', width=2)),
-            (control.get('neg_gate_label') or f'Neg {label}',   pg.mkBrush(100, 100, 255, 40), pg.mkPen('b', width=2)),
-        ]
+        from flowkit import Dimension
+
+        gate_specs = [(control.get('gate_label', ''), pg.mkBrush(0, 200, 0, 40), pg.mkPen('g', width=2)), (f'Neg {label}', pg.mkBrush(100, 100, 255, 40), pg.mkPen('b', width=2)), ]
 
         for gate_lbl, region_brush, region_pen in gate_specs:
             if not gate_lbl:
@@ -551,34 +555,56 @@ class ProfilesViewer(QFrame):
                 if not raw_gating.find_matching_gate_paths(gate_lbl):
                     continue
                 gate_path = raw_gating.find_matching_gate_paths(gate_lbl)[0]
-                gate_obj  = raw_gating.get_gate(gate_lbl, gate_path=gate_path)
-                dim       = gate_obj.dimensions[0]
+                gate_obj = raw_gating.get_gate(gate_lbl, gate_path=gate_path)
+                dim = gate_obj.dimensions[0]
                 # dim.min/max are already in display (transformed) space —
                 # SpectralAutoGenerator stores them via
                 # raw_gating.transformations[channel_x].apply(...) before adding the gate,
                 # matching how configure_rois in CytometryPlotWidget reads them directly.
                 lo_t, hi_t = float(dim.min), float(dim.max)
 
-                region = pg.LinearRegionItem(
-                    values=(lo_t, hi_t),
-                    brush=region_brush,
-                    pen=region_pen,
-                    movable=False,
-                )
+                region = pg.LinearRegionItem(values=(lo_t, hi_t), brush=region_brush, pen=region_pen, movable=True, )
                 self._hist_vb.addItem(region)
 
-                label_line = pg.InfiniteLine(
-                    pos=lo_t, angle=90,
-                    pen=pg.mkPen(None),
-                    label=gate_lbl,
-                    labelOpts={'position': 0.92, 'color': 'g',
-                               'fill': pg.mkBrush(0, 0, 0, 120)},
-                )
+                # Floating gate label that tracks the left edge of the region
+                label_line = pg.InfiniteLine(pos=lo_t, angle=90, pen=pg.mkPen(None), label=gate_lbl, labelOpts={'position': 0.92, 'color': 'g', 'fill': pg.mkBrush(0, 0, 0, 120)}, )
                 self._hist_vb.addItem(label_line)
+
+                # Keep the floating label anchored at the left edge as the region moves
+                region.sigRegionChanged.connect(lambda r=region, ll=label_line: ll.setPos(r.getRegion()[0]))
+
+                # --- Write-back: update raw_gating and broadcast the change ---
+                # _make_writeback captures region explicitly to avoid the closure
+                # over the loop variable pitfall.
+                # note: this does not update the Raw Data tab--that requires changes to the controller
+                def _make_writeback(g_lbl, g_path, rg, rgn):
+                    def _on_finished():
+                        lo_d, hi_d = rgn.getRegion()
+                        try:
+                            # get range gate and set its new dimensions
+                            g = rg.get_gate(g_lbl, gate_path=g_path)
+                            ch = g.dimensions[0].id
+                            g.dimensions[0] = Dimension(ch, compensation_ref='uncompensated', transformation_ref=ch, range_min=lo_d, range_max=hi_d, )
+
+                            if self.bus is not None:
+                                # signal recalculation of hists and stats for raw data
+                                self.bus.changedGatingHierarchy.emit('raw', g_lbl)
+
+                                # signal refresh of ROI - search for plots with a duplicate gate
+                                for n, plot in enumerate(self.controller.data_for_cytometry_plots_raw['plots']):
+                                    if g_lbl in plot['child_gates']:
+                                        self.bus.updateRois.emit('raw', n)
+
+                        except Exception as exc:
+                            logger.warning(f'ProfilesViewer: failed to write back gate "{g_lbl}": {exc}')
+
+                    return _on_finished
+
+                region.sigRegionChangeFinished.connect(_make_writeback(gate_lbl, gate_path, raw_gating, region))
 
             except Exception:
                 pass
-    
+
     def show_context_menu(self, event):
         # Empty method to completely disable context menu
         pass

@@ -239,20 +239,22 @@ class ReportGenerator(QObject):
             self.controller.set_mode('Spectral Process')
             doc.add_heading('Spectral Model', 3)
             doc.add_paragraph(f"Negative Type: {self.controller.experiment.process['negative_type']}")
-            table = doc.add_table(rows=1, cols=5)
+            table = doc.add_table(rows=1, cols=6)
             row = table.rows[0]
             row.cells[0].text = 'Label'
-            row.cells[1].text = 'Control Type'
-            row.cells[2].text = 'Particle Type'
-            row.cells[3].text = 'Gate Channel'
-            row.cells[4].text = 'Gate Label'
+            row.cells[1].text = 'Antigen'
+            row.cells[2].text = 'Control Type'
+            row.cells[3].text = 'Particle Type'
+            row.cells[4].text = 'Gate Channel'
+            row.cells[5].text = 'Gate Label'
             for control in self.controller.experiment.process['spectral_model']:
                 row = table.add_row()
                 row.cells[0].text = control['label'] if control['label'] else ''
-                row.cells[1].text = control['control_type'] if control['control_type'] else ''
-                row.cells[2].text = control['particle_type'] if control['particle_type'] else ''
-                row.cells[3].text = control['gate_channel'] if control['gate_channel'] else ''
-                row.cells[4].text = control['gate_label'] if control['gate_label'] else ''
+                row.cells[1].text = control['antigen'] if control['antigen'] else ''
+                row.cells[2].text = control['control_type'] if control['control_type'] else ''
+                row.cells[3].text = control['particle_type'] if control['particle_type'] else ''
+                row.cells[4].text = control['gate_channel'] if control['gate_channel'] else ''
+                row.cells[5].text = control['gate_label'] if control['gate_label'] else ''
             reliable_table_autofit(table)
             format_table(table)
 
