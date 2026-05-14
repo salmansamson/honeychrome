@@ -1,13 +1,15 @@
 import os
 from pathlib import Path
 
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QFileDialog, QLabel, QListView, QMenu, QDialog, QDialogButtonBox, QVBoxLayout as QVLayout, QStyledItemDelegate)
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QFileDialog, QLabel, QListView, QMenu, QDialog, QDialogButtonBox, QVBoxLayout as QVLayout, QStyledItemDelegate, QCheckBox, QFrame)
 from PySide6.QtCore import Qt, QSettings, QStringListModel, QPoint, QObject, QModelIndex
 from PySide6.QtGui import QPixmap, QPainter, QIcon
 
 from honeychrome.controller_components.functions import q_settings, add_recent_file
-from honeychrome.settings import experiments_folder, file_extension
+from honeychrome.settings import experiments_folder, file_extension, send_debug_data
+from honeychrome.settings import q_settings as q_settings_app_config
 from honeychrome.view_components.busy_cursor import with_busy_cursor
+from honeychrome.__init__ import __version__
 
 base_directory = str(Path.home() / experiments_folder)
 
@@ -17,6 +19,23 @@ n_recent = 10
 
 import logging
 logger = logging.getLogger(__name__)
+
+import requests
+
+def check_for_updates():
+    try:
+        response = requests.get("https://api.github.com/repos/salmansamson/honeychrome/releases/latest")
+        latest_tag = response.json()["tag_name"]
+
+        if latest_tag != f"v{__version__}":
+            return f'New version {latest_tag} available! (You have v{__version__}.) <a href="https://honeychrome.cytkit.com">Update!</a>'
+        else:
+            return None
+    except Exception:
+        return None  # Stay silent if offline
+
+def toggle_send_debug_data_setting(checked):
+    q_settings_app_config.setValue("send_debug_data", checked)
 
 class HoverDelegate(QStyledItemDelegate):
     def __init__(self, parent=None):
@@ -96,6 +115,23 @@ class SplashScreen(QDialog):
         image_label.setPixmap(scaled_pixmap)
         layout.addWidget(image_label)
 
+        # update link and version check
+        update = check_for_updates()
+        if update:
+            frame = QFrame(self)
+            frame_layout = QVBoxLayout()
+            frame.setLayout(frame_layout)
+            frame_layout.setContentsMargins(10, 10, 10, 10)
+            frame.setFrameShape(QFrame.StyledPanel)
+            frame.setLineWidth(1)
+
+            update_label = QLabel(update)
+            update_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+            update_label.setOpenExternalLinks(True)
+
+            frame_layout.addWidget(update_label)
+            layout.addWidget(frame)
+
         layout.addWidget(QLabel("Select an option to start:"))
 
         self.btn_new = QPushButton("New Experiment")
@@ -131,6 +167,33 @@ class SplashScreen(QDialog):
             self.recent_view.customContextMenuRequested.connect(self.show_context_menu)
 
             layout.addWidget(self.recent_view)
+
+        # display checkbox for send_debug_data if settings not yet saved (i.e. first run)
+        if not q_settings_app_config.contains('send_debug_data'):
+            toggle_send_debug_data_setting(send_debug_data)
+
+            frame = QFrame(self)
+            frame_layout = QVBoxLayout()
+            frame.setLayout(frame_layout)
+            frame_layout.setContentsMargins(10, 10, 10, 10)
+            frame.setFrameShape(QFrame.StyledPanel)
+            frame.setLineWidth(1)
+
+            frame_layout.addWidget(QLabel('Honeychrome does not collect personal identifiable information'))
+            self.send_debug_data = QCheckBox("Send debug data to improve Honeychrome")
+            self.send_debug_data_label = QLabel('<a href="https://honeychrome.cytkit.com/docs/send_debug_data">What data is collected?</a>')
+
+            self.send_debug_data_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+            self.send_debug_data_label.setOpenExternalLinks(True)
+            self.send_debug_data.setChecked(q_settings_app_config.value("send_debug_data", send_debug_data, type=bool))
+
+            frame_layout.addWidget(self.send_debug_data)
+            frame_layout.addWidget(self.send_debug_data_label)
+            layout.addWidget(frame)
+            self.send_debug_data.toggled.connect(toggle_send_debug_data_setting)
+        else:
+            self.send_debug_data = None
+
 
         self.setLayout(layout)
 

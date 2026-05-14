@@ -5,13 +5,13 @@ from pathlib import Path
 import subprocess
 import re
 
-from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QDialog, QScrollArea, QFormLayout, QLineEdit, QCheckBox, QSpinBox, QDoubleSpinBox, QDialogButtonBox, QComboBox, QLabel, QButtonGroup, QFileDialog)
+from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QDialog, QScrollArea, QFormLayout, QLineEdit, QCheckBox, QSpinBox, QDoubleSpinBox, QDialogButtonBox, QComboBox, QLabel, QButtonGroup, QFileDialog, QFrame)
 from PySide6.QtCore import Qt, QSettings
 
 from honeychrome.settings import (colourmap_choice, graphics_export_formats, hist2dtype, colormap_name, graphics_export_format, cytometry_plot_width_target,
                       tile_size_nxn_grid, subsample, hist_bins, density_cutoff, trigger_channel, adc_channels, width_channels, height_channels,
                       use_dummy_instrument, magnitude_ceilings, magnitude_ceiling, raw_settings, unmixed_settings, experiments_folder,
-                      magnitude_ceilings_int, spectral_positive_gate_percent, spectral_negative_gate_percent, report_include_raw, report_include_unmixed, report_include_process)
+                      magnitude_ceilings_int, spectral_positive_gate_percent, spectral_negative_gate_percent, report_include_raw, report_include_unmixed, report_include_process, send_debug_data)
 import honeychrome.settings as settings
 
 
@@ -199,6 +199,25 @@ class AppConfigDialog(QDialog):
         else:
             form.addRow(QLabel("Note: plugins not available. (Run Honeychrome in full Python environment to use plugins.)"))
 
+
+        frame = QFrame(self)
+        frame_layout = QVBoxLayout()
+        frame.setLayout(frame_layout)
+        frame_layout.setContentsMargins(10, 10, 10, 10)
+        frame.setFrameShape(QFrame.StyledPanel)
+        frame.setLineWidth(1)
+
+        frame_layout.addWidget(QLabel('Honeychrome does not collect personal identifiable information'))
+        self.send_debug_data = QCheckBox("Send debug data to improve Honeychrome")
+        self.send_debug_data_label = QLabel('<a href="https://honeychrome.cytkit.com/docs/send_debug_data">What data is collected?</a>')
+
+        self.send_debug_data_label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        self.send_debug_data_label.setOpenExternalLinks(True)
+
+        frame_layout.addWidget(self.send_debug_data)
+        frame_layout.addWidget(self.send_debug_data_label)
+        form.addRow(frame)
+
         scroll.setWidget(container)
         main_layout.addWidget(scroll)
 
@@ -253,6 +272,8 @@ class AppConfigDialog(QDialog):
         self.report_include_unmixed_cb.setChecked(self.settings.value("report_include_unmixed", report_include_unmixed, type=bool))
         self.report_include_process_cb.setChecked(self.settings.value("report_include_process", report_include_process, type=bool))
 
+        self.send_debug_data.setChecked(self.settings.value("send_debug_data", send_debug_data, type=bool))
+
         if not meipass:
             for file_path in plugins_path.glob("*_tab.py"):
                 self.enable_plugin[file_path].setChecked(self.settings.value(f"EnablePlugin_{file_path}", False, type=bool))\
@@ -271,6 +292,7 @@ class AppConfigDialog(QDialog):
         self.settings.setValue("report_include_raw", self.report_include_raw_cb.isChecked())
         self.settings.setValue("report_include_unmixed", self.report_include_unmixed_cb.isChecked())
         self.settings.setValue("report_include_process", self.report_include_process_cb.isChecked())
+        self.settings.setValue("send_debug_data", self.send_debug_data.isChecked())
 
         if not meipass:
             for file_path in plugins_path.glob("*_tab.py"):
@@ -302,6 +324,7 @@ class AppConfigDialog(QDialog):
         self.report_include_raw_cb.setChecked(report_include_raw)
         self.report_include_unmixed_cb.setChecked(report_include_unmixed)
         self.report_include_process_cb.setChecked(report_include_process)
+        self.send_debug_data.setChecked(send_debug_data)
 
         if not meipass:
             for file_path in plugins_path.glob("*_tab.py"):

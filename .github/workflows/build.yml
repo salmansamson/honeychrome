@@ -64,6 +64,10 @@ jobs:
           brew install create-dmg
           chmod +x create_dmg_mac.sh
           rm -f *.dmg
+          echo "--- Contents of dist/ ---"
+          ls -lh dist/
+          echo "--- Contents of dist/honeychrome.app/Contents/ ---"
+          ls -R dist/honeychrome.app/Contents/
           ./create_dmg_mac.sh
 
       - name: Build Windows

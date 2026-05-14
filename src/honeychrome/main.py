@@ -1,13 +1,14 @@
 '''
 Honeychrome - open source cytometry data acquisition and analysis software
 '''
-import shutil
 
 # from honeychrome.tools import DepthFinder # debug module imports here
 
 import os
 import sys
 from pathlib import Path
+import platform
+import shutil
 
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
@@ -15,7 +16,10 @@ import multiprocessing as mp
 from multiprocessing import shared_memory, Lock
 import numpy as np
 
-from honeychrome.settings import experiments_folder
+from honeychrome import __version__
+from honeychrome.settings import experiments_folder, send_debug_data
+from honeychrome.settings import q_settings as q_settings_app_config
+
 current_file_path = Path(__file__).resolve()
 
 '''
@@ -66,7 +70,8 @@ from honeychrome.view import View, logo_icon
 
 import logging
 import warnings
-
+import sentry_sdk
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 def setup_logging(log_file):
     """Set up logging to both console and file, and capture all output."""
@@ -134,6 +139,29 @@ def main():
     # logger.info("Info message")  # To both console and file
     # logger.warning("Warning message")
     # logger.error("Error message")
+
+    # send debug data if setting is on
+    if q_settings_app_config.value("send_debug_data", send_debug_data, type=bool):
+        sentry_logging = LoggingIntegration(
+            level=logging.INFO,  # Send INFO and above as breadcrumbs (context)
+            event_level=logging.ERROR  # Actually send ERROR and above as alerts
+        )
+        # Keep it anonymous with send_default_pii=False (i.e. all personal data are scrubbed, e.g. usernames, file names and locations, etc)
+        sentry_sdk.init(dsn="https://c99858ad29b86e3c551978e9b72c7724@o4511334133334016.ingest.de.sentry.io/4511334139887696",
+                        integrations=[sentry_logging],
+                        release=f"honeychrome@{__version__}",
+                        send_default_pii=False)
+        sentry_sdk.set_tag("os_name", platform.system())
+        sentry_sdk.set_tag("os_release", platform.release())
+        sentry_sdk.set_tag("os_version", platform.version())
+        sentry_sdk.metrics.count("honeychrome.launch", 1, attributes={"version": __version__, 'platform': sys.platform})
+
+        # # Test sentry
+        # try:
+        #     division_by_zero = 1 / 0
+        # except Exception as e:
+        #     # Manually send the caught exception to Sentry
+        #     sentry_sdk.capture_exception(e)
 
     '''
     define objects for communication between processes
@@ -210,7 +238,7 @@ def main():
 
     if sys.platform == 'win32':
         import ctypes
-        myappid = 'honeychrome.cytometry.v0.7.2'
+        myappid = 'honeychrome.cytometry.v0.7.3'
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
     # Use Fusion style (works consistently across platforms)

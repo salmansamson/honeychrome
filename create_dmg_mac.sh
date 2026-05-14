@@ -2,12 +2,12 @@
 
 # --- CONFIGURATION ---
 APP_NAME="honeychrome"
-VERSION="0.7.2"
+VERSION="0.7.3"
 DMG_NAME="${APP_NAME}-v${VERSION}-macos.dmg"
 VOL_NAME="${APP_NAME} Installer"
 
 # Paths
-SOURCE_FOLDER="dist/honeychrome"  # Folder containing your .app
+SOURCE_APP="dist/honeychrome.app"  # Folder containing your .app
 APP_BUNDLE="${APP_NAME}.app"      # Name of the app inside source_folder
 BACKGROUND="other/honeychrome_installer_background.png"     # The background image we discussed
 ICON_FILE="src/honeychrome/view_components/assets/cytkit_web_logo.png"         # Optional: your custom icon file
@@ -31,4 +31,4 @@ create-dmg \
   --skip-jenkins \
   --eula "LICENSE.txt"\
   "$DMG_NAME" \
-  "$SOURCE_FOLDER/"
+  "$SOURCE_APP"
