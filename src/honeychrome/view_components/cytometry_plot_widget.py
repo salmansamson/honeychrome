@@ -18,7 +18,8 @@ import warnings
 
 from honeychrome.view_components.cytometry_plot_components import InteractiveLabel, NoPanViewBox, ZoomAxis, TransparentGraphicsLayoutWidget
 from honeychrome.view_components.regions_of_interest import RangeROI, EllipseROI, RectangleROI, QuadROI, PolygonROI, PolygonROIConstructor
-from scripts_and_development_sandboxes import logger
+import logging
+logger = logging.getLogger(__name__)
 
 warnings.filterwarnings("ignore", message="t.core.qobject.connect: QObject::connect(QStyleHints, QStyleHints): unique connections require a pointer to member function of a QObject subclass")
 
