@@ -618,7 +618,7 @@ class Controller(QObject):
         self.af_precomputed_cache = {}
         af_profiles = self.experiment.process.get('af_profiles', {})
         if not af_profiles:
-            logger.warning(f'cache_all_af_profiles: experiment.process has no af_profiles — keys present: {list(self.experiment.process.keys())}')
+            logger.debug(f'cache_all_af_profiles: experiment.process has no af_profiles — keys present: {list(self.experiment.process.keys())}')
             return
 
         fluor_spectra = self._build_fluor_spectra()
