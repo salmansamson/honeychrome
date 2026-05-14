@@ -40,7 +40,7 @@ class UnmixedExporter(QObject):
             unmixing_matrix = np.array(self.controller.experiment.process['unmixing_matrix'])
             spillover = np.array(self.controller.experiment.process['spillover'])
             pnn_raw = self.controller.experiment.settings['raw']['event_channels_pnn']
-            pnn_unmixed = self.controller.experiment.settings['unmixed']['event_channels_pnn']
+            pnn_unmixed = self.controller.experiment.settings['unmixed']['event_channels_pnn'] # ssr review: consider setting this to antigen fluorophore self.controller.data_for_cytometry_plots['pnn_unmixed']?
 
             fl_channel_ids_raw = np.array(self.controller.filtered_raw_fluorescence_channel_ids)
             sc_channel_ids_raw = np.array(self.controller.experiment.settings['raw']['scatter_channel_ids'])

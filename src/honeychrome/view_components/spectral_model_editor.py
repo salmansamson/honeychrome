@@ -960,7 +960,7 @@ class SpectralControlsEditor(QFrame):
                 # A label rename leaves four downstream structures stale.
                 # Propagate atomically without recalculating the unmixing matrix.
                 for old, new in zip(old_labels, new_labels):
-                    self._propagate_label_rename(old, new)
+                    self._propagate_label_rename(old, new) # ssr review: should this also be done for rename antigen?
                 # Rebuild ephemeral gating/transform objects from the updated experiment
                 # state and refresh the UI. Does not touch the unmixing matrix,
                 # spillover, fine-tuning, or AF cache.

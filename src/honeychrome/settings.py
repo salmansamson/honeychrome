@@ -98,8 +98,6 @@ line_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b',
 spectral_positive_gate_percent = 5 # take the top few percent of events
 spectral_negative_gate_percent = 25 # take the bottom few percent of events
 
-# ssr review: shouldn't antigen be used on unmixed data (not fluorophore) and fluorophore on process plots?
-# otb: we want both on unmixed data, fluorophore only on process plots (probably)
 spectral_model_column_labels = {
     "label": "Label",
     'antigen': 'Antigen', 
