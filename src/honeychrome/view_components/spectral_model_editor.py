@@ -32,7 +32,7 @@ class ResizingTable(QTableView):
 
         # No scrollbars
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         # multiselect
         self.setSelectionBehavior(QTableView.SelectRows)
@@ -54,8 +54,10 @@ class ResizingTable(QTableView):
         self.resizeRowsToContents()
         self.resizeColumnsToContents()
 
+        h_scrollbar = self.horizontalScrollBar().height() if self.horizontalScrollBar().isVisible() else 0
+
         width = self.verticalHeader().width() + self.horizontalHeader().length()
-        height = self.horizontalHeader().height() + self.verticalHeader().length()
+        height = self.horizontalHeader().height() + self.verticalHeader().length() + h_scrollbar
 
         # Add a small margin
         return QSize(width + 4, max([height + 4, 60]))
@@ -69,8 +71,9 @@ class ResizingTable(QTableView):
         for row in range(self.model().rowCount()):
             total_height += self.rowHeight(row)
 
-        # Add horizontal header height
-        total_height += self.horizontalHeader().height()
+        # Add horizontal header height and scrollbar
+        h_scrollbar = self.horizontalScrollBar().height() if self.horizontalScrollBar().isVisible() else 0
+        total_height += self.horizontalHeader().height() + h_scrollbar
 
         # Add frame width (borders)
         total_height += 2 * self.frameWidth()
@@ -271,9 +274,12 @@ class SpectralControlsEditor(QFrame):
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # control_type
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # particle_type
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # gate_channel
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # sample_name
+        header.setSectionResizeMode(5, QHeaderView.Fixed)  # sample_name
+        header.setDefaultSectionSize(200)
+        header.resizeSection(5, 200)
         header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # gate_label
-        header.setSectionResizeMode(7, QHeaderView.Stretch)           # universal_negative_name
+        header.setSectionResizeMode(7, QHeaderView.Fixed)  # universal_negative_name
+        header.resizeSection(7, 200)
         header.setSectionResizeMode(8, QHeaderView.ResizeToContents)  # use_cleaned
         header.setSectionResizeMode(9, QHeaderView.ResizeToContents)  # af_remove
 

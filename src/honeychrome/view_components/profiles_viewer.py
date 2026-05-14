@@ -318,10 +318,11 @@ class ProfilesViewer(QFrame):
 
     def _refresh_histogram(self, *_):
         """Redraw the peak-channel histogram for the control selected in the combo."""
-        if not self._hist_toggle.isChecked():
-            return
-        label = self._hist_combo.currentText()
-        self._plot_peak_histograms([label] if label else [])
+        if self._hist_toggle:
+            if not self._hist_toggle.isChecked():
+                return
+            label = self._hist_combo.currentText()
+            self._plot_peak_histograms([label] if label else [])
 
     def _plot_peak_histograms(self, labels: list):
         """
