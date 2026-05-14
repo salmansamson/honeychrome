@@ -458,6 +458,18 @@ class AfComparisonPlotWidget(QWidget):
         cutoff = settings.density_cutoff_retrieved
         heatmap[heatmap < cutoff] = 0
 
+        # Rescale border bins to interior max — mirrors calc_hist2d() in functions.py
+        # so that edge overflow events don't compress the interior colour range.
+        if heatmap.shape[0] > 2 and heatmap.shape[1] > 2:
+            global_max = heatmap.max()
+            inside_max = heatmap[1:-1, 1:-1].max()
+            if inside_max > 0 and inside_max < global_max:
+                scale = inside_max / global_max
+                heatmap[0, :] *= scale
+                heatmap[-1, :] *= scale
+                heatmap[1:-1, 0] *= scale
+                heatmap[1:-1, -1] *= scale
+
         self.img.setImage(heatmap)
         self.img.setRect(QRectF(
             tr_x.limits[0], tr_y.limits[0],
