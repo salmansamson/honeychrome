@@ -265,7 +265,6 @@ class SpectralControlsEditor(QFrame):
         # Column 4: sample_name
         # Column 5: gate_label
         # Column 6: universal_negative_name
-        # ssr review: we have a problem here with width. consider adding horizontal scrollbar
         header = self.view.horizontalHeader()
         header.setMinimumSectionSize(100)
         header.setStretchLastSection(True)
