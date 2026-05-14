@@ -648,6 +648,26 @@ class SpectralAutoGenerator(QObject):
                     # print(f'{label}: explained variance {int(explained_variance * 100)}, best channel {self.event_channels_pnn[channel_id_best_match]}, brightest events {int(best_match)}/100, gate {report.loc[positive_gate_label]['count']}/100')
 
                     default_unstained = _find_default_unstained_tube(self.samples['all_samples'])
+                    assigned_negative = default_unstained or ''  # default; overridden for Beads below
+                    # For bead controls, only use an unstained negative if available
+                    if particle_type == 'Beads':
+                        # Mirror the combobox builder logic exactly: iterate all_samples,
+                        # accept anything unstained (manually tagged OR regex), then
+                        # filter to those whose name contains "Beads".
+                        manually_tagged = set(self.samples.get('unstained_samples', []))
+                        default_unstained_bead = None
+                        for path, name in self.samples['all_samples'].items():
+                            is_unstained = (
+                                path in manually_tagged
+                                or bool(re.search(r'unstained', name, re.IGNORECASE))
+                                or bool(re.search(r'unstained', path, re.IGNORECASE))
+                            )
+                            if not is_unstained:
+                                continue
+                            if re.search(r'bead', name, re.IGNORECASE) or re.search(r'bead', path, re.IGNORECASE):
+                                default_unstained_bead = name
+                                break
+                        assigned_negative = default_unstained_bead or ''
                     control = {
                         'label': label,
                         'antigen': antigen,
@@ -658,7 +678,7 @@ class SpectralAutoGenerator(QObject):
                         'sample_path': full_sample_path, 
                         'gate_label': positive_gate_label,
                         'neg_gate_label': negative_gate_label,
-                        'universal_negative_name': default_unstained or '',
+                        'universal_negative_name': assigned_negative,
                     }
 
                     positive_profile = get_profile(sample, control['gate_label'], self.raw_gating, self.fluorescence_channel_ids)

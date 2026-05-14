@@ -462,11 +462,29 @@ class SpectralControlsEditor(QFrame):
                 unstained_paths = self.samples.get('unstained_samples', [])
                 if unstained_paths:
                     default_unstained = self.samples['all_samples'].get(unstained_paths[0])
+
+            # Find a bead-specific unstained: must be manually tagged AND match bead regex.
+            manually_tagged = set(self.samples.get('unstained_samples', []))
+            default_unstained_bead = None
+            for path, name in self.samples['all_samples'].items():
+                is_unstained = (
+                    path in manually_tagged
+                    or bool(re.search(r'unstained', name, re.IGNORECASE))
+                    or bool(re.search(r'unstained', path, re.IGNORECASE))
+                )
+                if not is_unstained:
+                    continue
+                if re.search(r'bead', name, re.IGNORECASE) or re.search(r'bead', path, re.IGNORECASE):
+                    default_unstained_bead = name
+                    break
+                
             for control in self.model._data:
                 if control.get('control_type') == 'Single Stained Spectral Control':
                     if not control.get('universal_negative_name'):
                         if control.get('particle_type') == 'Cells' and default_unstained:
                             control['universal_negative_name'] = default_unstained
+                        elif control.get('particle_type') == 'Beads' and default_unstained_bead:
+                            control['universal_negative_name'] = default_unstained_bead
                         else:
                             control['universal_negative_name'] = INTERNAL_NEGATIVE_SENTINEL
         else:
