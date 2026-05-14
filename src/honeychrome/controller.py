@@ -1455,9 +1455,10 @@ class Controller(QObject):
                     new_plot = deepcopy(plot)
                     if new_plot['source_gate'] not in unmixed_gate_names:
                         new_plot['source_gate'] = 'root'
+                    EXCLUDED_GATES = {'Pos Unstained', 'Neg Unstained'}
                     new_plot_child_gates = []
                     for gate in new_plot['child_gates']:
-                        if gate in unmixed_gate_names:
+                        if gate in unmixed_gate_names and gate not in EXCLUDED_GATES:
                             new_plot_child_gates.append(gate)
                     new_plot['child_gates'] = new_plot_child_gates
                     self.experiment.cytometry['plots'].append(new_plot)
