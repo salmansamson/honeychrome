@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 import colorcet as cc
-from PySide6.QtCore import Qt, QThread, Signal, QObject, QRectF, QSettings
+from PySide6.QtCore import Qt, QThread, Signal, QObject, QRectF, QSettings, QTimer, QEvent
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QLabel,
     QPushButton, QSpinBox, QComboBox, QGroupBox,
@@ -34,6 +34,7 @@ import warnings
 from honeychrome.controller_components.functions import (
     sample_from_fcs,
     apply_transfer_matrix,
+    build_display_label_map,
 )
 from honeychrome.controller_components.autospectral_functions import (
     get_af_spectra,
@@ -50,6 +51,7 @@ from honeychrome.view_components.cytometry_plot_components import (
     TransparentGraphicsLayoutWidget,
 )
 from honeychrome.view_components.profiles_viewer import BottomAxisVerticalTickLabels
+from honeychrome.view_components.help_toggle_widget import WheelBlocker
 import honeychrome.settings as settings
 
 import logging
@@ -58,7 +60,7 @@ from honeychrome.view_components.help_texts import autospectral_af_help_text
 
 logger = logging.getLogger(__name__)
 
-TAB_NAME = 'AutoSpectral'
+TAB_NAME = 'AutoSpectral AF'
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +100,7 @@ class ComparisonWorker(QObject):
 
     def __init__(self, raw_event_data, transfer_matrix,
                  af_precomputed, af_spectra, exp_settings,
-                 filtered_fl_ids_raw):
+                 filtered_fl_ids_raw, spillover=None):
         super().__init__()
         self.raw_event_data = raw_event_data
         self.transfer_matrix = transfer_matrix
@@ -106,21 +108,23 @@ class ComparisonWorker(QObject):
         self.af_spectra = af_spectra
         self.exp_settings = exp_settings
         self.filtered_fl_ids_raw = filtered_fl_ids_raw
+        self.spillover = spillover
 
     def run(self):
         try:
             ols_data = apply_transfer_matrix(
                 self.transfer_matrix, self.raw_event_data
             )
-            af_data = apply_af_transfer(
+            af_result = apply_af_transfer(
                 self.raw_event_data,
                 self.transfer_matrix,
                 self.af_precomputed,
                 self.af_spectra,
                 self.exp_settings,
                 filtered_fl_ids_raw=self.filtered_fl_ids_raw,
+                spillover=self.spillover,
             )
-            self.finished.emit(ols_data, af_data)
+            self.finished.emit(ols_data, af_result['unmixed'])
         except Exception as e:
             self.error.emit(str(e))
 
@@ -352,10 +356,14 @@ class AfComparisonPlotWidget(QWidget):
         pnn = self.controller.experiment.settings['unmixed'].get('event_channels_pnn', [])
         fl_ids = self.controller.experiment.settings['unmixed'].get('fluorescence_channel_ids', [])
         fl_names = [pnn[i] for i in fl_ids] if pnn and fl_ids else []
+        pnn_labels = build_display_label_map(
+            pnn, self.controller.experiment.process.get('spectral_model')
+        )
+        fl_display = [pnn_labels.get(n, n) for n in fl_names]
 
         # X axis
-        self.label_x.setText(self._channel_x)
-        self.label_x.leftClickMenuItems = fl_names
+        self.label_x.setText(pnn_labels.get(self._channel_x, self._channel_x))
+        self.label_x.leftClickMenuItems = fl_display
         self.label_x.leftItemSelected = (
             fl_names.index(self._channel_x) if self._channel_x in fl_names else 0
         )
@@ -367,8 +375,8 @@ class AfComparisonPlotWidget(QWidget):
         self.vb.setXRange(*tr_x.limits, padding=0)
 
         # Y axis
-        self.label_y.setText(self._channel_y)
-        self.label_y.leftClickMenuItems = fl_names
+        self.label_y.setText(pnn_labels.get(self._channel_y, self._channel_y))
+        self.label_y.leftClickMenuItems = fl_display
         self.label_y.leftItemSelected = (
             fl_names.index(self._channel_y) if self._channel_y in fl_names else 0
         )
@@ -720,6 +728,11 @@ class AutoSpectralTab(QWidget):
         scroll.setWidget(self._content)
         outer.addWidget(scroll)
 
+        from honeychrome.settings import heading_style
+        title_label = QLabel("AutoSpectral AF")
+        title_label.setStyleSheet(heading_style)
+        content_layout.addWidget(title_label)
+
         # Help text (rich text / HTML)
         self.help_label = QLabel(autospectral_af_help_text)
         self.help_label.setTextFormat(Qt.RichText)
@@ -781,6 +794,8 @@ class AutoSpectralTab(QWidget):
 
         self._sample_combo = QComboBox()
         self._sample_combo.setToolTip('Select the unstained control sample.')
+        self._sample_combo.installEventFilter(WheelBlocker(self._sample_combo))
+        self._sample_combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         layout.addRow('Unstained sample:', self._sample_combo)
 
         self._n_clusters_spin = QSpinBox()
@@ -789,6 +804,8 @@ class AutoSpectralTab(QWidget):
         self._n_clusters_spin.setToolTip(
             'KMeans cluster count (equivalent to som.dim² in R AutoSpectral).'
         )
+        self._n_clusters_spin.installEventFilter(WheelBlocker(self._n_clusters_spin))
+        self._n_clusters_spin.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         layout.addRow('AF clusters:', self._n_clusters_spin)
 
         self._extract_btn = QPushButton('Extract AF Profile')
@@ -812,7 +829,9 @@ class AutoSpectralTab(QWidget):
         self._profile_plot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         # Disable mouse wheel rescaling
         self._profile_plot.setMouseEnabled(x=False, y=False)
-        self._profile_plot.getViewBox().wheelEvent = lambda ev: None
+        # prevent mouse scroll catching
+        self._wheel_blocker = WheelBlocker(self)
+        self._profile_plot.viewport().installEventFilter(self._wheel_blocker)
         layout.addWidget(self._profile_plot)
 
         self._profile_list = QListWidget()
@@ -902,6 +921,8 @@ class AutoSpectralTab(QWidget):
         ctrl_row = QHBoxLayout()
         ctrl_row.addWidget(QLabel('AF profile (right plot):'))
         self._cmp_profile_combo = QComboBox()
+        self._cmp_profile_combo.installEventFilter(WheelBlocker(self._cmp_profile_combo))
+        self._cmp_profile_combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self._cmp_profile_combo.setToolTip(
             '"Assigned to sample" uses the profiles assigned in Step 2. '
             'Select an individual profile to preview it without changing assignments.'
@@ -950,6 +971,8 @@ class AutoSpectralTab(QWidget):
     def _on_mode_change(self, mode):
         if mode == TAB_NAME:
             self._refresh_ui()
+            if self.controller.raw_event_data is not None:
+                QTimer.singleShot(0, self._run_comparison)
 
     def _on_sample_loaded(self, _sample_path):
         # Rebuild grid and controls immediately, then defer the comparison run
@@ -959,7 +982,6 @@ class AutoSpectralTab(QWidget):
             self._rebuild_assignment_grid()
             self._refresh_comparison_controls()
             self._clear_comparison_plots()
-            from PySide6.QtCore import QTimer
             QTimer.singleShot(0, self._run_comparison)
 
     def _on_process_refreshed(self):
@@ -997,18 +1019,16 @@ class AutoSpectralTab(QWidget):
 
         samples = self.controller.experiment.samples
         all_samples = samples.get('all_samples', {})
-        controls = samples.get('single_stain_controls', [])
         manually_tagged = set(samples.get('unstained_samples', []))
 
-        # Restrict to cell controls that are either manually tagged or match the
-        # "Unstained" regex (but allow tagged files that haven't been marked as Beads)
+        # Search all samples for unstained negatives, excluding bead files.
         candidates = [
-            p for p in controls
-            if not re.search(r'[Bb]eads', all_samples.get(p, ''))
+            p for p in all_samples
+            if not re.search(r'[Bb]eads', all_samples.get(p, ''), re.IGNORECASE)
             and (
                 p in manually_tagged
-                or 'unstained' in all_samples.get(p, '').lower()
-                or 'unstained' in p.lower()
+                or re.search(r'unstained', all_samples.get(p, ''), re.IGNORECASE)
+                or re.search(r'unstained', p, re.IGNORECASE)
             )
         ]
 
@@ -1029,6 +1049,34 @@ class AutoSpectralTab(QWidget):
             self._extract_status.setText('Please select an unstained sample.')
             return
 
+        spectral_model = self.controller.experiment.process.get('spectral_model', [])
+        all_samples = self.controller.experiment.samples
+        unstained_paths = set(all_samples.get('unstained_samples', []))
+        all_sample_paths = all_samples.get('all_samples', {})
+
+        # Reverse map: sample display name → path
+        name_to_path = {v: k for k, v in all_sample_paths.items()}
+
+        # Check if any control in the spectral model points to an unstained sample
+        offending = [
+            c.get('label', '?')
+            for c in spectral_model
+            if name_to_path.get(c.get('sample_name', '')) in unstained_paths
+        ]
+
+        if offending:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "Unstained Sample in Spectral Model",
+                "Warning: the following spectral model controls appear to use an unstained sample:\n\n"
+                + "\n".join(f"  • {lbl}" for lbl in offending)
+                + "\n\nUnstained samples should not be added as spectral controls when using AutoSpectral AF. "
+                "They should only be used as the negative reference (Unstained Negative column). "
+                "Please remove these controls from the Spectral Process table before proceeding."
+            )
+            return
+        
         try:
             full_path = str(self.controller.experiment_dir / sample_path)
             sample = sample_from_fcs(full_path, self.bus)
@@ -1528,10 +1576,16 @@ class AutoSpectralTab(QWidget):
         # Build a state key describing exactly what this run will compute.
         # If it matches the last completed run, the cached arrays are still
         # valid — skip the worker and just redraw.
+        spillover = self.controller.experiment.process.get('spillover')
+        spillover_key = tuple(np.array(spillover).ravel()) if spillover is not None else None
+        # Use a content hash of the precomputed P matrix rather than id()
+        p_matrix = af_precomputed.get('P') if af_precomputed is not None else None
+        af_key = bytes(p_matrix.data) if p_matrix is not None else None
         state_key = (
             self.controller.current_sample_path,
             profile_key,
-            id(af_precomputed),
+            af_key,
+            spillover_key,
         )
         if state_key == self._last_cmp_state and self._ols_data is not None:
             self._plot_ols.set_status('')
@@ -1553,6 +1607,7 @@ class AutoSpectralTab(QWidget):
             af_spectra,
             self.controller.experiment.settings,
             self.controller.filtered_raw_fluorescence_channel_ids,
+            spillover=self.controller.experiment.process.get('spillover'),
         )
         self._cmp_worker.moveToThread(self._cmp_thread)
         self._cmp_thread.started.connect(self._cmp_worker.run)

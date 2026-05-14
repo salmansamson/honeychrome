@@ -1,6 +1,6 @@
 import sys
 from PySide6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QHBoxLayout)
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QObject, QEvent
 
 from honeychrome.view_components.help_texts import process_help_text
 from honeychrome.view_components.icon_loader import icon
@@ -38,6 +38,16 @@ class HelpToggleWidget(QWidget):
         self.help_label.setVisible(not is_visible)
         self.help_button.setText("Hide Help" if not is_visible else self.title)
 
+
+class WheelBlocker(QObject):
+    """Event filter that ignores wheel events, preventing scroll from being
+    captured by pyqtgraph viewports inside a scrollable parent."""
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.Wheel:
+            event.ignore()
+            return True
+        return False
+    
 
 if __name__ == "__main__":
     title = "Show Help"

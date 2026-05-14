@@ -15,7 +15,7 @@ from honeychrome.view_components.statistical_plotter import StatisticalCompariso
 os.environ["QT_LOGGING_RULES"] = "qt.core.qobject.connect=false" #suppress pyqtgraph graphicslayoutwidget warning
 
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QMainWindow, QFileDialog, QWidget, QHBoxLayout, QSplitter, QTabWidget, QStatusBar, QVBoxLayout, QLabel, QProgressBar, QScrollArea, QPushButton, QMenu
+from PySide6.QtWidgets import QMainWindow, QFileDialog, QWidget, QHBoxLayout, QSplitter, QTabWidget, QStatusBar, QVBoxLayout, QLabel, QProgressBar, QScrollArea, QPushButton, QMenu, QGroupBox
 from PySide6.QtCore import Qt, QSettings, QByteArray, Slot, QTimer, QThread, Signal as QtSignal
 
 from honeychrome.view_components.gating_hierarchy_widget import GatingHierarchyWidget
@@ -256,8 +256,40 @@ class MainWindow(QMainWindow):
         self.process_layout.addWidget(self.help_spectral_process)
         self.process_layout.addWidget(self.spectral_controls_editor)
         self.process_layout.addWidget(self.profiles_viewer)
-        self.process_layout.addWidget(self.scatter_cleaning_viewer)
-        self.process_layout.addWidget(self.af_cleaning_viewer)
+
+        # ---- AutoSpectral Control Cleaning boxed section ----
+        self.cleaning_section = QGroupBox()
+        self.cleaning_section.setStyleSheet("""
+            QGroupBox {
+                border: 2px solid #cccccc;
+                border-radius: 6px;
+                margin-top: 4px;
+                padding: 8px;
+            }
+        """)
+        cleaning_box_layout = QVBoxLayout(self.cleaning_section)
+        cleaning_box_layout.setContentsMargins(8, 8, 8, 8)
+        cleaning_box_layout.setSpacing(6)
+
+        from honeychrome.settings import heading_style
+        cleaning_title = QLabel("AutoSpectral Control Cleaning")
+        cleaning_title.setStyleSheet(heading_style)
+        cleaning_box_layout.addWidget(cleaning_title)
+
+        clean_btn_row = QHBoxLayout()
+        clean_btn_row.addWidget(self.spectral_controls_editor.clean_controls_btn)
+        clean_btn_row.addStretch()
+        cleaning_box_layout.addLayout(clean_btn_row)
+
+        cleaning_box_layout.addWidget(self.profiles_viewer._hist_toggle)
+        cleaning_box_layout.addWidget(self.profiles_viewer._hist_panel)
+        cleaning_box_layout.addWidget(self.scatter_cleaning_viewer)
+        cleaning_box_layout.addWidget(self.af_cleaning_viewer)
+
+        self.cleaning_section.setVisible(False)
+        self.process_layout.addWidget(self.cleaning_section)
+        # ---- end cleaning section ----
+
         self.process_layout.addWidget(self.similarity_viewer)
         self.process_layout.addWidget(self.hotspot_viewer)
         self.process_layout.addWidget(self.unmixing_viewer)
@@ -267,7 +299,7 @@ class MainWindow(QMainWindow):
         self.process_tab.setLayout(self.process_layout)
         self.tabs.addTab(scroll_area, "Spectral Process")
 
-        # --- AutoSpectral tab ---
+        # --- AutoSpectral AF tab ---
         self.autospectral_widget = AutoSpectralTab(bus, controller, parent=self)
         autospectral_tab_widget = QWidget()
         autospectral_tab_layout = QVBoxLayout()
@@ -275,7 +307,7 @@ class MainWindow(QMainWindow):
         autospectral_tab_layout.setSpacing(0)
         autospectral_tab_widget.setLayout(autospectral_tab_layout)
         autospectral_tab_layout.addWidget(self.autospectral_widget)
-        self.tabs.addTab(autospectral_tab_widget, "AutoSpectral")
+        self.tabs.addTab(autospectral_tab_widget, "AutoSpectral AF")
 
         # --- Unmixed ---
         self.unmixed_tab = QWidget()
@@ -304,8 +336,24 @@ class MainWindow(QMainWindow):
         self.statistics_layout.addWidget(self.statistical_comparison_widget)
         self.tabs.addTab(self.statistics_tab, "Statistics")
 
+        # --- visibility wiring ---
+        self.bus.cleaningActivated.connect(self.cleaning_section.setVisible)
+        self.bus.cleaningResultsReady.connect(self._on_cleaning_results_ready)
+
+        # Restore cleaning UI state
+        from PySide6.QtCore import QSettings as _QSettings
+        _qs = _QSettings("honeychrome", "app_configuration")
+        if _qs.value("show_autospectral_cleaning", False, type=bool):
+            _help_expanded = _qs.value("cleaning_help_expanded", True, type=bool)
+            self.spectral_controls_editor.activate_cleaning_checkbox.setChecked(True)
+            # Restore help expanded/collapsed state (setChecked auto-expands help;
+            # override here if the user had collapsed it last time)
+            self.spectral_controls_editor.cleaning_help_widget.help_label.setVisible(_help_expanded)
+            self.spectral_controls_editor.cleaning_help_widget.help_button.setText(
+                "Hide Help" if _help_expanded else "Show Cleaning Help"
+            )
+
         # --- Plugin tabs (placeholders + background load) ---
-        # ssr review: I hope you are sure about this working!
         self._plugin_placeholders = {}
         self._bus_ref = bus
         self._controller_ref = controller
@@ -525,6 +573,14 @@ class MainWindow(QMainWindow):
         for name, widget in {"gains": self.gains_widget, "acquisition": self.acquisition_widget}.items():
             visible = self.settings.value(f"{name}_visible", True, type=bool)
             widget.setVisible(visible)
+
+    @Slot()
+    def _on_cleaning_results_ready(self):
+        """Refresh the peak-channel histogram immediately after Clean Controls finishes."""
+        if self.profiles_viewer._hist_toggle.isChecked():
+            logger.info(f'MainWindow: calling _refresh_hist_combo and _refresh_histogram')
+            self.profiles_viewer._refresh_hist_combo()
+            self.profiles_viewer._refresh_histogram()
 
 if __name__ == "__main__":
     import sys

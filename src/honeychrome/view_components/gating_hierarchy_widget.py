@@ -415,6 +415,8 @@ class GatingHierarchyWidget(QWidget):
     @Slot(str)
     def update_data(self, mode):
         if mode == self.mode:
+            if self.data_for_cytometry_plots is None:
+                return
             self.model.update_statistics(self.data_for_cytometry_plots['statistics'])
             logger.info(f'GatingTree {self.mode} updated stats')
 

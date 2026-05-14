@@ -1,11 +1,11 @@
 """
 af_cleaning_viewer.py
 ----------------------
-Diagnostic widget for intrusive AF noise removal.
+Diagnostic widget for intrusive noise exclusion.
 
 Shows a two-panel biplot for the selected control:
-  Left  — Universal negative (unstained), showing where the AF boundary
-          was defined in (AF channel, fluorophore peak channel) space.
+  Left  — Universal negative (unstained), showing where the noise boundary
+          was defined in (noise channel, fluorophore peak channel) space.
   Right — Single-stained control, showing the same boundary applied and
           which events were excluded.
 
@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 )
 
 from honeychrome.settings import heading_style
+from honeychrome.view_components.help_toggle_widget import WheelBlocker
 
 logger = logging.getLogger(__name__)
 
@@ -68,19 +69,19 @@ class _SquarePlotWidget(pg.GraphicsLayoutWidget):
 
 class AfCleaningViewer(QFrame):
     # Colour scheme
-    _COL_AF_DIM      = (150, 150, 200,  60)   # dim blue — AF-dim (low-AF) negative events
-    _COL_AF_BRIGHT   = (255,  80,  80, 180)   # red      — AF-bright negative events
+    _COL_AF_DIM      = (150, 150, 200,  60)   # dim blue — low noise negative events
+    _COL_AF_BRIGHT   = (255,  80,  80, 180)   # red      — high noise negative events
     _COL_ALL_POS     = (180, 180, 180,  50)   # grey     — all positive events
-    _COL_KEPT_POS    = ( 80, 200,  80, 200)   # green    — AF-clean positives
-    _COL_REMOVED_POS = (255,  80,  80, 200)   # red      — AF-removed positives
+    _COL_KEPT_POS    = ( 80, 200,  80, 200)   # green    — noise-excluded (clean) positives
+    _COL_REMOVED_POS = (255,  80,  80, 200)   # red      — excluded noise from positives
     _COL_BOUNDARY    = 'y'                    # yellow   — exclusion boundary
 
     _LEGEND = [
-        (_COL_AF_DIM,      'Low-AF negative events'),
-        (_COL_AF_BRIGHT,   'High-AF negative events'),
+        (_COL_AF_DIM,      'Low-noise negative events'),
+        (_COL_AF_BRIGHT,   'High-noise negative events'),
         (_COL_ALL_POS,     'All positive events'),
-        (_COL_KEPT_POS,    'AF-clean positives (kept)'),
-        (_COL_REMOVED_POS, 'AF-contaminated positives (removed)'),
+        (_COL_KEPT_POS,    'Noise-excluded positives (kept)'),
+        (_COL_REMOVED_POS, 'Noise-contaminated positives (removed)'),
     ]
 
     def __init__(self, bus, controller, parent=None):
@@ -103,7 +104,7 @@ class AfCleaningViewer(QFrame):
         self._toggle.setChecked(False)
         self._toggle.setEnabled(False)
         self._toggle.setToolTip(
-            'Enable "Remove AF" in Clean Controls options and run Clean Controls first.')
+            'Tick "Exclude noise" in Clean Controls options and run Clean Controls first.')
         outer.addWidget(self._toggle)
 
         self._content = QWidget()
@@ -117,6 +118,8 @@ class AfCleaningViewer(QFrame):
         self._combo = QComboBox()
         self._combo.setMinimumWidth(220)
         self._combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._combo.installEventFilter(WheelBlocker(self._combo))
+        self._combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         ctrl_row.addWidget(self._combo)
         ctrl_row.addStretch()
         self._status = QLabel('')
@@ -135,14 +138,14 @@ class AfCleaningViewer(QFrame):
         bnd_swatch = QLabel('—')
         bnd_swatch.setStyleSheet('color: yellow;')
         legend_row.addWidget(bnd_swatch)
-        legend_row.addWidget(QLabel('AF boundary'))
+        legend_row.addWidget(QLabel('Noise exclusion boundary'))
         legend_row.addStretch()
         content_layout.addLayout(legend_row)
 
         # Plot pair
         left_box = QVBoxLayout()
         left_box.setSpacing(2)
-        self._neg_title = QLabel('Unstained — AF boundary definition')
+        self._neg_title = QLabel('Unstained — Noise boundary definition')
         self._neg_title.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
         self._neg_title.setStyleSheet('font-weight: bold; padding: 2px;')
         self._neg_title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -150,13 +153,15 @@ class AfCleaningViewer(QFrame):
         self._neg_plot = _SquarePlotWidget()
         self._neg_plot.setMinimumSize(320, 320)
         self._neg_plot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._neg_wheel_blocker = WheelBlocker(self)
+        self._neg_plot.viewport().installEventFilter(self._neg_wheel_blocker)
         left_box.addWidget(self._neg_plot)
         left_w = QWidget(); left_w.setLayout(left_box)
         left_w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         right_box = QVBoxLayout()
         right_box.setSpacing(2)
-        self._pos_title = QLabel('Single-Stained Control — AF boundary applied')
+        self._pos_title = QLabel('Single-Stained Control — Noise exclusion applied')
         self._pos_title.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
         self._pos_title.setStyleSheet('font-weight: bold; padding: 2px;')
         self._pos_title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -164,6 +169,8 @@ class AfCleaningViewer(QFrame):
         self._pos_plot = _SquarePlotWidget()
         self._pos_plot.setMinimumSize(320, 320)
         self._pos_plot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._pos_wheel_blocker = WheelBlocker(self)
+        self._pos_plot.viewport().installEventFilter(self._pos_wheel_blocker)
         right_box.addWidget(self._pos_plot)
         right_w = QWidget(); right_w.setLayout(right_box)
         right_w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -186,9 +193,9 @@ class AfCleaningViewer(QFrame):
     # ------------------------------------------------------------------
 
     def refresh_combo(self):
-        cleaned = self.controller.experiment.process.get('cleaned_events', {})
+        cleaned = self.controller.cleaned_events
         spectral_model = self.controller.experiment.process.get('spectral_model', [])
-        # Only show controls that actually had AF removal run (af_ch_idx is set),
+        # Only show controls that actually had noise exclusion run (af_ch_idx is set),
         # ordered as they appear in the spectral model.
         model_order = [c['label'] for c in spectral_model if 'label' in c]
         labels = [
@@ -205,9 +212,9 @@ class AfCleaningViewer(QFrame):
         has_data = bool(labels)
         self._toggle.setEnabled(has_data)
         self._toggle.setToolTip(
-            'Show AF removal biplots for the selected control.'
+            'Show Noise exclusion biplots for the selected control.'
             if has_data else
-            'Enable "Remove AF" in Clean Controls options and run Clean Controls first.'
+            'Enable "Exclude noise" in Clean Controls options and run Clean Controls first.'
         )
 
     # ------------------------------------------------------------------
@@ -255,7 +262,7 @@ class AfCleaningViewer(QFrame):
         self._neg_plot.clear_vb()
         self._pos_plot.clear_vb()
 
-        cleaned_store = self.controller.experiment.process.get('cleaned_events', {})
+        cleaned_store = self.controller.cleaned_events
         cleaned = cleaned_store.get(label)
         if cleaned is None:
             self._status.setText('No cleaned data for this control.')
@@ -266,7 +273,7 @@ class AfCleaningViewer(QFrame):
         boundary    = cleaned.get('af_boundary_neg')
 
         if af_ch_idx is None or peak_ch_idx is None:
-            self._status.setText('AF removal was not run for this control.')
+            self._status.setText('Noise exclusion was not performed for this control.')
             return
 
         # Resolve channel names for axis labels
@@ -284,7 +291,7 @@ class AfCleaningViewer(QFrame):
         neg_name = control.get('universal_negative_name', '—') if control else '—'
         sample_name = control.get('sample_name', '—') if control else '—'
 
-        self._neg_title.setText(f'Unstained — {neg_name}')
+        self._neg_title.setText(f'Unstained — Noise exclusion boundary {neg_name}')
         self._pos_title.setText(f'{label} — {sample_name}')
         self._neg_plot.set_channel_labels(af_ch_name, peak_ch_name)
         self._pos_plot.set_channel_labels(af_ch_name, peak_ch_name)
@@ -315,7 +322,7 @@ class AfCleaningViewer(QFrame):
 
         # ---- RIGHT PLOT: positive events coloured kept/removed ----
         pos_events = cleaned.get('positive')
-        # We need the pre-AF-removal positive to show removed events too.
+        # We need the pre-noise exclusion positive to show removed events too.
         # The cleaned['positive'] is already post-removal; we load raw gated events
         # to show all events in grey, then overlay the surviving cleaned ones.
         all_pos_2d = None
@@ -380,4 +387,4 @@ class AfCleaningViewer(QFrame):
 
         n_rem = cleaned.get('n_removed_af', 0)
         n_surv = cleaned.get('n_surviving_positive', len(pos_events) if pos_events is not None else 0)
-        self._status.setText(f'{n_rem} events removed by AF filter · {n_surv} positive events surviving')
+        self._status.setText(f'{n_rem} events removed by noise filter · {n_surv} positive events surviving')

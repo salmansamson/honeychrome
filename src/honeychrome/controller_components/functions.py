@@ -62,13 +62,16 @@ def add_recent_file(path):
     recent.insert(0, path)
     q_settings.setValue("recent_files", recent)  # store full history
 
-def export_unmixed_sample(sample_name, unmixed_folder, unmixed_event_data_without_fine_tuning, unmixed_event_channels_pnn, spillover, subsample=None):
+def export_unmixed_sample(sample_name, unmixed_folder, unmixed_event_data_without_fine_tuning, unmixed_event_channels_pnn, spillover, subsample=None, extra_null_channels=None):
     # note that FlowKit compensation matrix is actually spillover matrix
+    null_channels = ['event_id']
+    if extra_null_channels:
+        null_channels = null_channels + extra_null_channels
     unmixed_sample_name = sample_name + ' (Unmixed).fcs'
     unmixed_sample = Sample(unmixed_event_data_without_fine_tuning,
                                     channel_labels=unmixed_event_channels_pnn,
-                                    null_channel_list=['event_id'],
-                                    compensation=spillover,
+                                    null_channel_list=null_channels,
+                                    compensation=spillover.T, # was previously incorrect, but not noticeable when identity matrix
                                     sample_id=sample_name)
     unmixed_sample.export(unmixed_sample_name, subsample=subsample, directory=unmixed_folder, source='comp', include_metadata=True)
 
@@ -316,7 +319,7 @@ def apply_gates_in_place(data_for_cytometry_plots, gates_to_calculate=None):
                 if gate.gate_type == 'QuadrantGate':
                     quadrant_names = gate.quadrants.keys()
                     for name in quadrant_names:
-                        if name not in lookup_tables: #ssr review: this this fix a bug?
+                        if name not in lookup_tables: # guard: lookup table may not exist yet if called before calculate_lookup_tables
                             continue
                         mask = lookup_tables[name][indices_data_digitized_flattened]
                         gate_membership[name] = mask * gate_membership[parent_id[0]]
@@ -444,6 +447,10 @@ def calc_stats(data_for_cytometry_plots, initialise=True):
                         parent_id = parent_id[1][-1]
 
                 n_events_gate_old = statistics_old[gate_id]['n_events_gate']
+                if gate_id not in gate_membership:
+                    logger.warning(f'calc_stats: gate "{gate_id}" not in gate_membership — skipping.')
+                    statistics[gate_id] = {'n_events_gate': 0, 'p_gate_total': 0, 'p_gate_parent': 0, 'event_conc': np.nan}
+                    continue
                 n_events_gate_new = gate_membership[gate_id].sum()
                 n_events_gate = int(n_events_gate_old + n_events_gate_new)
                 p_gate_total = n_events_gate / n_events_total if n_events_total != 0 else 0
@@ -558,3 +565,19 @@ def rename_label_offset(plot, old_gate_name, gate_name):
         if old_gate_name in plot['label_offsets']:
             plot['label_offsets'][gate_name] = plot['label_offsets'][old_gate_name]
             plot['label_offsets'].pop(old_gate_name)
+
+def build_display_label_map(pnn, spectral_model):
+    """
+    Returns a dict {pnn_name: display_label} for all channels.
+    Fluorophore channels with a non-empty antigen get "Antigen Label";
+    all other channels map to themselves.
+    """
+    label_to_antigen = {
+        control['label']: control.get('antigen', '')
+        for control in (spectral_model or [])
+    }
+    result = {}
+    for name in (pnn or []): # guard against None
+        antigen = label_to_antigen.get(name, '')
+        result[name] = f'{antigen} {name}'.strip() if antigen else name
+    return result

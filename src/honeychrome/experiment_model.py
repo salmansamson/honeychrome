@@ -147,8 +147,6 @@ class ExperimentModel:
         self.settings = file_data['settings']
         self.samples = file_data['samples']
         self.process = file_data['process']
-        # ssr review: preferably put these variables in controller ephemeral data
-        self.process.setdefault('cleaned_events', {})   # runtime-only; not in older files
         self.samples.setdefault('unstained_samples', [])  # not present in older .kit files
         self.cytometry = file_data['cytometry']
         self.statistics = file_data['statistics']
@@ -156,14 +154,10 @@ class ExperimentModel:
     def save(self):
         if self.experiment_path is None:
             raise ValueError("No file path set for saving")
-        # cleaned_events holds numpy arrays at runtime and must not be serialised.
-        # It is recomputed on demand by SpectralCleaner when the user clicks "Clean Controls".
-        # ssr review: preferably put this logic in controller
-        process_to_save = {k: v for k, v in self.process.items() if k != 'cleaned_events'}
         file_data = {
             'settings':self.settings,
             'samples':self.samples,
-            'process':process_to_save,
+            'process':self.process,
             'cytometry':self.cytometry,
             'statistics':self.statistics
         }
@@ -237,9 +231,19 @@ class ExperimentModel:
 
         self.samples['all_sample_nevents'] = all_sample_nevents
 
-        # Prune any manually-tagged unstained samples that no longer exist on disk
+        import re as _re
+        # Auto-register any samples whose name matches 'unstained' (case-insensitive)
+        # into unstained_samples, alongside manually-tagged ones.
+        tagged = self.samples.setdefault('unstained_samples', [])
+        for p, tube_name in self.samples['all_samples'].items():
+            if p not in tagged:
+                if (_re.search(r'unstained', tube_name, _re.IGNORECASE)
+                        or _re.search(r'unstained', p, _re.IGNORECASE)):
+                    tagged.append(p)
+
+        # Prune any tagged unstained samples that no longer exist on disk
         self.samples['unstained_samples'] = [
-            p for p in self.samples.get('unstained_samples', [])
+            p for p in self.samples['unstained_samples']
             if p in self.samples['all_samples']
         ]
 

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from honeychrome.settings import heading_style
+from honeychrome.view_components.help_toggle_widget import WheelBlocker
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +183,8 @@ class ScatterCleaningViewer(QFrame):
         self._combo = QComboBox()
         self._combo.setMinimumWidth(220)
         self._combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._combo.installEventFilter(WheelBlocker(self._combo))
+        self._combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         ctrl_row.addWidget(self._combo)
         ctrl_row.addStretch()
         self._status = QLabel('')
@@ -210,7 +213,7 @@ class ScatterCleaningViewer(QFrame):
 
         left_box = QVBoxLayout()
         left_box.setSpacing(2)
-        self._neg_title = QLabel('Universal Negative')
+        self._neg_title = QLabel('Unstained Negative')
         self._neg_title.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
         self._neg_title.setStyleSheet('font-weight: bold; padding: 2px;')
         self._neg_title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -218,6 +221,8 @@ class ScatterCleaningViewer(QFrame):
         self._neg_plot = _SquareScatterWidget('FSC-A', 'SSC-A')
         self._neg_plot.setMinimumSize(320, 320)
         self._neg_plot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._neg_wheel_blocker = WheelBlocker(self)
+        self._neg_plot.viewport().installEventFilter(self._neg_wheel_blocker)
         left_box.addWidget(self._neg_plot)
         left_w = QWidget(); left_w.setLayout(left_box)
         left_w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -232,6 +237,8 @@ class ScatterCleaningViewer(QFrame):
         self._pos_plot = _SquareScatterWidget('FSC-A', 'SSC-A')
         self._pos_plot.setMinimumSize(320, 320)
         self._pos_plot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._pos_wheel_blocker = WheelBlocker(self)
+        self._pos_plot.viewport().installEventFilter(self._pos_wheel_blocker)
         right_box.addWidget(self._pos_plot)
         right_w = QWidget(); right_w.setLayout(right_box)
         right_w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -254,7 +261,7 @@ class ScatterCleaningViewer(QFrame):
     # ------------------------------------------------------------------
 
     def refresh_combo(self):
-        cleaned = self.controller.experiment.process.get('cleaned_events', {})
+        cleaned = self.controller.cleaned_events
         spectral_model = self.controller.experiment.process.get('spectral_model', [])
         # Only include controls that actually underwent scatter matching,
         # ordered as they appear in the spectral model.
@@ -273,7 +280,7 @@ class ScatterCleaningViewer(QFrame):
         has_data = bool(labels)
         self._toggle.setEnabled(has_data)
         self._toggle.setToolTip(
-            'Show FSC/SSC biplots for the selected control and its universal negative.'
+            'Show FSC/SSC biplots for the selected control and its unstained negative.'
             if has_data else
             'Run "Clean Controls" first to populate this panel.'
         )
@@ -325,7 +332,7 @@ class ScatterCleaningViewer(QFrame):
         self._neg_plot.clear_vb()
         self._pos_plot.clear_vb()
 
-        cleaned_store = self.controller.experiment.process.get('cleaned_events', {})
+        cleaned_store = self.controller.cleaned_events
         cleaned = cleaned_store.get(label)
         if cleaned is None:
             self._status.setText('No cleaned data for this control.')
@@ -356,7 +363,7 @@ class ScatterCleaningViewer(QFrame):
         self._neg_plot.set_channel_labels(ch_x, ch_y)
         self._pos_plot.set_channel_labels(ch_x, ch_y)
         self._neg_title.setText(
-            f'Universal Negative — {control.get("universal_negative_name", "—")}')
+            f'Unstained Negative — {control.get("universal_negative_name", "—")}')
         self._pos_title.setText(
             f'{label} — {control.get("sample_name", "—")}')
 

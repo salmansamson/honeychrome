@@ -105,6 +105,15 @@ class DictTreeModel(QAbstractItemModel):
         self.full_data = full_data
         self.root_item = TreeItem(None, "All Samples", "", "")
 
+    def _is_unstained(self, path: str) -> bool:
+        """Return True if path is manually tagged OR name matches 'unstained' regex."""
+        if path in self.full_data.get('unstained_samples', []):
+            return True
+        tube_name = self.full_data['all_samples'].get(path, '')
+        import re
+        return bool(re.search(r'unstained', tube_name, re.IGNORECASE)
+                    or re.search(r'unstained', path, re.IGNORECASE))
+
     def setup_all_samples_from_dict(self, paths):
         title = 'All Samples'
         parent_item = TreeItem(None, title, "", self.root_item)
@@ -113,13 +122,15 @@ class DictTreeModel(QAbstractItemModel):
             if path not in self.full_data['single_stain_controls']:
                 title = self.full_data['all_samples'][path]
                 nevents = self.full_data['all_sample_nevents'][path]
-                icon = load_icon('droplet') if nevents > 0 else load_icon('droplet-empty')
+                if self._is_unstained(path):
+                    icon = load_icon('droplet', colour='#4a90d9') if nevents > 0 else load_icon('droplet-empty')
+                else:
+                    icon = load_icon('droplet') if nevents > 0 else load_icon('droplet-empty')
                 parts = path.replace("\\", "/").split("/")
                 node = parent_item
                 for part in parts[1:-1]:
                     if part.strip():
                         node = node.get_or_create_child(part)
-
                 item = TreeItem(icon, title, nevents, path, node)
                 node.append_child(item)
 
@@ -129,7 +140,7 @@ class DictTreeModel(QAbstractItemModel):
         self.root_item.append_child(parent_item)
         for path in data:
             nevents = self.full_data['all_sample_nevents'][path]
-            if path in self.full_data.get('unstained_samples', []):
+            if self._is_unstained(path):
                 icon = load_icon('droplet', colour='#4a90d9') if nevents > 0 else load_icon('droplet-empty')
             else:
                 icon = load_icon('droplet') if nevents > 0 else load_icon('droplet-empty')
@@ -153,7 +164,7 @@ class DictTreeModel(QAbstractItemModel):
         elif isinstance(data, list):
             for path in data:
                 nevents = self.full_data['all_sample_nevents'][path]
-                if path in self.full_data.get('unstained_samples', []):
+                if self._is_unstained(path):
                     icon = load_icon('droplet', colour='#4a90d9') if nevents > 0 else load_icon('droplet-empty')
                 else:
                     icon = load_icon('droplet') if nevents > 0 else load_icon('droplet-empty')

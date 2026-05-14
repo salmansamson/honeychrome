@@ -40,7 +40,7 @@ from multiprocessing import shared_memory
 import time
 
 from honeychrome.experiment_model import ExperimentModel, check_fcs_matches_experiment
-from honeychrome.controller_components.functions import apply_gates_in_place, apply_transfer_matrix, generate_transformations, update_transforms, initialise_hists, calc_hists, calc_stats, initialise_stats, assign_default_transforms, define_quad_gates, define_range_gate, define_polygon_gate, define_rectangle_gate, define_ellipse_gate, add_recent_file, empty_queue_nowait, define_process_plots, get_set_or_initialise_label_offset, sample_from_fcs
+from honeychrome.controller_components.functions import apply_gates_in_place, apply_transfer_matrix, generate_transformations, update_transforms, initialise_hists, calc_hists, calc_stats, initialise_stats, assign_default_transforms, define_quad_gates, define_range_gate, define_polygon_gate, define_rectangle_gate, define_ellipse_gate, add_recent_file, empty_queue_nowait, define_process_plots, get_set_or_initialise_label_offset, sample_from_fcs, build_display_label_map
 from honeychrome.controller_components.gml_functions_mod_from_flowkit import from_gml, to_gml
 from honeychrome.settings import traces_cache_size, traces_cache_dtype, adc_rate
 import honeychrome.settings as settings
@@ -65,6 +65,7 @@ logger = logging.getLogger(__name__)
 # raw, spectral process, unmixed, statistics, etc.
 cytometry_data_dictionary = {
     'pnn': None, # list of channel names
+    'pnn_labels': None, # antigen dye labels
     'fluoro_indices': None, # list of fluorescence channel indices to the list of channel names
     'lookup_tables': None, # dictionary of boolean lookup tables for each gate on the 1D or 2D plot on which the gate is defined (for fast gating)
     'event_data': None, # event data (which may be raw or unmixed depending on the copy of the dictionary)
@@ -95,6 +96,7 @@ class Controller(QObject):
         self.live_sample_path = None
         self.raw_event_data = None
         self.unmixed_event_data = None
+        self.af_sidecar_data = None   # (n_cells, 2) float64: col 0 = af_scale, col 1 = af_idx; None when OLS
 
         # ephemeral data on top of experiment
         self.filtered_raw_fluorescence_channel_ids = None
@@ -174,14 +176,8 @@ class Controller(QObject):
 
         self.current_mode = 'raw'
         self.initialise_ephemeral_data()
-
-        ### SSR: this addition causes a bug - it wipes the spillover matrix
-        ### OTB: now updated to only update the unmixing matrix, retaining any existing spillover matrix
-        # # Recompute unmixing matrix from profiles to fix any column-ordering
-        # # inconsistency in the stored matrix (e.g. from pre-fix .kit files).
-        # ssr review: are you sure this is necessary? this clobbers initialise_ephemeral_data
-        if self.experiment.process.get('unmixing_matrix'):
-            self.refresh_spectral_process()
+        self.cache_all_af_profiles()
+        self.initialise_af_matrices()
 
         logger.info(f'Controller: experiment loaded {self.experiment_dir}')
 
@@ -377,6 +373,7 @@ class Controller(QObject):
         self.live_sample_path = None
         self.raw_event_data = None
         self.unmixed_event_data = None
+        self.af_sidecar_data = None
 
         # ephemeral data on top of experiment
         self.raw_lookup_tables = {}
@@ -387,6 +384,7 @@ class Controller(QObject):
         self.unmixed_transformations = None
         self.raw_gating = None
         self.unmixed_gating = None
+        self.cleaned_events: dict = {}   # runtime-only; numpy arrays; not serialised
         self.data_for_cytometry_plots = {'pnn': None, 'fluoro_indices': None, 'lookup_tables': None, 'event_data': None, 'transformations': None, 'statistics': {}, 'gating': GatingStrategy(), 'plots': [], 'histograms': [], 'gate_membership': {}}
         self.data_for_cytometry_plots_raw = deepcopy(self.data_for_cytometry_plots)
         self.data_for_cytometry_plots_process = deepcopy(self.data_for_cytometry_plots)
@@ -449,9 +447,15 @@ class Controller(QObject):
                 self.unmixed_lookup_tables = {}
                 process_plots = []
 
+            unmixed_pnn = self.experiment.settings['unmixed']['event_channels_pnn']
+            unmixed_pnn_labels = build_display_label_map(
+                unmixed_pnn or [], self.experiment.process.get('spectral_model') # guard in case unmixed_pnn is None
+            )
+
             self.data_for_cytometry_plots_process.update(
                 {
                     'pnn': self.experiment.settings['unmixed']['event_channels_pnn'],
+                    'pnn_labels': unmixed_pnn_labels,
                     'fluoro_indices': self.experiment.settings['unmixed']['fluorescence_channel_ids'],
                     'transformations': self.unmixed_transformations,
                     'gating': self.unmixed_gating,
@@ -463,6 +467,7 @@ class Controller(QObject):
             self.data_for_cytometry_plots_unmixed.update(
                 {
                     'pnn': self.experiment.settings['unmixed']['event_channels_pnn'],
+                    'pnn_labels': unmixed_pnn_labels,
                     'fluoro_indices': self.experiment.settings['unmixed']['fluorescence_channel_ids'],
                     'transformations': self.unmixed_transformations,
                     'gating': self.unmixed_gating,
@@ -539,20 +544,15 @@ class Controller(QObject):
         ]
 
         if not cached:
-            # Cache empty — background rebuild after spectral process refresh
-            # is still in progress, or fluor_spectra are not yet available.
-            # AF correction will be activated on the next load_sample() call
-            # once the cache is ready. Do not call cache_all_af_profiles()
-            # here: that would block the main thread, which is exactly the
-            # race condition this change is designed to avoid.
-            logger.debug(
-                'initialise_af_matrices: cache empty for assigned profiles — '
-                'deferring AF activation to next load_sample().'
+            logger.warning(
+                f'initialise_af_matrices: no cache hit for sample "{self.current_sample_path}". '
+                f'profile_names={profile_names}, '
+                f'cache_keys={list(self.af_precomputed_cache.keys())}'
             )
             self.af_precomputed = None
             self.af_spectra = None
             return
-
+        
         if len(cached) == 1:
             combined = cached[0]
         else:
@@ -618,6 +618,7 @@ class Controller(QObject):
         self.af_precomputed_cache = {}
         af_profiles = self.experiment.process.get('af_profiles', {})
         if not af_profiles:
+            logger.warning(f'cache_all_af_profiles: experiment.process has no af_profiles — keys present: {list(self.experiment.process.keys())}')
             return
 
         fluor_spectra = self._build_fluor_spectra()
@@ -694,17 +695,31 @@ class Controller(QObject):
 
 
     def _apply_unmixing(self, raw_event_data):
-        """Apply unmixing — AF-corrected if matrices are set, otherwise plain OLS."""
+        """Apply unmixing — AF-corrected if matrices are set, otherwise plain OLS.
+
+        Always returns the unmixed event array (same shape contract as before).
+        As a side-effect, populates self.af_sidecar_data with a (n_cells, 2)
+        array [af_scale, af_idx] when AF correction is active, or sets it to
+        None when plain OLS is used.  Callers must not rely on af_sidecar_data
+        until after this method returns.
+        """
         if self.af_precomputed is not None and self.af_spectra is not None:
-            return apply_af_transfer(
+            result = apply_af_transfer(
                 raw_event_data,
                 self.transfer_matrix,
                 self.af_precomputed,
                 self.af_spectra,
                 self.experiment.settings,
                 filtered_fl_ids_raw=self.filtered_raw_fluorescence_channel_ids,
+                spillover=self.experiment.process.get('spillover'),
             )
+            # result is now a dict; store the sidecar columns
+            self.af_sidecar_data = np.column_stack(
+                [result['af_scale'], result['af_idx'].astype(np.float64)]
+            )
+            return result['unmixed']
         else:
+            self.af_sidecar_data = None
             return apply_transfer_matrix(self.transfer_matrix, raw_event_data)
 
     @Slot(str, str)
@@ -825,14 +840,20 @@ class Controller(QObject):
         self.current_sample = None
         self.raw_event_data = None
         self.unmixed_event_data = None
+        self.af_sidecar_data = None
         self.clear_data_for_cytometry_plots()
         self.initialise_data_for_cytometry_plots()
         logger.info(f"Controller: unloaded sample")
 
+    # added with busy cursor since with AF integration this may be noticeable
+    @with_busy_cursor
     def reapply_fine_tuning(self):
         self.initialise_transfer_matrix()
         if self.raw_event_data is not None:
-            self.unmixed_event_data = apply_transfer_matrix(self.transfer_matrix, self.raw_event_data)
+            self.initialise_af_matrices()
+            self.unmixed_event_data = self._apply_unmixing(self.raw_event_data)
+            self.clear_data_for_cytometry_plots()
+            self.initialise_data_for_cytometry_plots()
 
     @Slot()
     def on_gain_change(self, ch_name, value):
@@ -991,6 +1012,7 @@ class Controller(QObject):
         elif tab_name == 'Unmixed Data':
             self.current_mode = 'unmixed'
             self.data_for_cytometry_plots = self.data_for_cytometry_plots_unmixed
+            self.initialise_data_for_cytometry_plots(force_recalc_histograms=True)
         elif tab_name == 'Statistics':
             self.current_mode = 'statistics'
             self.data_for_cytometry_plots = self.data_for_cytometry_plots_unmixed
@@ -1052,21 +1074,37 @@ class Controller(QObject):
                     self.thread = threading.Thread(target=self.update_hists_and_stats, args=(), daemon=True)
                     self.thread.start()
 
-    # ssr review: why remove with_busy_cursor?
-    # note original intention of this method was to reinitialise only the minimal data for process plots
+    @with_busy_cursor
     @Slot()
     def reinitialise_data_for_process_plots(self):
         if self.current_mode == 'process':
             self.data_for_cytometry_plots.update({'event_data': self.unmixed_event_data})
             self.data_for_cytometry_plots['histograms'] = initialise_hists(self.data_for_cytometry_plots['plots'], self.data_for_cytometry_plots)
-            self.data_for_cytometry_plots['gate_membership'] = {}
+            # Seed gate_membership with root so calc_hists_and_stats enters the correct branch
+            # and calc_stats never encounters a missing gate key.
+            if self.unmixed_event_data is not None:
+                self.data_for_cytometry_plots['gate_membership'] = {
+                    'root': np.ones(len(self.unmixed_event_data), dtype=np.bool_)
+                }
+            else:
+                self.data_for_cytometry_plots['gate_membership'] = {}
+            # Capture the dict reference now — protects the thread if set_mode switches later
+            process_data_snapshot = self.data_for_cytometry_plots
             threading.Thread(
                 target=self._reinitialise_process_plots_worker,
+                args=(process_data_snapshot,),
                 daemon=True,
             ).start()
 
-    def _reinitialise_process_plots_worker(self):
-        self.calc_hists_and_stats()
+    def _reinitialise_process_plots_worker(self, data_snapshot):
+        # Use the snapshot captured at slot-fire time, not self.data_for_cytometry_plots
+        # which may have been redirected to a different dict by set_mode on the main thread.
+        original = self.data_for_cytometry_plots
+        self.data_for_cytometry_plots = data_snapshot
+        try:
+            self.calc_hists_and_stats()
+        finally:
+            self.data_for_cytometry_plots = original
         logger.info(f'Controller: prepared hists for process plots')
 
     @Slot(str, str)
@@ -1434,7 +1472,10 @@ class Controller(QObject):
             self.experiment.cytometry['transforms'] = None
             self.experiment.cytometry['gating'] = None
             self.unmixed_event_data = None
+            self.af_sidecar_data = None
 
+        # Rebuild AF cache synchronously before reinitialising ephemeral data.
+        self.cache_all_af_profiles()
         # then reinitialise ephemeral data for process and unmixed tabs
         self.initialise_ephemeral_data(scope=['unmixed'])
         self.initialise_data_for_cytometry_plots(force_recalc_histograms=True)
@@ -1444,13 +1485,6 @@ class Controller(QObject):
             self.bus.spectralProcessRefreshed.emit()
             # self.bus.changedGatingHierarchy.emit('unmixed', 'root')
             self.bus.statusMessage.emit(f'Spectral process refreshed.')
-
-        # Rebuild the AF precomputed cache in a daemon thread so the main
-        # thread is not blocked.  initialise_af_matrices() has a synchronous
-        # fallback that fires on the next load_sample() if the cache is not
-        # yet ready, so there is no race condition for correctness.
-        import threading
-        threading.Thread(target=self.cache_all_af_profiles, daemon=True).start()
 
         logger.info(f'Controller: refreshed spectral process, unmixed settings, unmixed cytometry')
 

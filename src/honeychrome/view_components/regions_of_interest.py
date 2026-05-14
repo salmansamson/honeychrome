@@ -147,9 +147,14 @@ class DraggableRoiLabel(pg.TextItem):
                     idx = plot['child_gates'].index(old_name)
                     plot['child_gates'][idx] = new_name
                     rename_label_offset(plot, old_name, new_name)
+            # If this is a raw-mode rename, propagate to the spectral model's gate_label
+            # so that generate() and Recalculate can still find the gate.
+            mode = self.parent_roi.vb.parent().mode
+            if mode == 'raw' and self.bus is not None:
+                self.bus.rawGateRenamed.emit(old_name, new_name)
             if self.bus is not None:
-                self.bus.updateSourceChildGates.emit(self.parent_roi.vb.parent().mode, new_name)
-                self.bus.changedGatingHierarchy.emit(self.parent_roi.vb.parent().mode, new_name)
+                self.bus.updateSourceChildGates.emit(mode, new_name)
+                self.bus.changedGatingHierarchy.emit(mode, new_name)
 
         # print(self.gating.get_gate_ids())
 

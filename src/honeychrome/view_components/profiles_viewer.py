@@ -1,13 +1,16 @@
 from PySide6.QtCore import QPointF, QRectF, Qt, QRect, QSize, QPoint, Slot, QObject, QEvent
 from PySide6.QtGui import QWheelEvent
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QLayout, QWidget, QHBoxLayout, QLabel, QSizePolicy, QCheckBox
+from PySide6.QtWidgets import QFrame, QVBoxLayout, QLayout, QWidget, QHBoxLayout, QLabel, QSizePolicy, QCheckBox, QComboBox
 import pyqtgraph as pg
 import numpy as np
+import logging
+logger = logging.getLogger(__name__)
 
 from honeychrome.settings import heading_style, line_colors
 from honeychrome.view_components.cytometry_plot_components import (
     NoPanViewBox, ZoomAxis, TransparentGraphicsLayoutWidget,
 )
+from honeychrome.view_components.help_toggle_widget import WheelBlocker
 
 
 # --------------------- Flow Layout -------------------------
@@ -226,15 +229,25 @@ class ProfilesViewer(QFrame):
         self._hist_toggle.setToolTip(
             'For each selected control, plot a 1-D histogram of its peak channel.\n'
             'Gate boundaries are marked. When cleaned data are available and "Use Cleaned"\n'
-            'is ticked, the cleaned positive and negative pools are shown as filled overlays.\n'
-            'Axis style matches the Raw Data tab (biexponential transform, real-value ticks).'
+            'is ticked, the cleaned positive and negative pools are shown as filled overlays.'
         )
-        self.layout.addWidget(self._hist_toggle)
 
         self._hist_panel = QWidget()
         hist_panel_layout = QVBoxLayout(self._hist_panel)
         hist_panel_layout.setContentsMargins(0, 4, 0, 0)
         hist_panel_layout.setSpacing(0)
+
+        # Control selector row (mirrors ScatterCleaningViewer pattern)
+        hist_ctrl_row = QHBoxLayout()
+        hist_ctrl_row.addWidget(QLabel('Control:'))
+        self._hist_combo = QComboBox()
+        self._hist_combo.setMinimumWidth(220)
+        self._hist_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._hist_combo.installEventFilter(WheelBlocker(self._hist_combo))
+        self._hist_combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        hist_ctrl_row.addWidget(self._hist_combo)
+        hist_ctrl_row.addStretch()
+        hist_panel_layout.addLayout(hist_ctrl_row)
 
         # Use the same graphics layout as CytometryPlotWidget so ZoomAxis works correctly
         self._hist_glw = TransparentGraphicsLayoutWidget()
@@ -259,24 +272,53 @@ class ProfilesViewer(QFrame):
         # Left axis — plain count, no transform
         self._hist_axis_left.setTicks(None)
 
+        self._hist_wheel_blocker = WheelBlocker(self)
+        self._hist_glw.viewport().installEventFilter(self._hist_wheel_blocker)
         hist_panel_layout.addWidget(self._hist_glw)
         self._hist_panel.setVisible(False)
-        self.layout.addWidget(self._hist_panel)
 
         self._hist_toggle.toggled.connect(self._hist_panel.setVisible)
-        self._hist_toggle.toggled.connect(self._refresh_histogram)
+        self._hist_toggle.toggled.connect(self._on_hist_toggle)
+        self._hist_combo.currentTextChanged.connect(self._refresh_histogram)
 
         if self.controller.experiment.process['profiles']:
             self.plot_profiles([])
 
+    def set_hist_toggle_visible(self, visible: bool):
+        """Show or hide the peak-channel histogram toggle (controlled by cleaning activation)."""
+        self._hist_toggle.setVisible(visible)
+
+    def _refresh_hist_combo(self):
+        """Repopulate the control combo from profiles in spectral model order.
+        Library controls are excluded — they have no FCS file to load events from."""
+        spectral_model = self.controller.experiment.process.get('spectral_model', [])
+        all_profile_keys = set(self.controller.experiment.process.get('profiles', {}).keys())
+        labels = [
+            c['label'] for c in spectral_model
+            if c.get('label') in all_profile_keys
+            and c.get('control_type') != 'Single Stained Spectral Control from Library'
+        ]
+        current = self._hist_combo.currentText()
+        self._hist_combo.blockSignals(True)
+        self._hist_combo.clear()
+        self._hist_combo.addItems(labels)
+        if current in labels:
+            self._hist_combo.setCurrentText(current)
+        self._hist_combo.blockSignals(False)
+
+    def _on_hist_toggle(self, checked: bool):
+        """Called when the histogram toggle checkbox changes state."""
+        if not checked:
+            return
+        self._refresh_hist_combo()
+        self._refresh_histogram()
+
     def _refresh_histogram(self, *_):
-        """Redraw the peak-channel histogram for the currently-displayed profiles."""
+        """Redraw the peak-channel histogram for the control selected in the combo."""
         if not self._hist_toggle.isChecked():
             return
-        labels = list(self.plot_items.keys()) or list(
-            self.controller.experiment.process.get('profiles', {}).keys()
-        )
-        self._plot_peak_histograms(labels)
+        label = self._hist_combo.currentText()
+        self._plot_peak_histograms([label] if label else [])
 
     def _plot_peak_histograms(self, labels: list):
         """
@@ -307,7 +349,7 @@ class ProfilesViewer(QFrame):
             return
 
         spectral_model   = self.controller.experiment.process.get('spectral_model', [])
-        cleaned_store    = self.controller.experiment.process.get('cleaned_events', {})
+        cleaned_store    = self.controller.cleaned_events
         event_channels_pnn = self.controller.experiment.settings['raw']['event_channels_pnn']
         fluor_ch_ids     = self.controller.filtered_raw_fluorescence_channel_ids
         experiment_dir   = self.controller.experiment_dir
@@ -362,8 +404,14 @@ class ProfilesViewer(QFrame):
                     pct = count / peak * 100 if peak > 0 else count
                     return edges, pct
 
-            use_cleaned = control.get('use_cleaned', False)
+            use_cleaned = control.get('use_cleaned') is not False
             cleaned     = cleaned_store.get(label) if use_cleaned else None
+
+            from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
+            use_internal = (
+                control.get('particle_type') == 'Beads'
+                or control.get('universal_negative_name') == INTERNAL_NEGATIVE_SENTINEL
+            )
 
             rel_path = all_samples_rev.get(control.get('sample_name', ''))
 
@@ -377,9 +425,26 @@ class ProfilesViewer(QFrame):
                 if pos_events is None or len(pos_events) == 0:
                     continue
                 pos_peak_raw = pos_events[:, peak_local_idx]
-                neg_peak_raw = (neg_events[:, peak_local_idx]
-                                if (neg_events is not None and len(neg_events) > 0)
-                                else None)
+
+                if use_internal and (neg_events is None or len(neg_events) == 0):
+                    # cleaned['negative'] is empty for internal-negative controls
+                    # (pre-fix controller). Load the Neg gate from the FCS file directly.
+                    neg_peak_raw = None
+                    if rel_path and raw_gating:
+                        try:
+                            sample = sample_from_fcs(str(experiment_dir / rel_path))
+                            all_ev = get_raw_events(sample, fluor_ch_ids)
+                            neg_gate_lbl = control.get('neg_gate_label') or f'Neg {label}'
+                            if raw_gating.find_matching_gate_paths(neg_gate_lbl):
+                                neg_mask = raw_gating.gate_sample(sample).get_gate_membership(neg_gate_lbl)
+                                neg_ev = all_ev[neg_mask]
+                                neg_peak_raw = neg_ev[:, peak_local_idx] if len(neg_ev) > 0 else None
+                        except Exception:
+                            pass
+                else:
+                    neg_peak_raw = (neg_events[:, peak_local_idx]
+                                    if (neg_events is not None and len(neg_events) > 0)
+                                    else None)
 
                 # All-events background
                 if rel_path:
@@ -413,11 +478,13 @@ class ProfilesViewer(QFrame):
                                         pen=pg.mkPen(_COL_MATCHED, width=1, style=Qt.DashLine))
                     item.setData(x_neg, y_neg)
                     self._hist_vb.addItem(item)
-                    legend_items.append(('#50a0ff', f'{label} — matched −ve (dashed)'))
+                    neg_legend = 'neg gate' if use_internal else 'matched −ve'
+                    legend_items.append(('#50a0ff', f'{label} — {neg_legend} (dashed)'))
 
             else:
                 # Standard gate-mean path
                 if not rel_path:
+                    logger.warning(f'_plot_peak_histograms: no rel_path for label "{label}" — skipping histogram')
                     continue
                 try:
                     sample = sample_from_fcs(str(experiment_dir / rel_path))
@@ -429,36 +496,12 @@ class ProfilesViewer(QFrame):
                     item.setData(x_all, y_all)
                     self._hist_vb.addItem(item)
                     legend_items.append(('#a0a0a0', label))
-                except Exception:
+                except Exception as exc:
+                    logger.warning(f'_plot_peak_histograms: failed to load/histogram "{label}" from "{rel_path}": {exc}')
                     continue
 
-                # Gate boundary InfiniteLines
-                for gate_lbl, gate_style in [
-                    (control.get('gate_label', ''), Qt.SolidLine),
-                    (f'Neg {label}',               Qt.DashLine),
-                ]:
-                    if not gate_lbl:
-                        continue
-                    try:
-                        if not raw_gating.find_matching_gate_paths(gate_lbl):
-                            continue
-                        mask = raw_gating.gate_sample(sample).get_gate_membership(gate_lbl)
-                        if mask.sum() == 0:
-                            continue
-                        boundary_raw = float(all_ev[mask, peak_local_idx].min())
-                        if xform_obj is not None and xform_obj.xform is not None:
-                            boundary_t = float(xform_obj.xform.apply(
-                                np.array([boundary_raw]))[0])
-                        else:
-                            boundary_t = boundary_raw
-                        self._hist_vb.addItem(pg.InfiniteLine(
-                            pos=boundary_t, angle=90,
-                            pen=pg.mkPen(color, width=1, style=gate_style),
-                            label=gate_lbl,
-                            labelOpts={'position': 0.85, 'color': color},
-                        ))
-                    except Exception:
-                        pass
+            # Gate regions — drawn for BOTH cleaned and non-cleaned paths
+            self._draw_hist_gates(label, control, xform_obj, raw_gating)
 
         # Apply transform axis and labels to the selected control's peak channel
         first_ctrl = next(
@@ -489,6 +532,53 @@ class ProfilesViewer(QFrame):
             self._hist_panel.layout().addWidget(lbl)
             self._hist_legend_label = lbl
 
+    def _draw_hist_gates(self, label: str, control: dict,
+                         xform_obj, raw_gating) -> None:
+        """
+        Draw read-only Pos/Neg gate regions on the peak-channel histogram,
+        reflecting the current gate positions from raw_gating.
+        Gates are modified via the Raw Data tab only.
+        """
+        gate_specs = [
+            (control.get('gate_label', ''),                     pg.mkBrush(0, 200, 0, 40),     pg.mkPen('g', width=2)),
+            (control.get('neg_gate_label') or f'Neg {label}',   pg.mkBrush(100, 100, 255, 40), pg.mkPen('b', width=2)),
+        ]
+
+        for gate_lbl, region_brush, region_pen in gate_specs:
+            if not gate_lbl:
+                continue
+            try:
+                if not raw_gating.find_matching_gate_paths(gate_lbl):
+                    continue
+                gate_path = raw_gating.find_matching_gate_paths(gate_lbl)[0]
+                gate_obj  = raw_gating.get_gate(gate_lbl, gate_path=gate_path)
+                dim       = gate_obj.dimensions[0]
+                # dim.min/max are already in display (transformed) space —
+                # SpectralAutoGenerator stores them via
+                # raw_gating.transformations[channel_x].apply(...) before adding the gate,
+                # matching how configure_rois in CytometryPlotWidget reads them directly.
+                lo_t, hi_t = float(dim.min), float(dim.max)
+
+                region = pg.LinearRegionItem(
+                    values=(lo_t, hi_t),
+                    brush=region_brush,
+                    pen=region_pen,
+                    movable=False,
+                )
+                self._hist_vb.addItem(region)
+
+                label_line = pg.InfiniteLine(
+                    pos=lo_t, angle=90,
+                    pen=pg.mkPen(None),
+                    label=gate_lbl,
+                    labelOpts={'position': 0.92, 'color': 'g',
+                               'fill': pg.mkBrush(0, 0, 0, 120)},
+                )
+                self._hist_vb.addItem(label_line)
+
+            except Exception:
+                pass
+    
     def show_context_menu(self, event):
         # Empty method to completely disable context menu
         pass
@@ -541,8 +631,8 @@ class ProfilesViewer(QFrame):
 
         # Refresh histogram if it's visible
         if self._hist_toggle.isChecked():
-            self._plot_peak_histograms(profile_list)
-
+            self._refresh_hist_combo()
+            self._refresh_histogram()
 
 
 

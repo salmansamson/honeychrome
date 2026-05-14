@@ -205,3 +205,43 @@ def from_gml(xml):
         gating_strategy.add_gate(gate.convert_to_parent_class(), gate_path)
 
     return gating_strategy
+
+# otb: have added this here. if you prefer, move to spectral_model_editor.py
+def _rename_channel_in_gml(gml_string: str, old_name: str, new_name: str) -> str:
+    """
+    Rename a single fluorescence channel in a GatingML 2.0 XML string.
+
+    Channel names appear as the 'data-type:name' attribute on
+    'data-type:fcs-dimension' elements, and as the 'id' attribute on
+    'transforms:*' transform elements (which are also keyed by channel name).
+    Both are renamed by exact attribute-value match, so "PE" never touches
+    "PE-Cy7", "PE-CF594", etc.
+
+    Returns the serialised XML string unchanged if old_name is not found.
+    """
+    from lxml import etree
+
+    NS_DT = 'http://www.isac-net.org/std/Gating-ML/v2.0/datatypes'
+    NS_XFORM = 'http://www.isac-net.org/std/Gating-ML/v2.0/transformations'
+    DT_NAME = f'{{{NS_DT}}}name'
+    XFORM_ID = f'{{{NS_XFORM}}}id'  # transforms:id is namespace-qualified
+
+    root = etree.fromstring(gml_string.encode())
+    changed = False
+
+    # 1. fcs-dimension name attributes (gate dimension references)
+    for elem in root.iter(f'{{{NS_DT}}}fcs-dimension'):
+        if elem.get(DT_NAME) == old_name:
+            elem.set(DT_NAME, new_name)
+            changed = True
+
+    # 2. transform element id attributes (transform definitions keyed by channel)
+    for elem in root.iter():
+        if elem.get(XFORM_ID) == old_name and elem.tag.startswith(f'{{{NS_XFORM}}}'):
+            elem.set(XFORM_ID, new_name)
+            changed = True
+
+    if not changed:
+        return gml_string
+
+    return etree.tostring(root, encoding='unicode', pretty_print=True)

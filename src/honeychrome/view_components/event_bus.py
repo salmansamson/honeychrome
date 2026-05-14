@@ -71,6 +71,9 @@ class EventBus(QObject):
     showSelectedProfiles = Signal(list)
     spectralControlAdded = Signal()
     spectralModelUpdated = Signal()
+    cleaningActivated = Signal(bool)   # True = cleaning UI active, False = hidden
+    cleaningResultsReady = Signal()    # emitted after Clean Controls recalc finishes
     spectralProcessRefreshed = Signal()
     requestUpdateProcessHists = Signal()
     spilloverSelectedCellChanged = Signal(str, str)
+    rawGateRenamed = Signal(str, str)   # (old_name, new_name) — propagate raw gate rename to spectral model

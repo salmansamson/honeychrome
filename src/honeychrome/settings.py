@@ -77,8 +77,10 @@ report_include_process = True
 wheel_speed = 0.002
 heading_style = """
 QLabel {
-    font-size: 18px;
+    font-size: 20px;
+    font-weight: bold;
     padding-top: 16px;
+    padding-bottom: 4px;
 }
 """
 live_data_process_repeat_time = 0.5 #s
@@ -96,6 +98,7 @@ spectral_positive_gate_percent = 5 # take the top few percent of events
 spectral_negative_gate_percent = 25 # take the bottom few percent of events
 
 # ssr review: shouldn't antigen be used on unmixed data (not fluorophore) and fluorophore on process plots?
+# otb: we want both on unmixed data, fluorophore only on process plots (probably)
 spectral_model_column_labels = {
     "label": "Label",
     'antigen': 'Antigen', 
@@ -104,7 +107,8 @@ spectral_model_column_labels = {
     "gate_channel": "Major Channel",
     "sample_name": "Sample Name",
     "gate_label": "Positive Gate",
-    "universal_negative_name": "Universal Negative",
+    'neg_gate_label': 'Negative Gate',
+    "universal_negative_name": "Unstained Negative",
     "use_cleaned": "Use Cleaned",
     "af_remove": "Exclude noise",
 }
@@ -210,7 +214,6 @@ process_default = {
     'unmixing_matrix': None,
     'spillover': None,
     'af_profiles': {},
-    'cleaned_events': {},
     'spectral_cleaning_opts': {},   # global fallback opts (currently unused; per-control af_remove preferred)
 }
 
