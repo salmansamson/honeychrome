@@ -458,6 +458,18 @@ class AfComparisonPlotWidget(QWidget):
         cutoff = settings.density_cutoff_retrieved
         heatmap[heatmap < cutoff] = 0
 
+        # Rescale border bins to interior max — mirrors calc_hist2d() in functions.py
+        # so that edge overflow events don't compress the interior colour range.
+        if heatmap.shape[0] > 2 and heatmap.shape[1] > 2:
+            global_max = heatmap.max()
+            inside_max = heatmap[1:-1, 1:-1].max()
+            if inside_max > 0 and inside_max < global_max:
+                scale = inside_max / global_max
+                heatmap[0, :] *= scale
+                heatmap[-1, :] *= scale
+                heatmap[1:-1, 0] *= scale
+                heatmap[1:-1, -1] *= scale
+
         self.img.setImage(heatmap)
         self.img.setRect(QRectF(
             tr_x.limits[0], tr_y.limits[0],
@@ -843,7 +855,7 @@ class AutoSpectralTab(QWidget):
         btn_row = QHBoxLayout()
 
         load_btn = QPushButton('Load CSV…')
-        load_btn.setToolTip('Load an AF profile from a previously saved CSV file.')
+        load_btn.setToolTip('Load an AF profile from a CSV file.')
         load_btn.clicked.connect(self._load_profile_csv)
         btn_row.addWidget(load_btn)
 
@@ -897,6 +909,14 @@ class AutoSpectralTab(QWidget):
         layout.addWidget(self._assign_status)
 
         btn_row = QHBoxLayout()
+
+        assign_all_btn = QPushButton('Assign Selected Profile to All Samples')
+        assign_all_btn.setToolTip(
+            'Assign the profile currently selected in the Stored AF Profiles list '
+            'to all non-SSC samples. Already-assigned profiles are not duplicated.'
+        )
+        assign_all_btn.clicked.connect(self._assign_selected_profile_to_all)
+        btn_row.addWidget(assign_all_btn)
 
         clear_sample_btn = QPushButton('Clear AF for Current Sample')
         clear_sample_btn.setToolTip(
@@ -1202,6 +1222,8 @@ class AutoSpectralTab(QWidget):
         self._refresh_comparison_controls()
 
     def _on_profile_row_changed(self, _row: int):
+        if not hasattr(self, '_save_btn'):
+            return
         has = self._profile_list.currentItem() is not None
         self._save_btn.setEnabled(has)
         self._delete_btn.setEnabled(has)
@@ -1209,6 +1231,8 @@ class AutoSpectralTab(QWidget):
 
     def _draw_selected_profile(self):
         """Draw the spectral plot for the currently selected profile."""
+        if not hasattr(self, '_save_btn'):
+            return
         self._profile_plot.clear()
         item = self._profile_list.currentItem()
         has = item is not None
@@ -1466,6 +1490,54 @@ class AutoSpectralTab(QWidget):
         if self.bus:
             self.bus.statusMessage.emit(
                 f'AutoSpectral: AF cleared for {Path(sample_path).stem}.'
+            )
+
+    def _assign_selected_profile_to_all(self):
+        """Assign the profile selected in the profile list to every non-SSC sample."""
+        item = self._profile_list.currentItem()
+        if item is None:
+            self._assign_status.setText(
+                'No profile selected — pick one from the Stored AF Profiles list first.'
+            )
+            return
+
+        profile_name = item.text()
+        all_samples = self.controller.experiment.samples.get('all_samples', {})
+        ssc = set(self.controller.experiment.samples.get('single_stain_controls', []))
+        non_ssc = [p for p in all_samples if p not in ssc]
+
+        if not non_ssc:
+            self._assign_status.setText('No non-SSC samples available.')
+            return
+
+        sample_af = self.controller.experiment.samples.get('sample_af_profiles', {})
+        for sample_path in non_ssc:
+            assigned = list(sample_af.get(sample_path, []))
+            if profile_name not in assigned:
+                assigned.append(profile_name)
+            sample_af[sample_path] = assigned
+
+        self.controller.experiment.samples['sample_af_profiles'] = sample_af
+        self.controller.experiment.save()
+
+        # If the current sample was affected, reinitialise its AF matrices and
+        # re-apply unmixing so the Unmixed Data tab updates immediately.
+        if self.controller.current_sample_path in non_ssc:
+            self.controller.initialise_af_matrices()
+            if self.controller.raw_event_data is not None:
+                self.controller.unmixed_event_data = self.controller._apply_unmixing(
+                    self.controller.raw_event_data
+                )
+                self.controller.clear_data_for_cytometry_plots()
+                self.controller.initialise_data_for_cytometry_plots()
+
+        self._rebuild_assignment_grid()
+        self._assign_status.setText(
+            f'"{profile_name}" assigned to {len(non_ssc)} sample(s).'
+        )
+        if self.bus:
+            self.bus.statusMessage.emit(
+                f'AutoSpectral: "{profile_name}" assigned to all {len(non_ssc)} non-SSC sample(s).'
             )
 
     def _clear_all_af(self):
