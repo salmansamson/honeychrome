@@ -639,10 +639,16 @@ class ProfilesViewer(QFrame):
 
 
         # Plot each profile
-        if profile_list:
-            pass
-        else:
-            profile_list = list(profiles.keys())
+        if not profile_list:
+            # Derive order from spectral model, not profiles dict insertion order
+            spectral_model = self.controller.experiment.process.get('spectral_model', [])
+            profile_list = [
+                c['label'] for c in spectral_model
+                if c.get('label') and c['label'] in profiles
+            ]
+            # Fall back to dict order if spectral model is empty or unpopulated
+            if not profile_list:
+                profile_list = list(profiles.keys())
 
         profile_list = [p for p in profile_list if p]
         for i, profile_name in enumerate(profile_list):

@@ -255,6 +255,7 @@ class SpectralControlsEditor(QFrame):
         self.view = ResizingTable()
         self.view.setModel(self.proxy)
         self.bus.spectralModelUpdated.connect(self.view.resizeToFit)
+        self.bus.spectralModelUpdated.connect(self._sort_model_by_gate_channel)
         self.bus.spectralControlAdded.connect(self.view.resizeToFit) #extends the table as autogeneration runs... looks interesting but a bit wonky
         self.bus.sampleTreeUpdated.connect(self.refresh_comboboxes) # check for changes to unstained samples
         self.bus.rawGateRenamed.connect(self._on_raw_gate_renamed)
@@ -1030,6 +1031,7 @@ class SpectralControlsEditor(QFrame):
         if control_valid:
             self.bus.showSelectedProfiles.emit([control['label']])
             self.bus.spectralModelUpdated.emit()
+            self.bus.spectralModelUpdated.emit()
         logger.info(f'SpectralModelEditor: updated {"valid" if control_valid else "invalid"} control {control}')
 
     @with_busy_cursor
@@ -1221,6 +1223,19 @@ class SpectralControlsEditor(QFrame):
 
         logger.info(f'SpectralModelEditor: propagated label rename "{old}" -> "{new}"')
 
+    def _sort_model_by_gate_channel(self):
+        """Re-order the spectral model table rows by major channel order
+        (position of gate_channel in fluorescence_channels_pnn)."""
+        if not self.model._data:
+            return
+        channel_order = {ch: i for i, ch in enumerate(self.fluorescence_channels_pnn)}
+        self.model.beginResetModel()
+        self.model._data.sort(
+            key=lambda c: channel_order.get(c.get('gate_channel') or '', len(channel_order))
+        )
+        self.model.endResetModel()
+        self.refresh_comboboxes()
+
     @Slot(str, str)
     def _on_raw_gate_renamed(self, old_name: str, new_name: str):
         """
@@ -1259,7 +1274,6 @@ class SpectralControlsEditor(QFrame):
                 self.model.index(self.model.rowCount() - 1, self.model.columnCount() - 1),
             )
 
-    # AFTER
     @Slot()
     def _on_force_recalc(self):
         self.setEnabled(False)
