@@ -1050,7 +1050,7 @@ class Controller(QObject):
                 # for default transformations, set limits to observed data
                 if self.data_for_cytometry_plots['event_data'] is not None and len(self.data_for_cytometry_plots['event_data']):
                     if self.current_sample_path != self.live_sample_path:
-                        for label in self.data_for_cytometry_plots['transformations']:
+                        for label in (self.data_for_cytometry_plots['transformations'] or {}):
                             transformation = self.data_for_cytometry_plots['transformations'][label]
                             if transformation.id == 'default':
                                 index = self.data_for_cytometry_plots['pnn'].index(label)
