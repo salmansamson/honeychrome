@@ -12,6 +12,7 @@ from honeychrome.controller_components.spectral_controller import SpectralAutoGe
 from honeychrome.controller_components.spectral_functions import sanitise_control_in_place, _find_default_unstained
 from honeychrome.view_components.icon_loader import icon
 from honeychrome.settings import spectral_model_column_labels, heading_style, INTERNAL_NEGATIVE_SENTINEL
+from honeychrome.view_components.busy_cursor import with_busy_cursor
 from honeychrome.view_components.help_toggle_widget import WheelBlocker, HelpToggleWidget
 from honeychrome.view_components.help_texts import autospectral_cleaning_help_text
 from honeychrome.controller_components.gml_functions_mod_from_flowkit import _rename_channel_in_gml
@@ -563,7 +564,8 @@ class SpectralControlsEditor(QFrame):
         finally:
             self._refreshing_comboboxes = False
 
-    def _add_or_replace_combobox_if_enabled(self, idx, should_have_combobox, items):
+    def _add_or_replace_combobox_if_enabled(self, idx, should_have_combobox, items,
+                                         searchable=False, row=None):
         proxy_index = self.proxy.mapFromSource(idx)
 
         # remove existing index widget (if any)
@@ -579,6 +581,16 @@ class SpectralControlsEditor(QFrame):
             cb.installEventFilter(WheelBlocker(cb))
             cb.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
             cb.addItems(items)
+
+            if searchable:
+                from PySide6.QtWidgets import QCompleter
+                cb.setEditable(True)
+                cb.setInsertPolicy(QComboBox.NoInsert)
+                completer = QCompleter(items, cb)
+                completer.setFilterMode(Qt.MatchContains)
+                completer.setCaseSensitivity(Qt.CaseInsensitive)
+                cb.setCompleter(completer)
+
             self.view.setIndexWidget(proxy_index, cb)
 
             current_val = self.model.data(idx, Qt.EditRole)
@@ -586,7 +598,16 @@ class SpectralControlsEditor(QFrame):
             if i >= 0:
                 cb.setCurrentIndex(i)
 
-            cb.currentTextChanged.connect(lambda val, i=idx: self.model.setData(i, val))
+            if searchable and row is not None:
+                def _on_gate_channel_changed(val, i=idx, r=row):
+                    self.model.setData(i, val)
+                    if val:
+                        self.model._data[r]['gate_channel_locked'] = True
+                    else:
+                        self.model._data[r].pop('gate_channel_locked', None)
+                cb.currentTextChanged.connect(_on_gate_channel_changed)
+            else:
+                cb.currentTextChanged.connect(lambda val, i=idx: self.model.setData(i, val))
 
 
     def _add_comboboxes_to_row(self, row):
@@ -594,7 +615,7 @@ class SpectralControlsEditor(QFrame):
         unused_raw_channels = []
         if self.model._data[row]['control_type'] == 'Single Stained Spectral Control':
             enable_particle_types_cb = True
-            enable_gate_channel_cb = False
+            enable_gate_channel_cb = True # user may override the auto-detected major channel
             if self.model._data[row]['particle_type'] == 'Cells':
                 current_control_list = [self.samples['all_samples'][sample_path] for sample_path in self.samples['single_stain_controls']]
                 enable_sample_name_cb = True
@@ -705,7 +726,15 @@ class SpectralControlsEditor(QFrame):
                 self._add_or_replace_combobox_if_enabled(idx, enable_particle_types_cb, [""] + PARTICLE_TYPES)
             elif col_name == "gate_channel":
                 self.update_fluorescence_channels_pnn()
-                self._add_or_replace_combobox_if_enabled(idx, enable_gate_channel_cb, [""] + unused_raw_channels)
+                is_ssc = self.model._data[row].get('control_type') == 'Single Stained Spectral Control'
+                if is_ssc:
+                    channel_items = [""] + self.fluorescence_channels_pnn
+                else:
+                    channel_items = [""] + unused_raw_channels
+                self._add_or_replace_combobox_if_enabled(
+                    idx, enable_gate_channel_cb, channel_items,
+                    searchable=is_ssc, row=row
+                )
             elif col_name == "sample_name":
                 self._add_or_replace_combobox_if_enabled(idx, enable_sample_name_cb, [""] + current_control_list)
             elif col_name == "gate_label":
@@ -975,6 +1004,24 @@ class SpectralControlsEditor(QFrame):
         unused_raw_channels = self.model.unused_raw_channels(control['gate_channel'])
         if control['control_type'] == 'Channel Assignment' and not control['gate_channel'] and unused_raw_channels:
             control['gate_channel'] = unused_raw_channels[0]
+
+        # If the user changed the major channel on an SSC, move the Pos/Neg gates
+        # to the new channel before regenerating the profile.
+        if (changed_col == 'gate_channel'
+                and control.get('control_type') == 'Single Stained Spectral Control'
+                and control.get('gate_channel')):
+            # Guard against re-entry: only rebuild gates if the channel has
+            # actually changed from what the current Pos/Neg gates are on.
+            pos_gate_label = control.get('gate_label') or f'Pos {control["label"]}'
+            existing_gate_paths = self.controller.raw_gating.find_matching_gate_paths(pos_gate_label)
+            if existing_gate_paths:
+                existing_gate = self.controller.raw_gating.get_gate(pos_gate_label)
+                current_gate_channel = existing_gate.dimensions[0].id
+            else:
+                current_gate_channel = None
+            if control['gate_channel'] != current_gate_channel:
+                self._move_pos_neg_gates_to_channel(control)
+
         sanitise_control_in_place(control)
         self.profile_updater.flush()
         control_valid = self.profile_updater.generate(control, self.spectral_library_search_results)
@@ -984,6 +1031,130 @@ class SpectralControlsEditor(QFrame):
             self.bus.showSelectedProfiles.emit([control['label']])
             self.bus.spectralModelUpdated.emit()
         logger.info(f'SpectralModelEditor: updated {"valid" if control_valid else "invalid"} control {control}')
+
+    @with_busy_cursor
+    def _move_pos_neg_gates_to_channel(self, control: dict) -> None:
+        """
+        Destroy the existing Pos/Neg gates for an SSC control and recreate them
+        on the user-selected major channel, preserving gate labels so all downstream
+        references (gate_label, neg_gate_label, plot child_gates) remain valid.
+        """
+        from flowkit import Dimension, gates
+        import numpy as np
+        from honeychrome.controller_components.functions import sample_from_fcs
+        from honeychrome.controller_components.spectral_functions import get_raw_events
+        import honeychrome.settings as settings
+
+        label = control.get('label', '')
+        channel_x = control.get('gate_channel', '')
+        if not label or not channel_x:
+            return
+
+        pos_gate_label = control.get('gate_label') or f'Pos {label}'
+        neg_gate_label = control.get('neg_gate_label') or f'Neg {label}'
+        raw_gating = self.controller.raw_gating
+        xform = self.controller.raw_gating.transformations.get(channel_x)
+        if xform is None:
+            logger.warning(f'_move_pos_neg_gates: no transform for "{channel_x}", aborting')
+            return
+
+        # Resolve base gate (same priority order as SpectralAutoGenerator)
+        base_gate_priority = self.controller.experiment.process.get('base_gate_priority_order', [])
+        raw_gate_names = [g[0].lower() for g in raw_gating.get_gate_ids()]
+        base_gate_label = 'root'
+        for gate in base_gate_priority:
+            if gate.lower() in raw_gate_names:
+                base_gate_label = gate
+                break
+
+        if base_gate_label != 'root' and raw_gating.find_matching_gate_paths(base_gate_label):
+            base_path = tuple(list(raw_gating.find_matching_gate_paths(base_gate_label)[0]) + [base_gate_label])
+        else:
+            base_path = ('root',)
+
+        # Derive gate bounds from the control sample on the new channel
+        all_samples_reverse = {v: k for k, v in self.controller.experiment.samples['all_samples'].items()}
+        sample_rel_path = all_samples_reverse.get(control.get('sample_name', ''))
+        try:
+            sample_full_path = str(self.controller.experiment_dir / sample_rel_path)
+            sample = sample_from_fcs(sample_full_path)
+            fluor_ids = self.controller.filtered_raw_fluorescence_channel_ids
+            event_channels_pnn = self.controller.experiment.settings['raw']['event_channels_pnn']
+            ch_global_idx = event_channels_pnn.index(channel_x)
+            fl_col = fluor_ids.index(ch_global_idx)
+
+            gate_label_for_load = base_gate_label if base_gate_label != 'root' else None
+            fl_events = get_raw_events(sample, fluor_ids,
+                                    gate_label=gate_label_for_load,
+                                    gating_strategy=raw_gating)
+            ch_values = fl_events[:, fl_col]
+
+            pos_pct = settings.spectral_positive_gate_percent_retrieved
+            neg_pct = settings.spectral_negative_gate_percent_retrieved
+            fl_top    = np.percentile(ch_values, [100 - pos_pct, 100])
+            fl_bottom = np.percentile(ch_values, [0, neg_pct])
+        except Exception as e:
+            logger.warning(f'_move_pos_neg_gates: could not derive bounds for "{label}": {e} — using full-range fallback')
+            lo, hi = xform.limits
+            fl_top    = np.array([lo + 0.6 * (hi - lo), hi])
+            fl_bottom = np.array([lo, lo + 0.25 * (hi - lo)])
+
+        # Convert raw-space bounds to transformed space — mirrors the auto-generator exactly
+        if xform is not None:
+            pos_min = xform.apply(np.array([fl_top[0]]))[0]
+            pos_max = xform.apply(np.array([fl_top[1]]))[0]
+            neg_min = xform.apply(np.array([fl_bottom[0]]))[0]
+            neg_max = xform.apply(np.array([fl_bottom[1]]))[0]
+        else:
+            pos_min, pos_max = float(fl_top[0]),    float(fl_top[1])
+            neg_min, neg_max = float(fl_bottom[0]), float(fl_bottom[1])
+
+        # Remove old gates and recreate on the new channel
+        for gate_lbl in (pos_gate_label, neg_gate_label):
+            if raw_gating.find_matching_gate_paths(gate_lbl):
+                raw_gating.remove_gate(gate_lbl)
+
+        pos_gate = gates.RectangleGate(pos_gate_label,
+                        dimensions=[Dimension(channel_x, range_min=pos_min, range_max=pos_max,
+                                            transformation_ref=channel_x)])
+        neg_gate = gates.RectangleGate(neg_gate_label,
+                        dimensions=[Dimension(channel_x, range_min=neg_min, range_max=neg_max,
+                                            transformation_ref=channel_x)])
+        raw_gating.add_gate(pos_gate, gate_path=base_path)
+        raw_gating.add_gate(neg_gate, gate_path=base_path)
+
+        # Update raw plots: remove gate refs from any old-channel plot, add to new-channel plot
+        raw_plots = self.controller.experiment.cytometry.get('raw_plots', [])
+        for plot in raw_plots:
+            for lbl in (pos_gate_label, neg_gate_label):
+                if lbl in plot.get('child_gates', []):
+                    plot['child_gates'].remove(lbl)
+
+        target_plot = next(
+            (p for p in raw_plots
+            if p.get('type') == 'hist1d' and p.get('channel_x') == channel_x),
+            None
+        )
+        if not target_plot:
+            target_plot = {
+                'type': 'hist1d',
+                'channel_x': channel_x,
+                'source_gate': base_gate_label,
+                'child_gates': []
+            }
+            raw_plots.append(target_plot)
+            if self.bus:
+                self.bus.showNewPlot.emit('raw')
+
+        for lbl in (pos_gate_label, neg_gate_label):
+            if lbl not in target_plot['child_gates']:
+                target_plot['child_gates'].append(lbl)
+
+        if self.bus:
+            self.bus.changedGatingHierarchy.emit('raw', pos_gate_label)
+            self.bus.changedGatingHierarchy.emit('raw', neg_gate_label)
+
+        logger.info(f'_move_pos_neg_gates: moved "{pos_gate_label}" and "{neg_gate_label}" to "{channel_x}"')
 
     def _propagate_label_rename(self, old: str, new: str):
         """

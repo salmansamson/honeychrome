@@ -240,7 +240,8 @@ class ProfileUpdater:
 
                             if profile.sum() == 0:
                                 raise Exception(f'RLM profile for "{control["label"]}" is zero — check event pool.')
-                            control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
+                            if not control.get('gate_channel_locked'):
+                                control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
                             profile = profile.tolist()
                             self.profiles[control['label']] = profile
                             profile_dict = dict(zip(self.fluorescence_channels_pnn, profile))
@@ -336,7 +337,8 @@ class ProfileUpdater:
                                     f'Make sure the unstained negative has lower fluorescence than the positive. '
                                     f'Go back to the raw data and adjust your gates (or use internal negatives).')
 
-                        control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
+                        if not control.get('gate_channel_locked'):
+                            control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
                         profile = profile.tolist()
                         self.profiles[control['label']] = profile
                         profile_dict = dict(zip(self.fluorescence_channels_pnn, profile))
