@@ -1156,10 +1156,12 @@ class SpectralControlsEditor(QFrame):
 
         # Update raw plots: remove gate refs from any old-channel plot, add to new-channel plot
         raw_plots = self.controller.experiment.cytometry.get('raw_plots', [])
-        for plot in raw_plots:
+        for n, plot in enumerate(raw_plots):
             for lbl in (pos_gate_label, neg_gate_label):
                 if lbl in plot.get('child_gates', []):
                     plot['child_gates'].remove(lbl)
+                    if self.bus:
+                        self.bus.updateRois.emit('raw', n)
 
         target_plot = next(
             (p for p in raw_plots
@@ -1180,6 +1182,10 @@ class SpectralControlsEditor(QFrame):
         for lbl in (pos_gate_label, neg_gate_label):
             if lbl not in target_plot['child_gates']:
                 target_plot['child_gates'].append(lbl)
+                n = raw_plots.index(target_plot)
+                if self.bus:
+                    self.bus.updateRois.emit('raw', n)
+
 
         if self.bus:
             self.bus.changedGatingHierarchy.emit('raw', pos_gate_label)
