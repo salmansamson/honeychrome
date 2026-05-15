@@ -116,7 +116,7 @@ class HeatmapGridModel(QAbstractTableModel):
             normalized = np.full_like(data, 0.5)
 
         indices = (normalized * (len(self.colormap) - 1)).astype(np.int32)
-        # indices = np.clip(indices, 0, len(self.colormap) - 1) # not necessary to clip as already scaled
+        indices = np.clip(indices, 0, len(self.colormap) - 1) # not necessary to clip as already scaled # ssr putting this back in... otherwise we get crashes
 
         # Vectorized lookup
         rgb_array = self.color_table[indices]

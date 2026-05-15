@@ -71,7 +71,7 @@ def export_unmixed_sample(sample_name, unmixed_folder, unmixed_event_data_withou
     unmixed_sample = Sample(unmixed_event_data_without_fine_tuning,
                                     channel_labels=unmixed_event_channels_pnn, # ssr review: should we add antigens to pnn?
                                     null_channel_list=null_channels,
-                                    compensation=spillover.T, # was previously incorrect, but not noticeable when identity matrix # ssr review - check with Oliver
+                                    compensation=spillover.T,
                                     sample_id=sample_name)
     unmixed_sample.export(unmixed_sample_name, subsample=subsample, directory=unmixed_folder, source='comp', include_metadata=True)
 
