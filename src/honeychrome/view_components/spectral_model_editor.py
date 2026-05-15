@@ -1011,8 +1011,10 @@ class SpectralControlsEditor(QFrame):
                 full_labels_from_cytometry_plots = list(self.controller.data_for_cytometry_plots_unmixed['pnn_labels'].values())
                 changed_antigen_label_indices_in_spectral_model = [n for n, k in enumerate(antigen_labels) if k not in full_labels_from_cytometry_plots]
                 for n in changed_antigen_label_indices_in_spectral_model:
-                    old_labels.append(labels_from_spectral_model[n])
-                    new_labels.append(labels_from_spectral_model[n])
+                    l = labels_from_spectral_model[n]
+                    if l not in new_labels:
+                        old_labels.append(l)
+                        new_labels.append(l)
 
             if changed_col in ('label', 'antigen') and old_labels and new_labels:
                 # A label rename leaves four downstream structures stale.
