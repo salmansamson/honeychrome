@@ -1,9 +1,9 @@
-Honeychrome v0.7.3 Release Notes
+Honeychrome v0.8.0 Release Notes
 
 This release contains several new features, improvements and bug fixes.
 
 Major new features
-* AutoSpectral AF (the autofluorescence part of AutoSpectral) has been added in a new tab. This (optional) enhancement of the unmixing workflow is rapidly becoming the standard tool for fixing unmixing artifacts caused by variable autofluorescence.
+* The two major components of AutoSpectral have been added: Control Cleaning and Autofluorescence. These (optional) enhancements of the unmixing workflow are rapidly becoming the standard tool for fixing unmixing artifacts caused by variable autofluorescence.
 * tabbed plugin system: Honeychrome now automatically loads plugins from a plugins folder; two example plugins included. Note that plugins are currently only available if Honeychrome is run in the Python environment (see installation instructions), not as a precompiled executable.
 * 2D plots can now be shown as dot plots coloured by gate
 * debug data: Honeychrome can send error/crash data if allowed by the user. Note that no personal identifiable information is collected or sent.
@@ -11,10 +11,10 @@ Major new features
 PyPi release
 * You can now use Honeychrome in a Python environment, simply by issuing the command: "pip install honeychrome", then run "honeychrome" from the command line
 
-Improvements
+Numerous improvements, including the following
+* automatic recognition of antigens and fluorophore names in the spectral model editor
 * better colourmap ranges to avoid saturation
 * imported FCS files can now live anywhere: if they are not in the experiment folder, a symbolic link is set up from the experiment folder, so no more broken relative paths
-* build system now produces executable installers for Linux (Ubuntu > 22.04), Windows (10, 11), and MacOs (Intel / ARM). Hopefully this will now cover (almost) everyone who had trouble running the previous executables
+* build system now produces executable installers for Linux (Ubuntu > 22.04), Windows (10, 11), and MacOs (ARM). Hopefully this will now cover (almost) everyone who had trouble running the previous executables
 
-Bug fixes
-* The spectral model editor previously had a bug that messed up adding new controls. Now fixed.
+Also numerous bug fixes.

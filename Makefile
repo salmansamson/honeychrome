@@ -37,7 +37,7 @@ clean:
 	@echo "Cleaned up build artifacts."
 
 # Variables for packaging
-VERSION = 0.7.3
+VERSION = 0.8.0
 PKG_NAME = honeychrome-v$(VERSION)-linux-x64
 
 package: build
