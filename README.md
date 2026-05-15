@@ -69,7 +69,7 @@ A set of compressed binary packages are available in the releases section.
 (For other Linux systems, please use the Python instructions below.)
 
 #### MacOs
-1. Download [Honeychrome for MacOS (arm64)](https://github.com/salmansamson/honeychrome/releases/download/v0.8.0/honeychrome-v0.8.0-macos-arm64.dmg)
+1. Download [Honeychrome for MacOS (arm64)](https://github.com/salmansamson/honeychrome/releases/download/v0.8.0/honeychrome-v0.8.0-macos.dmg)
 2. Open the disk image and drag honeychrome.app to your Applications folder.
 3. Double click the app in your Applications folder to run 
 
