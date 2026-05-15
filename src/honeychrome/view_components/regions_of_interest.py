@@ -151,7 +151,7 @@ class DraggableRoiLabel(pg.TextItem):
             # so that generate() and Recalculate can still find the gate.
             mode = self.parent_roi.vb.parent().mode
             if mode == 'raw' and self.bus is not None:
-                self.bus.rawGateRenamed.emit(old_name, new_name) # ssr review: does this propagate to ROIs?
+                self.bus.rawGateRenamed.emit(old_name, new_name)
             if self.bus is not None:
                 self.bus.updateSourceChildGates.emit(mode, new_name)
                 self.bus.changedGatingHierarchy.emit(mode, new_name)

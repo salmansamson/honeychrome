@@ -1012,8 +1012,6 @@ class Controller(QObject):
         elif tab_name == 'Unmixed Data':
             self.current_mode = 'unmixed'
             self.data_for_cytometry_plots = self.data_for_cytometry_plots_unmixed
-            # ssr review: this should not be necessary, as initialise_data_for_cytometry_plots called whenever refresh spectral process called
-            # self.initialise_data_for_cytometry_plots(force_recalc_histograms=True)
         elif tab_name == 'Statistics':
             self.current_mode = 'statistics'
             self.data_for_cytometry_plots = self.data_for_cytometry_plots_unmixed

@@ -259,6 +259,7 @@ class SpectralControlsEditor(QFrame):
         self.bus.spectralControlAdded.connect(self.view.resizeToFit) #extends the table as autogeneration runs... looks interesting but a bit wonky
         self.bus.sampleTreeUpdated.connect(self.refresh_comboboxes) # check for changes to unstained samples
         self.bus.rawGateRenamed.connect(self._on_raw_gate_renamed)
+        self.bus.rawGateRenamed.connect(lambda old_name, new_name: self.refresh_comboboxes())
         self.view.selectionModel().selectionChanged.connect(self._show_selected_profiles)
 
         # Different resize modes for different columns

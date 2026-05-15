@@ -1164,7 +1164,7 @@ class AutoSpectralTab(QWidget):
             'channel_names': channel_names,
         }
         self.controller.experiment.process['af_profiles'] = af_profiles
-        self.controller.experiment.save()
+        self.bus.autoSaveRequested.emit()
 
         # Cache precomputed matrices for the new profile immediately —
         # this is the only linalg.solve call needed; sample loading just does hstack.
@@ -1322,7 +1322,7 @@ class AutoSpectralTab(QWidget):
             'channel_names': channel_names,
         }
         self.controller.experiment.process['af_profiles'] = af_profiles
-        self.controller.experiment.save()
+        self.bus.autoSaveRequested.emit()
 
         # Cache precomputed matrices for the loaded profile.
         self.controller.cache_af_profile(profile_name)
@@ -1349,7 +1349,7 @@ class AutoSpectralTab(QWidget):
             if name in sample_af[sp]:
                 sample_af[sp].remove(name)
         self.controller.experiment.samples['sample_af_profiles'] = sample_af
-        self.controller.experiment.save()
+        self.bus.autoSaveRequested.emit()
 
         self.controller.initialise_af_matrices()
         self._refresh_profile_list()
@@ -1431,7 +1431,7 @@ class AutoSpectralTab(QWidget):
                     assigned.remove(profile_name)
             sample_af[sample_path] = assigned
             self.controller.experiment.samples['sample_af_profiles'] = sample_af
-            self.controller.experiment.save()
+            self.bus.autoSaveRequested.emit()
 
             # Update the controller's cached AF matrices for this sample so
             # that the next load_sample() call picks up the new assignment
@@ -1471,7 +1471,7 @@ class AutoSpectralTab(QWidget):
         sample_af = self.controller.experiment.samples.get('sample_af_profiles', {})
         sample_af[sample_path] = []
         self.controller.experiment.samples['sample_af_profiles'] = sample_af
-        self.controller.experiment.save()
+        self.bus.autoSaveRequested.emit()
 
         self.controller.initialise_af_matrices()
 
@@ -1518,7 +1518,7 @@ class AutoSpectralTab(QWidget):
             sample_af[sample_path] = assigned
 
         self.controller.experiment.samples['sample_af_profiles'] = sample_af
-        self.controller.experiment.save()
+        self.bus.autoSaveRequested.emit()
 
         # If the current sample was affected, reinitialise its AF matrices and
         # re-apply unmixing so the Unmixed Data tab updates immediately.

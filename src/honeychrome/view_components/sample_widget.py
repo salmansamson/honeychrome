@@ -502,7 +502,7 @@ class SampleWidget(QWidget):
             unstained.remove(path)
         else:
             unstained.append(path)
-        self.controller.experiment.save()
+        self.bus.autoSaveRequested.emit()
         self.model.refresh_tree()
         self.tree_view.expandAll()
         if self.bus:
