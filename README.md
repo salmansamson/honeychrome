@@ -155,7 +155,7 @@ Honeychrome builds on several great open source Python packages:
 - Several others for processing of data, including numpy, scikit, sklearn
 - Seaborn and Matplotlib for publication-quality graphics
 
-Samson Rogers and Oliver Burton have been the main developers of Honeychrome. Oliver contributed the AutoSpectral Cleaning and AF functions and many aspects of the spec and usability. 
+Samson Rogers and Oliver Burton have been the main developers of Honeychrome so far. Oliver contributed the AutoSpectral Cleaning and AF functions and many aspects of the spec and usability. 
 Thanks to support and advice from many people including C. Vant, Lotte Carr, Scott Tasker, Philip Jones, Robyn Pritchard.
 
 ## Roadmap
