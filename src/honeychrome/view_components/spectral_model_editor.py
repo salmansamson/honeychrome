@@ -997,17 +997,28 @@ class SpectralControlsEditor(QFrame):
                         )
                         return
             
-            # Rename the profiles dict key to match the new label.
-            old_labels = [k for k in self.profile_updater.profiles if k not in [c['label'] for c in self.model._data]]
-            new_labels = [c['label'] for c in self.model._data if c['label'] not in self.profile_updater.profiles]
+            # Rename the profiles dict key to match the new label. Include any labels where either label or antigen has been changed
+            labels_from_profiles = self.profile_updater.profiles.keys()
+            labels_from_spectral_model = [c['label'] for c in self.model._data]
+            old_labels = [k for k in labels_from_profiles if k not in labels_from_spectral_model]
+            new_labels = [c for c in labels_from_spectral_model if c not in labels_from_profiles]
             for old, new in zip(old_labels, new_labels):
                 self.profile_updater.profiles[new] = self.profile_updater.profiles.pop(old)
 
-            if changed_col == 'label' and old_labels and new_labels:
+            # append if label - antigen has been changed f'{antigen} {name}'.strip() if antigen else name
+            if self.controller.data_for_cytometry_plots_unmixed.get('pnn_labels'):
+                antigen_labels = [(f'{c['antigen']} {c['label']}'.strip() if c['antigen'] else c['label']) for c in self.model._data]
+                full_labels_from_cytometry_plots = list(self.controller.data_for_cytometry_plots_unmixed['pnn_labels'].values())
+                changed_antigen_label_indices_in_spectral_model = [n for n, k in enumerate(antigen_labels) if k not in full_labels_from_cytometry_plots]
+                for n in changed_antigen_label_indices_in_spectral_model:
+                    old_labels.append(labels_from_spectral_model[n])
+                    new_labels.append(labels_from_spectral_model[n])
+
+            if changed_col in ('label', 'antigen') and old_labels and new_labels:
                 # A label rename leaves four downstream structures stale.
                 # Propagate atomically without recalculating the unmixing matrix.
                 for old, new in zip(old_labels, new_labels):
-                    self._propagate_label_rename(old, new) # ssr review: should this also be done for rename antigen?
+                    self._propagate_label_rename(old, new)
                 # Rebuild ephemeral gating/transform objects from the updated experiment
                 # state and refresh the UI. Does not touch the unmixing matrix,
                 # spillover, fine-tuning, or AF cache.
@@ -1221,7 +1232,7 @@ class SpectralControlsEditor(QFrame):
             if plot.get('channel_y') == old:
                 plot['channel_y'] = new
 
-            # 6. Update the live ephemeral dicts immediately so any widget that
+        # 6. Update the live ephemeral dicts immediately so any widget that
         #    re-renders before spectralProcessRefreshed is handled sees
         #    consistent channel names. initialise_ephemeral_data will
         #    overwrite these properly afterwards.
