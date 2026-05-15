@@ -164,4 +164,5 @@ autospectral_cleaning_help_text = '''
 <li><b>Proceed:</b> to unmixing, AutoSpectral AF extraction if desired, and downstream analysis or batch export as normal, using the cleaned profiles.</li>
 </ol>
 <p>Documentation: <a href="https://drcytometer.github.io/AutoSpectral/articles/09_Cleaning.html">AutoSpectral package on Github</a></p>
+<br/>
 '''
