@@ -32,6 +32,7 @@ methods:
 '''
 
 import json
+import sys
 from copy import deepcopy
 from pathlib import Path
 from flowkit import GatingStrategy, Dimension, gates
@@ -46,6 +47,14 @@ from honeychrome.settings import settings_default, samples_default, process_defa
 
 import logging
 logger = logging.getLogger(__name__)
+
+def check_for_windows_junction(path):
+    if os.path.islink(path):
+        # To specifically confirm it's a junction and NOT a standard symlink:
+        # Junctions are directories, standard file symlinks are not.
+        if path.is_dir() and not path.is_symlink():
+            return True
+    return False
 
 def safe_save(content, filename):
     temp_name = filename + '.tmp'
@@ -188,15 +197,15 @@ class ExperimentModel:
         experiment_dir_unmixed_samples = self.settings['unmixed']['unmixed_samples_subdirectory']
 
         # use relative paths if available. On Microshaft Windblows this doesn't work for links. Therefore use absolute paths as fallback
-        try:
+        if check_for_windows_junction(experiment_dir/experiment_dir_single_stain_controls):
+            single_stain_controls = [str(p) for p in sorted((experiment_dir/experiment_dir_single_stain_controls).resolve().glob('**/*.fcs'))]
+        else:
             single_stain_controls = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_single_stain_controls).glob('**/*.fcs'))]
-            raw_samples = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_raw_samples).glob('**/*.fcs'))]
-            # unmixed_samples = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_unmixed_samples).glob('**/*.fcs'))] #### not currently used
-        except:
-            single_stain_controls = sorted((experiment_dir/experiment_dir_single_stain_controls).resolve().glob('**/*.fcs'))
-            raw_samples = sorted((experiment_dir/experiment_dir_raw_samples).resolve().glob('**/*.fcs'))
-            # unmixed_samples = sorted((experiment_dir/experiment_dir_unmixed_samples).resolve().glob('**/*.fcs')) #### not currently used
 
+        if check_for_windows_junction(experiment_dir/experiment_dir_raw_samples):
+            raw_samples = [str(p) for p in sorted((experiment_dir/experiment_dir_raw_samples).resolve().glob('**/*.fcs'))]
+        else:
+            raw_samples = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_raw_samples).glob('**/*.fcs'))]
 
         # add all single stain controls to raw samples if not already present
         for sample_path in single_stain_controls:
