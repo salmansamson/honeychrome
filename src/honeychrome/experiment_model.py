@@ -186,9 +186,17 @@ class ExperimentModel:
         experiment_dir_single_stain_controls = self.settings['raw']['single_stain_controls_subdirectory']
         experiment_dir_raw_samples = self.settings['raw']['raw_samples_subdirectory']
         experiment_dir_unmixed_samples = self.settings['unmixed']['unmixed_samples_subdirectory']
-        single_stain_controls = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_single_stain_controls).glob('**/*.fcs'))]
-        raw_samples = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_raw_samples).glob('**/*.fcs'))]
-        # unmixed_samples = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_unmixed_samples).glob('**/*.fcs'))] #### not currently used
+
+        # use relative paths if available. On windows this breaks for links. use absolute paths as fallback
+        try:
+            single_stain_controls = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_single_stain_controls).resolve().glob('**/*.fcs'))]
+            raw_samples = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_raw_samples).resolve().glob('**/*.fcs'))]
+            # unmixed_samples = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_unmixed_samples).resolve().glob('**/*.fcs'))] #### not currently used
+        except:
+            single_stain_controls = sorted((experiment_dir/experiment_dir_single_stain_controls).resolve().glob('**/*.fcs'))
+            raw_samples = sorted((experiment_dir/experiment_dir_raw_samples).resolve().glob('**/*.fcs'))
+            # unmixed_samples = sorted((experiment_dir/experiment_dir_unmixed_samples).resolve().glob('**/*.fcs')) #### not currently used
+
 
         # add all single stain controls to raw samples if not already present
         for sample_path in single_stain_controls:
@@ -199,7 +207,6 @@ class ExperimentModel:
         all_sample_nevents = {}
         all_samples = {}
         for sample_path in raw_samples:
-            # sample_metadata = flowio_v14.FlowData(experiment_dir / sample_path, only_text=True)
             sample_metadata = FlowData(experiment_dir / sample_path, only_text=True, use_header_offsets=True)
             all_sample_nevents[sample_path] = sample_metadata.event_count
             # sample_metadata = extract_fcs_metadata(experiment_dir / sample_path)
