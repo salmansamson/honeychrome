@@ -20,6 +20,8 @@ env:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write    # Allows uploading files to Releases
     strategy:
       fail-fast: false
       matrix:
