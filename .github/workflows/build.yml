@@ -86,3 +86,14 @@ jobs:
             **/*.exe
             **/*.dmg
             **/*.tar.gz
+
+      - name: Release Raw Binaries
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            **/*.exe
+            **/*.dmg
+            **/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
