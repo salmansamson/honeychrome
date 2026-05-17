@@ -30,8 +30,8 @@ jobs:
 #            artifact_name: linux-x64-latest
           - os: windows-2022
             artifact_name: win-x64
-          - os: macos-14
-            artifact_name: mac-intel
+#          - os: macos-14
+#            artifact_name: mac-intel
           - os: macos-latest
             artifact_name: mac-arm64
 

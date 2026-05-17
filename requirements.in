@@ -23,3 +23,4 @@ sentry_sdk==2.59.0
 python-docx==1.2.0
 ### consider following two for picoscope device driver
 # picosdk==1.1
+Requests==2.34.2
