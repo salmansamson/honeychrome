@@ -187,11 +187,11 @@ class ExperimentModel:
         experiment_dir_raw_samples = self.settings['raw']['raw_samples_subdirectory']
         experiment_dir_unmixed_samples = self.settings['unmixed']['unmixed_samples_subdirectory']
 
-        # use relative paths if available. On windows this breaks for links. use absolute paths as fallback
+        # use relative paths if available. On Microshaft Windblows this doesn't work for links. Therefore use absolute paths as fallback
         try:
-            single_stain_controls = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_single_stain_controls).resolve().glob('**/*.fcs'))]
-            raw_samples = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_raw_samples).resolve().glob('**/*.fcs'))]
-            # unmixed_samples = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_unmixed_samples).resolve().glob('**/*.fcs'))] #### not currently used
+            single_stain_controls = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_single_stain_controls).glob('**/*.fcs'))]
+            raw_samples = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_raw_samples).glob('**/*.fcs'))]
+            # unmixed_samples = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_unmixed_samples).glob('**/*.fcs'))] #### not currently used
         except:
             single_stain_controls = sorted((experiment_dir/experiment_dir_single_stain_controls).resolve().glob('**/*.fcs'))
             raw_samples = sorted((experiment_dir/experiment_dir_raw_samples).resolve().glob('**/*.fcs'))
@@ -209,8 +209,6 @@ class ExperimentModel:
         for sample_path in raw_samples:
             sample_metadata = FlowData(experiment_dir / sample_path, only_text=True, use_header_offsets=True)
             all_sample_nevents[sample_path] = sample_metadata.event_count
-            # sample_metadata = extract_fcs_metadata(experiment_dir / sample_path)
-            # all_sample_nevents[sample_path] = sample_metadata['tot']
             if sample_name_source_instance == 'tubename':
                 all_samples[sample_path] = sample_metadata.text['tubename']
             elif sample_name_source_instance == 'fil':
