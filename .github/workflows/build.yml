@@ -34,8 +34,8 @@ jobs:
             artifact_name: win-x64
 #          - os: macos-14
 #            artifact_name: mac-intel
-          - os: macos-latest
-            artifact_name: mac-arm64
+#          - os: macos-latest
+#            artifact_name: mac-arm64
 
     steps:
       - name: Check out code
