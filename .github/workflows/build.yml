@@ -96,12 +96,16 @@ jobs:
           Copy-Item -Path .\AppxManifest.xml -Destination .\dist\honeychrome\
           
           # 2. Copy the Assets folder (app logos/icons) if it exists in your repo
-          if (Test-Path .\Assets) {
-              Copy-Item -Path .\Assets -Destination .\dist\honeychrome\ -Recurse -Force
+          if (Test-Path .\assets) {
+              Copy-Item -Path .\assets -Destination .\dist\honeychrome\ -Recurse -Force
           }
           
-          # 3. CRITICAL FIX: No trailing slash on the directory path!
-          MakeAppx.exe pack /d "dist\honeychrome" /p "honeychrome.msix"
+          # 3. CRITICAL FIX: Use strict absolute paths for MakeAppx
+          $sourceDir = "$env:GITHUB_WORKSPACE\dist\honeychrome"
+          $outputMsix = "$env:GITHUB_WORKSPACE\honeychrome.msix"
+          
+          # /o overwrites if a broken file exists, /v gives verbose output
+          MakeAppx.exe pack /v /o /d "$sourceDir" /p "$outputMsix"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v6
