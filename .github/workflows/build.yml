@@ -102,11 +102,17 @@ jobs:
           
           cd dist
                     
-          # 3. SANITIZE: MakeAppx crashes (0x8007007b) if any payload file starts with a dot
-          Get-ChildItem -Path "honeychrome" -Recurse -Force | Where-Object { $_.Name.StartsWith('.') } | Remove-Item -Force -Recurse
-                    
-          # 4. Pack the app
-          MakeAppx.exe pack /v /o /d "honeychrome" /p "honeychrome.msix"
+          # 1. More aggressive cleanup: Remove hidden files AND files with illegal naming patterns
+          # Removes files starting with '.', ending with '.', or containing invalid chars
+          Get-ChildItem -Path "honeychrome" -Recurse -Force | Where-Object { 
+              $_.Name -match '^\.' -or $_.Name -match '\.$' -or $_.Name -match '[<>:"|?*]' 
+          } | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+          
+          ls -R dist/honeychrome
+
+          # 2. Use the /m flag to generate a mapping file first (helps debug exactly which file fails)
+          # This separates the validation phase from the packing phase
+          MakeAppx.exe pack /v /o /d "honeychrome" /p "honeychrome.msix" /m "mapping.xml"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v6
