@@ -80,6 +80,29 @@ jobs:
           # GitHub Windows runners have 'ISCC' (Inno Setup Compiler) pre-installed.
           ISCC honeychrome.iss
 
+      # Adds Windows SDK tools (like MakeAppx.exe) to the environment path
+      - name: Set up Windows SDK Tools
+        if: matrix.os == 'windows-2022'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # Prepares the frozen directory with the required AppxManifest and Assets
+      - name: Prepare and Package MSIX
+        if: matrix.os == 'windows-2022'
+        shell: powershell
+        run: |
+          # 1. Copy the mandatory manifest into the PyInstaller app directory
+          Copy-Item -Path .\AppxManifest.xml -Destination .\dist\honeychrome\
+          
+          # 2. Copy the Assets folder (app logos/icons) if it exists in your repo
+          if (Test-Path .\Assets) {
+              Copy-Item -Path .\Assets -Destination .\dist\honeychrome\ -Recurse -Force
+          }
+          
+          # 3. Use MakeAppx to bundle the target folder into an MSIX package
+          MakeAppx.exe pack /d .\dist\honeychrome\ /p honeychrome.msix
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v6
         with:
@@ -88,6 +111,7 @@ jobs:
             **/*.exe
             **/*.dmg
             **/*.tar.gz
+            *.msix
 
       - name: Release Raw Binaries
         uses: softprops/action-gh-release@v2
@@ -98,5 +122,6 @@ jobs:
             **/*.exe
             **/*.dmg
             **/*.tar.gz
+            *.msix
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

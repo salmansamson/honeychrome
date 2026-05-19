@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         IgnorableNamespaces="uap">
+
+  <Identity Name="YourProject.GPLApp"
+            Publisher="CN=YourNameOrOrganization"
+            Version="1.0.0.0"
+            ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Honeychrome</DisplayName>
+    <PublisherDisplayName>Cytkit</PublisherDisplayName>
+    <Logo>assets\cytkit_web_logo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.17763.0" MaxVersionTested="10.0.22000.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us"/>
+  </Resources>
+
+  <Applications>
+    <Application Id="App" Executable="honeychrome.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Honeychrome"
+                          Description="Open Source Cytometry Data Analysis and Acquisition"
+                          BackgroundColor="#464646"
+                          Square150x150Logo="assets\Square150x150Logo.png"
+                          Square44x44Logo="assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="assets\Wide310x150Logo.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+</Package>
