@@ -86,7 +86,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-            -
+
       # Prepares the frozen directory with the required AppxManifest and Assets
       - name: Prepare and Package MSIX
         if: matrix.os == 'windows-2022'
