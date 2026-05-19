@@ -86,7 +86,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-
+            -
       # Prepares the frozen directory with the required AppxManifest and Assets
       - name: Prepare and Package MSIX
         if: matrix.os == 'windows-2022'
@@ -100,8 +100,8 @@ jobs:
               Copy-Item -Path .\Assets -Destination .\dist\honeychrome\ -Recurse -Force
           }
           
-          # 3. Use MakeAppx to bundle the target folder into an MSIX package
-          MakeAppx.exe pack /d .\dist\honeychrome\ /p honeychrome.msix
+          # 3. CRITICAL FIX: No trailing slash on the directory path!
+          MakeAppx.exe pack /d "dist\honeychrome" /p "honeychrome.msix"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v6
