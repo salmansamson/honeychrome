@@ -100,12 +100,13 @@ jobs:
               Copy-Item -Path .\assets -Destination .\dist\honeychrome\ -Recurse -Force
           }
           
-          # 3. CRITICAL FIX: Use strict absolute paths for MakeAppx
-          $sourceDir = "$env:GITHUB_WORKSPACE\dist\honeychrome"
-          $outputMsix = "$env:GITHUB_WORKSPACE\honeychrome.msix"
-          
-          # /o overwrites if a broken file exists, /v gives verbose output
-          MakeAppx.exe pack /v /o /d "$sourceDir" /p "$outputMsix"
+          cd dist
+                    
+          # 3. SANITIZE: MakeAppx crashes (0x8007007b) if any payload file starts with a dot
+          Get-ChildItem -Path "honeychrome" -Recurse -Force | Where-Object { $_.Name.StartsWith('.') } | Remove-Item -Force -Recurse
+                    
+          # 4. Pack the app
+          MakeAppx.exe pack /v /o /d "honeychrome" /p "honeychrome.msix"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v6
