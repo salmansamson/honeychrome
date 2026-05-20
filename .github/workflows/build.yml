@@ -92,37 +92,26 @@ jobs:
         if: matrix.os == 'windows-2022'
         shell: powershell
         run: |
-          # 1. Copy the mandatory manifest into the PyInstaller app directory
-          Copy-Item -Path .\AppxManifest.xml -Destination .\dist\honeychrome\
+          # 1. Ensure clean directory paths
+          $distDir = "$env:GITHUB_WORKSPACE\dist\honeychrome"
+          $manifest = "$env:GITHUB_WORKSPACE\AppxManifest.xml"
+          $output = "$env:GITHUB_WORKSPACE\honeychrome.msix"
           
-          # 2. Copy the Assets folder (app logos/icons) if it exists in your repo
-          if (Test-Path .\assets) {
-              Copy-Item -Path .\assets -Destination .\dist\honeychrome\ -Recurse -Force
+          # 2. Copy dependencies into the dist folder
+          Copy-Item -Path $manifest -Destination $distDir\AppxManifest.xml
+          
+          if (Test-Path "$env:GITHUB_WORKSPACE\assets") {
+              Copy-Item -Path "$env:GITHUB_WORKSPACE\assets" -Destination $distDir\ -Recurse -Force
           }
           
-          cd dist
-                    
-          # 1. More aggressive cleanup: Remove hidden files AND files with illegal naming patterns
-          # Removes files starting with '.', ending with '.', or containing invalid chars
-          Get-ChildItem -Path "honeychrome" -Recurse -Force | Where-Object { 
+          # 3. Aggressive Sanitization (only run this ONCE on the final source)
+          Get-ChildItem -Path $distDir -Recurse -Force | Where-Object { 
               $_.Name -match '^\.' -or $_.Name -match '\.$' -or $_.Name -match '[<>:"|?*]' 
           } | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
           
-          ls -R honeychrome
-          
-          # --- ADD THIS: The Debugger ---
-          Write-Host "Checking for invalid characters in filenames..."
-          Get-ChildItem -Path "honeychrome" -Recurse | Where-Object { 
-              $_.Name -match '[\u0080-\uFFFF]' # Look for non-ASCII characters
-          } | Select-Object FullName | Format-Table -AutoSize
-          
-          # --- ADD THIS: List all files to check for deep nesting or long paths ---
-          # MakeAppx can fail if file paths exceed 260 characters
-          Get-ChildItem -Path "honeychrome" -Recurse | Where-Object { $_.FullName.Length -gt 250 } | Select-Object FullName
-
-          # 2. Use the /m flag to generate a mapping file first (helps debug exactly which file fails)
-          # This separates the validation phase from the packing phase
-          MakeAppx.exe pack /v /o /d "honeychrome" /p "honeychrome.msix" /m "mapping.xml"
+          # 4. PACK: Use absolute paths, remove the /m mapping file entirely
+          # We use /f (force) to ensure it treats the manifest in the folder as the primary
+          & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\makeappx.exe" pack /v /o /d "$distDir" /p "$output"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v6
