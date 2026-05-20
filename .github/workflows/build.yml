@@ -109,6 +109,16 @@ jobs:
           } | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
           
           ls -R dist/honeychrome
+          
+          # --- ADD THIS: The Debugger ---
+          Write-Host "Checking for invalid characters in filenames..."
+          Get-ChildItem -Path "honeychrome" -Recurse | Where-Object { 
+              $_.Name -match '[\u0080-\uFFFF]' # Look for non-ASCII characters
+          } | Select-Object FullName | Format-Table -AutoSize
+          
+          # --- ADD THIS: List all files to check for deep nesting or long paths ---
+          # MakeAppx can fail if file paths exceed 260 characters
+          Get-ChildItem -Path "honeychrome" -Recurse | Where-Object { $_.FullName.Length -gt 250 } | Select-Object FullName
 
           # 2. Use the /m flag to generate a mapping file first (helps debug exactly which file fails)
           # This separates the validation phase from the packing phase
