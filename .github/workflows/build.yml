@@ -108,7 +108,7 @@ jobs:
               $_.Name -match '^\.' -or $_.Name -match '\.$' -or $_.Name -match '[<>:"|?*]' 
           } | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
           
-          ls -R dist/honeychrome
+          ls -R honeychrome
           
           # --- ADD THIS: The Debugger ---
           Write-Host "Checking for invalid characters in filenames..."
