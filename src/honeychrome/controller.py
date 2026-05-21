@@ -108,8 +108,8 @@ class Controller(QObject):
         self.af_precomputed_cache: dict = {}
         self.raw_transformations = None
         self.unmixed_transformations = None
-        self.raw_gating = None
-        self.unmixed_gating = None
+        self.raw_gating = GatingStrategy()
+        self.unmixed_gating = GatingStrategy()
         self.data_for_cytometry_plots = deepcopy(cytometry_data_dictionary)
         self.data_for_cytometry_plots_raw = deepcopy(self.data_for_cytometry_plots)
         self.data_for_cytometry_plots_process = deepcopy(self.data_for_cytometry_plots)
@@ -382,8 +382,8 @@ class Controller(QObject):
         self.af_precomputed_cache = {}
         self.raw_transformations = None
         self.unmixed_transformations = None
-        self.raw_gating = None
-        self.unmixed_gating = None
+        self.raw_gating = GatingStrategy()
+        self.unmixed_gating = GatingStrategy()
         self.cleaned_events: dict = {}   # runtime-only; numpy arrays; not serialised
         self.data_for_cytometry_plots = {'pnn': None, 'fluoro_indices': None, 'lookup_tables': None, 'event_data': None, 'transformations': None, 'statistics': {}, 'gating': GatingStrategy(), 'plots': [], 'histograms': [], 'gate_membership': {}}
         self.data_for_cytometry_plots_raw = deepcopy(self.data_for_cytometry_plots)
@@ -442,7 +442,7 @@ class Controller(QObject):
                 logger.info(f'Controller: using {source_gate} as base gate for process NxN plots')
                 process_plots = define_process_plots(self.experiment.settings['unmixed']['fluorescence_channels'], self.experiment.settings['unmixed']['fluorescence_channels'], source_gate=source_gate)
             else:
-                self.unmixed_gating = None
+                self.unmixed_gating = GatingStrategy()
                 self.unmixed_transformations = None
                 self.unmixed_lookup_tables = {}
                 process_plots = []
