@@ -30,12 +30,12 @@ jobs:
 #            artifact_name: linux-x64-stable
 #          - os: ubuntu-24.04
 #            artifact_name: linux-x64-latest
-          - os: windows-2022
-            artifact_name: win-x64
+#          - os: windows-2022
+#            artifact_name: win-x64
 #          - os: macos-14
 #            artifact_name: mac-intel
-#          - os: macos-latest
-#            artifact_name: mac-arm64
+          - os: macos-latest
+            artifact_name: mac-arm64
 
     steps:
       - name: Check out code
@@ -62,6 +62,14 @@ jobs:
       - name: Build macOS
         if: startsWith(matrix.os, 'macos')
         run: | 
+        # import signing certificate
+          echo "$APPLE_CERT_BASE64" | base64 --decode > cert.p12
+          security create-keychain -p "" build.keychain
+          security import cert.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          security list-keychains -d user -s build.keychain
+          
+        # build, sign, notarize 
           make build
           brew install create-dmg
           chmod +x create_dmg_mac.sh
@@ -71,6 +79,12 @@ jobs:
           echo "--- Contents of dist/honeychrome.app/Contents/ ---"
           ls -R dist/honeychrome.app/Contents/
           ./create_dmg_mac.sh
+        env:
+          APPLE_CERT_BASE64: ${{ secrets.APPLE_CERT_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Build Windows
         if: matrix.os == 'windows-2022'

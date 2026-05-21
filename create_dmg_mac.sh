@@ -17,6 +17,23 @@ if [ -f "$DMG_NAME" ]; then
   rm "$DMG_NAME"
 fi
 
+# add signing and notarization
+codesign --deep --force --verify --verbose \
+  --sign "Developer ID Application: $APPLE_TEAM_ID" \
+  --options runtime \
+  --entitlements entitlements.plist \
+  "$SOURCE_APP"
+
+codesign --sign "Developer ID Application: $APPLE_TEAM_ID" "$DMG_NAME"
+
+xcrun notarytool submit "$DMG_NAME" \
+  --apple-id "$APPLE_ID" \
+  --password "$APP_SPECIFIC_PASSWORD" \
+  --team-id "$APPLE_TEAM_ID" \
+  --wait
+
+xcrun stapler staple "$DMG_NAME"
+
 # --- EXECUTION ---
 create-dmg \
   --volname "$VOL_NAME" \
