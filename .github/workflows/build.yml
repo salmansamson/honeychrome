@@ -62,14 +62,13 @@ jobs:
       - name: Build macOS
         if: startsWith(matrix.os, 'macos')
         run: | 
-        # import signing certificate
+        # import signing certificate, build, sign, notarize
           echo "$APPLE_CERT_BASE64" | base64 --decode > cert.p12
           security create-keychain -p "" build.keychain
           security import cert.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
           security list-keychains -d user -s build.keychain
-          
-        # build, sign, notarize 
+
           make build
           brew install create-dmg
           chmod +x create_dmg_mac.sh
