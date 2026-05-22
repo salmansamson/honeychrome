@@ -7,34 +7,24 @@ DMG_NAME="${APP_NAME}-v${VERSION}-macos.dmg"
 VOL_NAME="${APP_NAME} Installer"
 
 # Paths
-SOURCE_APP="dist/honeychrome.app"  # Folder containing your .app
-APP_BUNDLE="${APP_NAME}.app"      # Name of the app inside source_folder
-BACKGROUND="other/honeychrome_installer_background.png"     # The background image we discussed
-ICON_FILE="src/honeychrome/view_components/assets/cytkit_web_logo.png"         # Optional: your custom icon file
+SOURCE_APP="dist/honeychrome.app"
+APP_BUNDLE="${APP_NAME}.app"
+BACKGROUND="other/honeychrome_installer_background.png"
+ICON_FILE="src/honeychrome/view_components/assets/cytkit_web_logo.png"
 
-# Logic: Remove existing DMG if it exists
+# Remove existing DMG if it exists
 if [ -f "$DMG_NAME" ]; then
   rm "$DMG_NAME"
 fi
 
-# add signing and notarization
+# Step 1: Sign the .app bundle BEFORE creating the DMG
 codesign --deep --force --verify --verbose \
-  --sign "Developer ID Application: $APPLE_TEAM_ID" \
+  --sign "Developer ID Application: OLIVER TEAL BURTON (S673JAMG2N)" \
   --options runtime \
   --entitlements entitlements.plist \
   "$SOURCE_APP"
 
-codesign --sign "Developer ID Application: $APPLE_TEAM_ID" "$DMG_NAME"
-
-xcrun notarytool submit "$DMG_NAME" \
-  --apple-id "$APPLE_ID" \
-  --password "$APP_SPECIFIC_PASSWORD" \
-  --team-id "$APPLE_TEAM_ID" \
-  --wait
-
-xcrun stapler staple "$DMG_NAME"
-
-# --- EXECUTION ---
+# Step 2: Create the DMG
 create-dmg \
   --volname "$VOL_NAME" \
   --volicon "$ICON_FILE" \
@@ -46,6 +36,19 @@ create-dmg \
   --hide-extension "$APP_BUNDLE" \
   --app-drop-link 620 250 \
   --skip-jenkins \
-  --eula "LICENSE.txt"\
+  --eula "LICENSE.txt" \
   "$DMG_NAME" \
   "$SOURCE_APP"
+
+# Step 3: Sign the DMG
+codesign --sign "Developer ID Application: OLIVER TEAL BURTON (S673JAMG2N)" "$DMG_NAME"
+
+# Step 4: Notarize the DMG
+xcrun notarytool submit "$DMG_NAME" \
+  --apple-id "$APPLE_ID" \
+  --password "$APPLE_APP_PASSWORD" \
+  --team-id "$APPLE_TEAM_ID" \
+  --wait
+
+# Step 5: Staple the notarization ticket to the DMG
+xcrun stapler staple "$DMG_NAME"
