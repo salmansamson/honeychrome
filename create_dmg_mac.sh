@@ -51,4 +51,4 @@ xcrun notarytool submit "$DMG_NAME" \
   --wait
 
 # Step 5: Staple the notarization ticket to the DMG
-xcrun stapler staple "$DMG_NAME"
+#xcrun stapler staple "$DMG_NAME"
