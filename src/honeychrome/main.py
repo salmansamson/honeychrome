@@ -8,29 +8,29 @@ import os
 import sys
 from pathlib import Path, WindowsPath, PosixPath
 
-# Monkey-patch the Path div operator to handle absolute paths on Windows
-original_truediv = Path.__truediv__
-def smart_truediv(self, other):
-    """
-    Overridden / operator for pathlib.Path.
-    If 'other' looks like an absolute Windows path (e.g., 'D:\\data'),
-    it bypasses the relative restriction and returns 'other' directly.
-    """
-    if isinstance(other, (str, Path)):
-        other_str = str(other)
-
-        # Check if 'other' is an absolute Windows path (starts with drive letter like D:)
-        # This happens when os.path.relpath falls back to an absolute path.
-        if len(other_str) >= 2 and other_str[1] == ':' and other_str[0].isalpha():
-            return Path(other)
-
-    # Otherwise, behave exactly like standard pathlib
-    return original_truediv(self, other)
-
-# Apply the patch globally to Path and its OS-specific subclasses
-Path.__truediv__ = smart_truediv
-WindowsPath.__truediv__ = smart_truediv
-PosixPath.__truediv__ = smart_truediv
+# # Monkey-patch the Path div operator to handle absolute paths on Windows
+# original_truediv = Path.__truediv__
+# def smart_truediv(self, other):
+#     """
+#     Overridden / operator for pathlib.Path.
+#     If 'other' looks like an absolute Windows path (e.g., 'D:\\data'),
+#     it bypasses the relative restriction and returns 'other' directly.
+#     """
+#     if isinstance(other, (str, Path)):
+#         other_str = str(other)
+#
+#         # Check if 'other' is an absolute Windows path (starts with drive letter like D:)
+#         # This happens when os.path.relpath falls back to an absolute path.
+#         if len(other_str) >= 2 and other_str[1] == ':' and other_str[0].isalpha():
+#             return Path(other)
+#
+#     # Otherwise, behave exactly like standard pathlib
+#     return original_truediv(self, other)
+#
+# # Apply the patch globally to Path and its OS-specific subclasses
+# Path.__truediv__ = smart_truediv
+# WindowsPath.__truediv__ = smart_truediv
+# PosixPath.__truediv__ = smart_truediv
 
 
 import platform
