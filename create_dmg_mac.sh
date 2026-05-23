@@ -50,5 +50,31 @@ xcrun notarytool submit "$DMG_NAME" \
   --team-id "$APPLE_TEAM_ID" \
   --wait
 
-# Step 5: Staple the notarization ticket to the DMG
-#xcrun stapler staple "$DMG_NAME"
+# Step 5: Staple the notarization ticket to the DMG with retries
+MAX_RETRIES=5
+COUNT=0
+SUCCESS=false
+
+# Explicitly check status before attempting to staple
+echo "Verifying notarization status..."
+xcrun notarytool info <SUBMISSION_ID> --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID"
+
+while [ $COUNT -lt $MAX_RETRIES ]; do
+  echo "Attempting to staple... (Attempt $((COUNT+1))/$MAX_RETRIES)"
+  if xcrun stapler staple "$DMG_NAME"; then
+    echo "Staple successful!"
+    SUCCESS=true
+    break
+  else
+    COUNT=$((COUNT+1))
+    echo "Staple failed. Retrying in 30 seconds..."
+    sleep 30
+  fi
+done
+
+if [ "$SUCCESS" = false ]; then
+  echo "Stapling failed after $MAX_RETRIES attempts."
+  exit 1
+fi
+
+xcrun stapler validate "$DMG_NAME"
