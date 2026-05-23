@@ -58,7 +58,7 @@ A set of compressed binary packages are available in the releases section.
 > **Note:** Since Honeychrome is very new, you may get warnings on Windows/Mac that the application is unrecognised. If so, please post the warning on the Github issues page, or contact Samson ([cytkit.com/contact](https://cytkit.com/contact)). You can normally click through any warnings; starting the app should function normally after that.
 
 #### Windows
-1. Download [Honeychrome for Windows x64](https://github.com/salmansamson/honeychrome/releases/download/v0.8.0/Honeychrome-v0.8.0-windows-x64.exe)
+1. Download [Honeychrome for Windows x64](https://apps.microsoft.com/detail/9nxl24t3t6lv?ocid=webpdpshare) (from the Microsoft Store)
 2. Double click to run the installer
 
 #### Linux (Ubuntu > 24.04)
