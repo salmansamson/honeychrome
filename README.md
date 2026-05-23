@@ -54,14 +54,13 @@ This project uses the SignPath Foundation for code signing.
 Note that the plugin system is only available if Honeychrome is run from the Python source code.
 
 ### For non-programmers: download and run executable
-A set of compressed binary packages are available in the releases section.
-> **Note:** Since Honeychrome is very new, you may get warnings on Windows/Mac that the application is unrecognised. If so, please post the warning on the Github issues page, or contact Samson ([cytkit.com/contact](https://cytkit.com/contact)). You can normally click through any warnings; starting the app should function normally after that.
+A set of compressed binary installers are available below.
 
 #### Windows
 1. Download [Honeychrome for Windows x64](https://apps.microsoft.com/detail/9nxl24t3t6lv?ocid=webpdpshare) (from the Microsoft Store)
 2. Double click to run the installer
 
-#### Linux (Ubuntu > 24.04)
+#### Linux (Ubuntu with Wayland) > 24.04)
 1. Download [Honeychrome for Linux x64 Ubuntu > 24.04](https://github.com/salmansamson/honeychrome/releases/download/v0.8.0/honeychrome-v0.8.0-linux-x64.tar.gz)
 2. Extract the honeychrome folder and put it somewhere appropriate for the single user or system
 3. Change to the honeychrome folder and run ./install_linux.sh
