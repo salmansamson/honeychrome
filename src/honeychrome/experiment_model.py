@@ -193,18 +193,10 @@ class ExperimentModel:
         experiment_dir_raw_samples = self.settings['raw']['raw_samples_subdirectory']
         experiment_dir_unmixed_samples = self.settings['unmixed']['unmixed_samples_subdirectory']
 
-        # use relative paths if available. On Microshaft Windblows this doesn't work for links. Therefore use absolute paths as fallback
-        if check_for_windows_junction(experiment_dir/experiment_dir_single_stain_controls):
-            single_stain_controls = [str(p) for p in sorted((experiment_dir/experiment_dir_single_stain_controls).resolve().glob('**/*.fcs'))]
-            logger.info(f"ExperimentModel: experiment_dir_single_stain_controls {experiment_dir_single_stain_controls} is a junction; using absolute paths to files")
-        else:
-            single_stain_controls = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_single_stain_controls).glob('**/*.fcs'))]
-
-        if check_for_windows_junction(experiment_dir/experiment_dir_raw_samples):
-            raw_samples = [str(p) for p in sorted((experiment_dir/experiment_dir_raw_samples).resolve().glob('**/*.fcs'))]
-            logger.info(f"ExperimentModel: experiment_dir_raw_samples {experiment_dir_raw_samples} is a junction; using absolute paths to files")
-        else:
-            raw_samples = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_raw_samples).glob('**/*.fcs'))]
+        single_stain_controls = [str(p.relative_to(experiment_dir)) for p in
+                                 sorted((experiment_dir / experiment_dir_single_stain_controls).glob('**/*.fcs'))]
+        raw_samples = [str(p.relative_to(experiment_dir)) for p in
+                       sorted((experiment_dir / experiment_dir_raw_samples).glob('**/*.fcs'))]
 
         # add all single stain controls to raw samples if not already present
         for sample_path in single_stain_controls:
