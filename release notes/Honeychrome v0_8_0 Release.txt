@@ -15,6 +15,6 @@ Numerous improvements, including the following
 * automatic recognition of antigens and fluorophore names in the spectral model editor
 * better colourmap ranges to avoid saturation
 * imported FCS files can now live anywhere: if they are not in the experiment folder, a symbolic link is set up from the experiment folder, so no more broken relative paths
-* build system now produces executable installers for Linux (Ubuntu > 22.04), Windows (10, 11), and MacOs (ARM). Hopefully this will now cover (almost) everyone who had trouble running the previous executables
+* build system now produces executable installers for Linux (Ubuntu > 24.04), Windows (10, 11), and MacOs (ARM). Hopefully this will now cover (almost) everyone who had trouble running the previous executables
 
 Also numerous bug fixes.
