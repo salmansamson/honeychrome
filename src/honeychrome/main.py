@@ -238,7 +238,7 @@ def main():
 
     if sys.platform == 'win32':
         import ctypes
-        myappid = 'honeychrome.cytometry.v0.8.0'
+        myappid = f'honeychrome.cytometry.v{__version__}'
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
     # Use Fusion style (works consistently across platforms)
