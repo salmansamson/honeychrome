@@ -126,7 +126,7 @@ jobs:
             **/*.exe
             **/*.dmg
             **/*.tar.gz
-            *.msix
+            **/*.msix
 
       - name: Release Raw Binaries
         uses: softprops/action-gh-release@v2
@@ -137,6 +137,6 @@ jobs:
             **/*.exe
             **/*.dmg
             **/*.tar.gz
-            *.msix
+            **/*.msix
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
