@@ -243,7 +243,7 @@ class TraceAnalyser(mp.Process):
                         blob_np_front = self.traces_cache[:slice_end]  # get front of queue array
                         blob_np = np.concatenate((blob_np_back, blob_np_front))
 
-                blob_reshaped = blob_np.reshape(-1, self.n_channels_trace, self.n_time_points_in_event)
+                blob_reshaped = blob_np.reshape(-1, self.n_channels_trace, self.n_time_points_in_event) # .astype(np.float32) # try casting to float here. is it fast? does it improve precision?
 
                 # calculate area, height, width as defined in channel_dict and write to events_cache
 
