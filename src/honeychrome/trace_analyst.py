@@ -14,11 +14,11 @@ import numpy as np
 import time
 import warnings
 
-from honeychrome.settings import traces_cache_size, traces_cache_size, max_events_in_traces_cache, trace_n_points, n_channels_trace, adc_rate, threshold, n_time_points_in_event, window_extension_length_pre, baseline_decay_rate, window_extension_length_post, timeout_length, deltaT
+from honeychrome.settings import traces_cache_size, traces_cache_size, max_events_in_traces_cache, trace_n_points, n_channels_trace, adc_rate, threshold, n_time_points_in_event, window_extension_length_pre, baseline_decay_rate, window_extension_length_post, timeout_length, deltaT, adc_scale_mv
 from honeychrome.settings import max_events_in_cache, n_channels_per_event, channel_dict, event_channels_pnn, analyser_target_repeat_time
 
-threshold_adc = int((threshold / 500) * 2**16 / 2)
 baseline_length = int(1/baseline_decay_rate)
+gap = 10 # gap between start of end of baseline and start of peak
 
 def peak_start_stop_baseline(tr):
     # initialise peak detector
@@ -29,7 +29,7 @@ def peak_start_stop_baseline(tr):
 
     for n in range(window_extension_length_pre, len(tr)):
         # if not in peak, update baselines and detect if there is a peak
-        condition = tr[n] - baseline > threshold
+        condition = tr[n] - baseline > threshold * adc_scale_mv
         if not in_peak:
             if condition:
                 in_peak = True
@@ -54,11 +54,11 @@ def peak_start_stop_baseline(tr):
     return n_start, n_end, baseline
 
 def peak_measurements(tr, n_start, n_end, deltaT, area_indices, height_indices):
-    baselines = np.concatenate((tr[:,:n_start+1], tr[:,n_end-1:]), axis=1).mean(axis=1)
+    baselines = np.concatenate((tr[:,gap:n_start-gap], tr[:,n_end-gap:]), axis=1).mean(axis=1)
     traces_truncated_baseline_subtracted = tr[:,n_start:n_end] - baselines.reshape(-1,1)
     heights = np.max(traces_truncated_baseline_subtracted[height_indices,:], axis=1)
     areas = np.sum(traces_truncated_baseline_subtracted[area_indices,:], axis=1)
-    width = (n_end - n_start) * deltaT
+    width = (n_end - n_start) * deltaT * 1000 # width in nanoseconds
     centre = (n_start + n_end) * 0.5
     peak = areas, heights, width, centre
 
@@ -253,37 +253,53 @@ class TraceAnalyser(mp.Process):
                 # widths = self.calculate_width(blob_reshaped[:, self.indices_trigger_channel_in_traces, :])
 
                 ### More sophisticated calculation - loop over traces and perform background substraction
+                keep_mask = np.zeros(n_new_events, dtype=np.bool)
                 areas = np.zeros((n_new_events, len(self.indices_area_channels_in_events)))
                 heights = np.zeros((n_new_events, len(self.indices_height_channels_in_events)))
                 widths = np.zeros(n_new_events)
+                last_event_index = 0
                 for n, traces in enumerate(blob_reshaped):
                     n_start, n_end, tr_baseline = peak_start_stop_baseline(traces[self.indices_trigger_channel_in_traces])
-                    peak, baselines = peak_measurements(traces, n_start, n_end, deltaT, self.indices_area_channels_in_traces, self.indices_height_channels_in_traces)
-                    areas[n], heights[n], widths[n], centre = peak
+                    if n_start > 0:
+                        peak, baselines = peak_measurements(traces, n_start, n_end, deltaT, self.indices_area_channels_in_traces, self.indices_height_channels_in_traces)
+                        areas[n], heights[n], widths[n], centre = peak
+                        keep_mask[n] = True
+                        last_event_index = n
 
-                times = np.ones(n_new_events, dtype=np.int64) * int((time.perf_counter() - start_time) * 1000)
-                event_ids = np.array(range(events_tail, events_tail + n_new_events))
-                with self.events_cache_lock:
-                    self.events_cache[events_tail:events_tail + n_new_events, self.indices_area_channels_in_events] = areas
-                    self.events_cache[events_tail:events_tail + n_new_events, self.indices_height_channels_in_events] = heights
-                    self.events_cache[events_tail:events_tail + n_new_events, self.index_width_channel_in_events] = widths
-                    self.events_cache[events_tail:events_tail + n_new_events, self.index_time_channel_in_events] = times
-                    self.events_cache[events_tail:events_tail + n_new_events, self.index_event_id_in_events] = event_ids
+                # keep only the ones above threshold
+                areas = areas[keep_mask]
+                heights = heights[keep_mask]
+                widths = widths[keep_mask]
+                n_new_events = np.sum(keep_mask)
 
-                    ### debug print latest events
-                    #print(self.events_cache[events_tail:events_tail + n_new_events])
+                # if any above threshold, then push to events cache
+                if last_event_index > 0:
+                    times = np.ones(n_new_events, dtype=np.int64) * int((time.perf_counter() - start_time) * 1000)
+                    event_ids = np.array(range(events_tail, events_tail + n_new_events))
+                    with self.events_cache_lock:
+                        self.events_cache[events_tail:events_tail + n_new_events, self.indices_area_channels_in_events] = areas
+                        self.events_cache[events_tail:events_tail + n_new_events, self.indices_height_channels_in_events] = heights
+                        self.events_cache[events_tail:events_tail + n_new_events, self.index_width_channel_in_events] = widths
+                        self.events_cache[events_tail:events_tail + n_new_events, self.index_time_channel_in_events] = times
+                        self.events_cache[events_tail:events_tail + n_new_events, self.index_event_id_in_events] = event_ids
 
-                #update head of traces cache and tail of events cache
-                events_tail += n_new_events
-                print(f'[Trace Analyser] analysed {n_new_events} events (traces cache old head:{traces_head}, new head and tail:{traces_tail}), (events cache head:{events_head}, tail:{events_tail})')
-                traces_head = traces_tail
+                        ### debug print latest events
+                        #print(self.events_cache[events_tail:events_tail + n_new_events])
 
-                with self.index_head_traces_cache.get_lock():
-                    self.index_head_traces_cache.value = traces_head
-                with self.index_tail_events_cache.get_lock():
-                    self.index_tail_events_cache.value = events_tail
+                    # update head of traces cache and tail of events cache
+                    events_tail += n_new_events
+                    print(f'[Trace Analyser] analysed {n_new_events} events (traces cache old head:{traces_head}, new head and tail:{traces_tail}), (events cache head:{events_head}, tail:{events_tail})')
+                    traces_head = traces_tail
 
-                self.oscilloscope_traces_queue.put({'event_id':event_ids[-1], 'time':times[-1], 'traces':traces, 'n_start':n_start, 'n_end':n_end, 'peak':peak, 'baselines':baselines})
+                    with self.index_head_traces_cache.get_lock():
+                        self.index_head_traces_cache.value = traces_head
+                    with self.index_tail_events_cache.get_lock():
+                        self.index_tail_events_cache.value = events_tail
+
+                    self.oscilloscope_traces_queue.put({'event_id':event_ids[-1], 'time':times[-1], 'traces':blob_reshaped[last_event_index], 'n_start':n_start, 'n_end':n_end, 'peak':peak, 'baselines':baselines})
+
+                else:
+                    print(f'[Trace Analyser] {len(keep_mask)} traces returned but none above threshold')
 
             else:
                 print(f'[Trace Analyser] awaiting traces (traces cache head:{traces_head}, tail:{traces_tail})')

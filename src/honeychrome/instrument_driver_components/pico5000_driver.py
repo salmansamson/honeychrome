@@ -3,7 +3,7 @@ import numpy as np
 from picosdk.ps5000a import ps5000a as ps
 from picosdk.functions import assert_pico_ok, PICO_STATUS_LOOKUP
 
-from honeychrome.settings import adc_channels, magnitude_ceiling, traces_cache_dtype, n_channels_trace, n_time_points_in_event, transfer_target_repeat_time, threshold, FSC_sense
+from honeychrome.settings import adc_channels, magnitude_ceiling, traces_cache_dtype, n_channels_trace, n_time_points_in_event, transfer_target_repeat_time, threshold, FSC_sense, adc_scale_mv
 
 index_channel_a = adc_channels.index('FSC')
 index_channel_b = adc_channels.index('B1')
@@ -34,16 +34,18 @@ inject_signal = True
 # --- PICOSCOPE CONFIG ---
 SAMPLE_INTERVAL_NS = 8  # Timebase 3 (31.25 MS/s)
 TIMEBASE = 3  # 8ns at 14-bit
-MAX_SEGMENTS = int(1000 * transfer_target_repeat_time * 2)  # Number of pulses to capture per "Burst"
+MAX_SEGMENTS = int(1000 * transfer_target_repeat_time)  # Number of pulses to capture per "Burst"
 resolution = ps.PS5000A_DEVICE_RESOLUTION["PS5000A_DR_14BIT"]
 auto_trig_timeout = 10 #ms
-A_range = 500
-B_range = 50
+A_range = 1000
+B_range = 1000
+A_range_text = '1V'
+B_range_text = '1V'
 trigger_channel = 0 # 0=A, 1=B
 deltaT = SAMPLE_INTERVAL_NS * 1e-9
 analysis_decimation = 64 # e.g. 1024 x 8ns --> 8 us, 64 --> 0.5 us
 deltaT_analysis = deltaT * analysis_decimation
-PRE_TRIGGER = 1500 # e.g. 4000 x 8ns --> 32 us
+PRE_TRIGGER = 8000 # e.g. 4000 x 8ns --> 32 us
 # POST_TRIGGER = 2000 # e.g. 6000, or total window 8000 --> 64 us
 # TOTAL_WINDOW = PRE_TRIGGER + POST_TRIGGER
 TOTAL_WINDOW = int(analysis_decimation * n_time_points_in_event * 1.1)
@@ -61,7 +63,7 @@ def generate_test_signal():
     # WIDTHS_US = [5, 10, 20, 40]
     # AMPS_MV = [-50, -100, -200]
     WIDTHS_US = [10]
-    AMPS_MV = [-40, -60, -80, -100, -120, -140, -160, -180, -200]
+    AMPS_MV = [-150, -200]
     DC_LEVEL_MV = 200
 
     # Total time for the whole buffer to represent (e.g., 1.2 ms)
@@ -101,24 +103,9 @@ def generate_test_signal():
     return awg_buffer, delta_phase
 
 
-# from scipy.signal import decimate
 from scipy import signal
-# from harmonic_filter import high_precision_harmonic_filter
-sos_butter = signal.butter(4, 0.3e6, fs=1 / deltaT, output='sos')
+sos_butter = signal.butter(4, 0.4e6, fs=1 / deltaT, output='sos')
 def filter_and_decimate(trace):
-    # IIR (Chebyshev Type I) - Very fast, uses very few coefficients
-    # filtered_signal = decimate(trace, q=analysis_decimation, ftype='iir')
-
-    # FIR (Hamming window) - Better phase response, slightly slower
-    # filtered_signal = decimate(trace, q=4, ftype='fir')
-    # filtered_signal = decimate(filtered_signal, q=4, ftype='fir')
-    # filtered_signal = decimate(filtered_signal, q=4, ftype='fir')
-
-    # Gaussian filter
-    # from scipy.ndimage import gaussian_filter1d
-    # filtered_signal = gaussian_filter1d(filtered_signal, sigma=3)
-    # # filtered_signal = filtered_signal[::4]
-
     trace = signal.sosfiltfilt(sos_butter, trace)
     trace = trace[::analysis_decimation]
     trace = trace[:n_time_points_in_event]
@@ -166,8 +153,8 @@ class Pico5000_Device:
         status["setNoCaptures"] = ps.ps5000aSetNoOfCaptures(chandle, MAX_SEGMENTS)
         assert_pico_ok(status["setNoCaptures"])
 
-        range_A = ps.PS5000A_RANGE[f"PS5000A_{A_range}MV"]
-        range_B = ps.PS5000A_RANGE[f"PS5000A_{B_range}MV"]
+        range_A = ps.PS5000A_RANGE[f"PS5000A_{A_range_text}"]
+        range_B = ps.PS5000A_RANGE[f"PS5000A_{B_range_text}"]
         ps.ps5000aSetChannel(chandle, 0, 1, 0, range_A, 0.0)
         ps.ps5000aSetChannel(chandle, 1, 1, 1, range_B, 0.0)
 
@@ -178,11 +165,11 @@ class Pico5000_Device:
         assert_pico_ok(status["bwA"])
         assert_pico_ok(status["bwB"])
 
-        max_adc = ctypes.c_int16()
-        ps.ps5000aMaximumValue(chandle, ctypes.byref(max_adc))
+        self.max_adc = ctypes.c_int16()
+        ps.ps5000aMaximumValue(chandle, ctypes.byref(self.max_adc))
 
         # AUTO TRIGGER: Ch A (0), 100mV Threshold, Rising (0), Auto-trigger (400ms)
-        threshold_adc = int((threshold / 500) * max_adc.value)
+        threshold_adc = int((threshold / A_range) * self.max_adc.value)
         if trigger_channel == 0:
             threshold_adc *= FSC_sense
         ps.ps5000aSetSimpleTrigger(chandle, 1, trigger_channel, threshold_adc, 1, 0, auto_trig_timeout)
@@ -233,20 +220,19 @@ class Pico5000_Device:
             ps.ps5000aIsReady(chandle, ctypes.byref(ready))
 
         # Bulk Transfer
-        print("Transferring data to PC...")
         overflow = (ctypes.c_int16 * MAX_SEGMENTS)()
         ps.ps5000aGetValuesBulk(chandle, ctypes.byref(ctypes.c_int32(TOTAL_WINDOW)), 0, MAX_SEGMENTS - 1, 1, 0, ctypes.byref(overflow))
 
         # Get traces
         # Convert to Numpy Arrays (float32)
         # Using np.frombuffer is the fastest way to cast ctypes to numpy
-        traces_a = np.array([np.frombuffer(b, dtype=np.int16) for b in self.buffer_list_a], dtype=np.float32)
-        traces_b = np.array([np.frombuffer(b, dtype=np.int16) for b in self.buffer_list_b], dtype=np.float32)
+        traces_a = np.array([np.frombuffer(b, dtype=np.int16) for b in self.buffer_list_a], dtype=np.float32) * A_range / self.max_adc.value * adc_scale_mv
+        traces_b = np.array([np.frombuffer(b, dtype=np.int16) for b in self.buffer_list_b], dtype=np.float32) * B_range / self.max_adc.value * adc_scale_mv
 
         N = len(traces_a)
         traces = np.zeros((N, n_channels_trace, n_time_points_in_event), dtype=np.uint16)
         for n in range(N):
-            traces[n, index_channel_a, :] = FSC_sense * filter_and_decimate(traces_a[n]) + half_uint16
+            traces[n, index_channel_a, :] = FSC_sense * filter_and_decimate(traces_a[n]) + nearly_floor_uint16
             traces[n, index_channel_b, :] = filter_and_decimate(traces_b[n]) + nearly_floor_uint16
 
         blob_of_traces_as_array = traces.reshape(-1)

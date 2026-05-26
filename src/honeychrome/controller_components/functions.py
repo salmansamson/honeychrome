@@ -351,6 +351,12 @@ def initialise_hists(plots, data_for_cytometry_plots):
             hists.append(histogram)
     return hists
 
+def robust_cv(data):
+    if len(data)>0:
+        return (np.quantile(data, 0.75) - np.quantile(data, 0.25)) / np.quantile(data, 0.5) / 2 * 100
+    else:
+        return np.nan
+
 def initialise_stats(gating):
     statistics = {'root': {'n_events_gate': 0, 'p_gate_total': 1., 'p_gate_parent': 1., 'event_conc': np.nan}}
     if gating:
@@ -404,6 +410,7 @@ def calc_hists(data_for_cytometry_plots, indices_plots_to_calculate=None, status
 def calc_stats(data_for_cytometry_plots, initialise=True):
     statistics = {}
     # gate_ids = data_for_cytometry_plots['lookup_tables'].keys()
+    pnn = data_for_cytometry_plots['pnn']
     gating = data_for_cytometry_plots['gating']
     gate_membership = data_for_cytometry_plots['gate_membership']
     event_data = data_for_cytometry_plots['event_data']
@@ -433,7 +440,8 @@ def calc_stats(data_for_cytometry_plots, initialise=True):
         n_events_total = n_events_total_old + n_events_total_new
         statistics['root'] = {'n_events_gate': n_events_total, 'p_gate_total': 1., 'p_gate_parent': 1., 'event_conc': np.nan}
         for gate_id_full in gating.get_gate_ids():
-            if gating._get_gate_node(gate_id_full[0], gate_id_full[1]).gate_type != 'QuadrantGate':  # bit of a hack. Can't find a better way of excluding Quadrants
+            gate_node = gating._get_gate_node(gate_id_full[0], gate_id_full[1])
+            if gate_node.gate_type != 'QuadrantGate':  # bit of a hack. Can't find a better way of excluding Quadrants
                 gate_id = gate_id_full[0]
                 # parent_id = gate_id[0][1][-1]
                 parent_id = data_for_cytometry_plots['gating'].get_parent_gate_id(gate_id)
@@ -465,7 +473,15 @@ def calc_stats(data_for_cytometry_plots, initialise=True):
 
                 # print(gate_id, parent_id)
 
-                statistics[gate_id] = {'n_events_gate': n_events_gate, 'p_gate_total': p_gate_total, 'p_gate_parent': p_gate_parent, 'event_conc': np.nan}
+                # if gate has dimensions, calculate MFI and rCV for each channel
+                channels = [dim.id for dim in gate_node.gate.dimensions]
+                intensity = {}
+                rCV = {}
+                if len(gate_membership[gate_id]) > 0:
+                    intensity = {channel: event_data[gate_membership[gate_id], pnn.index(channel)].mean() for channel in channels}
+                    rCV = {channel: robust_cv(event_data[gate_membership[gate_id], pnn.index(channel)]) for channel in channels}
+
+                statistics[gate_id] = {'n_events_gate': n_events_gate, 'p_gate_total': p_gate_total, 'p_gate_parent': p_gate_parent, 'event_conc': np.nan, 'intensity': intensity, 'rCV': rCV}
 
     return statistics
 
