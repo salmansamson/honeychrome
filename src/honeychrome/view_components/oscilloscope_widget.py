@@ -34,12 +34,12 @@ class OscilloscopeWidget(QWidget):
             self.label = QLabel('')
 
             self.plot_widget1 = pg.PlotWidget()
-            self.plot_widget1.setLabel('left', 'Intensity', units='ADC Units')
+            self.plot_widget1.setLabel('left', 'Intensity', units='uV')
             self.plot_widget1.setLabel('bottom', 'Time', units='us')
             self.plot_widget1.showGrid(x=True, y=True, alpha=0.3)
 
             self.plot_widget2 = pg.PlotWidget()
-            self.plot_widget2.setLabel('left', 'Intensity', units='ADC Units')
+            self.plot_widget2.setLabel('left', 'Intensity', units='uV')
             self.plot_widget2.setLabel('bottom', 'Time', units='us')
             self.plot_widget2.showGrid(x=True, y=True, alpha=0.3)
 
@@ -90,6 +90,8 @@ class OscilloscopeWidget(QWidget):
     def _update_plot(self):
         """Thread-safe method to update the plot"""
         try:
+            print(self.trace)
+
             start = self.trace['n_start']
             end = self.trace['n_end']
             peak_span = np.array([self.x[start], self.x[end]])
@@ -99,23 +101,31 @@ class OscilloscopeWidget(QWidget):
             for i in self.scatter_channel_indices:
                 color = line_colors[i % len(line_colors)]
                 y = self.trace['traces'][i]
-                self.plot_widget1.plot(self.x, y, pen=color)
 
                 dotted_pen = pg.mkPen(color=color, width=2, style=Qt.DotLine)
+                dashed_pen = pg.mkPen(color=color, width=2, style=Qt.DashLine)
+                solid_pen = pg.mkPen(color=color, width=2, style=Qt.SolidLine)
+
+                self.plot_widget1.plot(self.x, y, pen=dashed_pen)
+                self.plot_widget1.plot(self.x, y-self.trace['baselines'][i], pen=solid_pen)
                 self.plot_widget1.plot(peak_span, self.trace['baselines'][i] * np.ones(2), pen=dotted_pen)
-                self.plot_widget1.plot(peak_start, np.array([self.trace['baselines'][i], self.trace['traces'][i].max()]), pen=color)
-                self.plot_widget1.plot(peak_end, np.array([self.trace['baselines'][i], self.trace['traces'][i].max()]), pen=color)
+                self.plot_widget1.plot(peak_start, np.array([0, self.trace['traces'][i][start:end].max()]), pen=solid_pen)
+                self.plot_widget1.plot(peak_end, np.array([0, self.trace['traces'][i][start:end].max()]), pen=solid_pen)
 
             self.plot_widget2.clear()
             for i in self.fluorescence_channel_indices:
                 color = line_colors[i % len(line_colors)]
                 y = self.trace['traces'][i]
-                self.plot_widget2.plot(self.x, y, pen=color)
 
                 dotted_pen = pg.mkPen(color=color, width=2, style=Qt.DotLine)
+                dashed_pen = pg.mkPen(color=color, width=2, style=Qt.DashLine)
+                solid_pen = pg.mkPen(color=color, width=2, style=Qt.SolidLine)
+
+                self.plot_widget2.plot(self.x, y, pen=dashed_pen)
+                self.plot_widget2.plot(self.x, y-self.trace['baselines'][i], pen=solid_pen)
                 self.plot_widget2.plot(peak_span, self.trace['baselines'][i] * np.ones(2), pen=dotted_pen)
-                self.plot_widget2.plot(peak_start, np.array([self.trace['baselines'][i], self.trace['traces'][i].max()]), pen=color)
-                self.plot_widget2.plot(peak_end, np.array([self.trace['baselines'][i], self.trace['traces'][i].max()]), pen=color)
+                self.plot_widget2.plot(peak_start, np.array([0, self.trace['traces'][i][start:end].max()]), pen=solid_pen)
+                self.plot_widget2.plot(peak_end, np.array([0, self.trace['traces'][i][start:end].max()]), pen=solid_pen)
 
             self.label.setText(f"event_id={self.trace['event_id']} time={self.trace['time']}")
 

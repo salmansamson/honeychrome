@@ -37,6 +37,9 @@ bytes_per_value = 2
 traces_cache_dtype = 'uint16'
 trace_n_points = n_channels_trace * n_time_points_in_event
 traces_cache_size = max_events_in_traces_cache * trace_n_points  # e.g. 160_000_000 for 100_000 events, 16 channels, 20 us --> 50 time points, 2 bytes per value
+nearly_floor_uint16 = 65536*0.1
+nearly_ceiling_uint16 = 65536*0.9
+half_uint16 = 65536*0.5
 
 ### folder in home directory where experiments will be stored
 experiments_folder = 'Experiments'

@@ -3,7 +3,7 @@ import numpy as np
 from picosdk.ps5000a import ps5000a as ps
 from picosdk.functions import assert_pico_ok, PICO_STATUS_LOOKUP
 
-from honeychrome.settings import adc_channels, magnitude_ceiling, traces_cache_dtype, n_channels_trace, n_time_points_in_event, transfer_target_repeat_time, threshold, FSC_sense, adc_scale_mv
+from honeychrome.settings import adc_channels, magnitude_ceiling, traces_cache_dtype, n_channels_trace, n_time_points_in_event, transfer_target_repeat_time, threshold, FSC_sense, adc_scale_mv, nearly_floor_uint16
 
 index_channel_a = adc_channels.index('FSC')
 index_channel_b = adc_channels.index('B1')
@@ -50,9 +50,6 @@ PRE_TRIGGER = 8000 # e.g. 4000 x 8ns --> 32 us
 # TOTAL_WINDOW = PRE_TRIGGER + POST_TRIGGER
 TOTAL_WINDOW = int(analysis_decimation * n_time_points_in_event * 1.1)
 POST_TRIGGER = TOTAL_WINDOW - PRE_TRIGGER
-nearly_floor_uint16 = 65536*0.1
-nearly_ceiling_uint16 = 65536*0.9
-half_uint16 = 65536*0.5
 
 status = {}
 chandle = ctypes.c_int16()
