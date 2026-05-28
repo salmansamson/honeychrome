@@ -1,0 +1,381 @@
+# cytometer_whitelist.py
+#
+# Cytometer identification and fluorescence channel whitelisting.
+#
+# Mirrors the logic in get_cytometer_param.R / .CYTOMETER_PARAMS:
+#   1. Match $CYT (and CREATOR as fallback) to a known cytometer entry.
+#   2. Derive fluorescence detector column names from the full $PnN list using
+#      a two-stage filter:
+#        - Exclusion pass  : remove any channel whose name matches a non-spectral pattern.
+#        - Positive pass   : (FACSDiscover only) additionally require the name to match
+#                            a spectral pattern such as "UV3 (420)-A".
+#   3. Order the surviving channels against cytometer_database.csv.
+#
+# Returns None for unrecognised cytometers so the caller can fall back to
+# flowio's own classification.
+
+from __future__ import annotations
+
+import re
+import logging
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
+
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Per-cytometer parameter table  (mirrors .CYTOMETER_PARAMS in R)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class _CytParams:
+    cyt_label: str
+    cyt_kw_pattern: str           # regex applied to $CYT  (case-insensitive)
+    creator_pattern: Optional[str]  # regex applied to CREATOR (case-insensitive); None = not used
+    non_spectral_pat: list[str]   # channel name substrings/patterns to EXCLUDE
+    spectral_pat: Optional[str]   # positive regex that surviving channels must match (FACSDiscover only)
+    db_col: str                   # column name in cytometer_database.csv
+    scatter_param: list[str]      # canonical scatter parameters
+    sat_value: int                # max fluorescence value (saturation threshold)
+    scatter_extra_pat: list[str]   # additional channel name patterns to include as scatter
+    singlet_y_preference: str      # 'FSC-W' or 'FSC-H'
+    scatter_display_ceiling: Optional[dict[str, float]] = None  # per-channel display limit override; None = use PNR
+
+
+_CYTOMETER_PARAMS: dict[str, _CytParams] = {
+
+    "Aurora": _CytParams(
+        cyt_label       = "Cytek Aurora",
+        cyt_kw_pattern  = r"^Aurora$",
+        creator_pattern = r"SpectroFlo",
+        non_spectral_pat = ["FSC", "SSC", "Time"],
+        spectral_pat    = None,
+        db_col          = "Aurora",
+        scatter_param = ["FSC-A", "SSC-A"],
+        sat_value = 4194304,
+        scatter_extra_pat = ["SSC-B-A"],
+        singlet_y_preference = "FSC-H",
+    ),
+
+    "NorthernLights": _CytParams(
+        cyt_label       = "Cytek Northern Lights",
+        cyt_kw_pattern  = r"^Aurora$",          # same $CYT as Aurora; distinguished by UV presence
+        creator_pattern = r"SpectroFlo",
+        non_spectral_pat = ["FSC", "SSC", "Time", r"-H$", r"-W$"],
+        spectral_pat    = None,
+        db_col          = "NorthernLights",
+        scatter_param = ["FSC-A", "SSC-A"],
+        sat_value = 4194304,
+        scatter_extra_pat = ["SSC-B-A"],
+        singlet_y_preference = "FSC-H",
+    ),
+
+    "ID7000": _CytParams(
+        cyt_label       = "Sony ID7000",
+        cyt_kw_pattern  = r"ID7000",
+        creator_pattern = None,
+        non_spectral_pat = ["FSC", "SSC", "TIME", r"-H$", r"-W$"],
+        spectral_pat    = None,
+        db_col          = "ID7000",
+        scatter_param = ["FSC-A", "SSC-A"],
+        sat_value = 1048576,
+        scatter_extra_pat = [],
+        singlet_y_preference = "FSC-H",
+    ),
+
+    "FACSDiscover": _CytParams(
+        cyt_label       = "BD FACSDiscover (S8 / A8)",
+        cyt_kw_pattern  = r"FACSDiscover",
+        creator_pattern = r"FACSDiva|FACSSuite",
+        non_spectral_pat = [
+            "FSC", "SSC", "Time", "LightLoss", "Delta", "Plate",
+            "Radial", "Correlation", "Intensity", "Eccentricity",
+            "Diffusivity", "Center", "Moment", "Size", "Saturated",
+            "Sorted", "Row", "Column", "Img", "Protocol", "EventLabel",
+            "Region", "Gate", "Index", "Phase", "Event", "Drop",
+            "Spectral", "Waveform", "Merged", "Flow", "Packet", "Reserved",
+            r"-H$", r"-W$", r"-T$",
+        ],
+        spectral_pat    = r"\([0-9]+\)-A$",     # must match e.g. "UV3 (420)-A"
+        db_col          = "Discover",
+        scatter_param = ["FSC-A", "SSC (Violet)-A"],
+        sat_value = 24140237,
+        scatter_extra_pat = [r"LightLoss", r"SSC \(Imaging\)"],
+        singlet_y_preference = "FSC-H",
+        scatter_display_ceiling = {"FSC-A": 3e7, "SSC (Violet)-A": 3e7, "SSC (Imaging)-A": 3e7}, 
+    ),
+
+    "Opteon": _CytParams(
+        cyt_label       = "Agilent NovoCyte Opteon",
+        cyt_kw_pattern  = r"NovoCyte|Opteon",
+        creator_pattern = r"NovoExpress|Opteon",
+        non_spectral_pat = ["FSC", "SSC", "VSSC", "Time", r"-H$", r"-W$", "Width"],
+        spectral_pat    = None,
+        db_col          = "Opteon",
+        scatter_param = ["FSC-A", "VSSC-A"],
+        sat_value = 16777216,
+        scatter_extra_pat = ["FSC", "SSC"],
+        singlet_y_preference = "FSC-H",
+    ),
+
+    "Mosaic": _CytParams(
+        cyt_label       = "Beckman Coulter CytoFLEX Mosaic",
+        cyt_kw_pattern  = r"CytoFLEX",
+        creator_pattern = r"CytExpert",
+        non_spectral_pat = ["FSC", "SSC", "BSSC", "Time", r"-H$"],
+        spectral_pat    = None,
+        db_col          = "Mosaic",
+        scatter_param = ["FSC-A", "BSSC-A"],
+        sat_value = 16777215,
+        scatter_extra_pat = ["FSC", "SSC"],
+        singlet_y_preference = "FSC-H",
+    ),
+
+    "Xenith": _CytParams(
+        cyt_label       = "ThermoFisher Attune Xenith",
+        cyt_kw_pattern  = r"Attune|Xenith",
+        creator_pattern = r"Attune|VitesseSQ",
+        non_spectral_pat = ["FSC", "SSC", "Time", "Event", "Gate", "Sort",
+                             "Comp", r"-H$", r"-W$"],
+        spectral_pat    = None,
+        db_col          = "Xenith",
+        scatter_param = ["FSC51-A", "SSC52-A"],
+        sat_value = 100000,
+        scatter_extra_pat = ["FSC", "SSC"],
+        singlet_y_preference = "FSC-H",
+    ),
+
+    "Symphony": _CytParams(
+        cyt_label       = "BD FACSymphony A5 SE",
+        cyt_kw_pattern  = r"FACSymphony",
+        creator_pattern = r"FACSDiva|FACSSuite",
+        non_spectral_pat = ["FSC", "SSC", "Time",r"-H$", r"-W$"],
+        spectral_pat    = None,
+        db_col          = "A5SE",
+        scatter_param = ["FSC-A", "SSC-A"],
+        sat_value = 262144,
+        scatter_extra_pat = [],
+        singlet_y_preference = "FSC-H",
+    ),
+}
+
+# Path to the bundled cytometer_database.csv
+_DB_PATH = Path(__file__).parent.parent / "data" / "cytometer_database.csv"
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+@dataclass
+class CytometerInfo:
+    """Returned by resolve_cytometer_params()."""
+    cyt_label: str                   # human-readable name
+    db_col: str                      # column in cytometer_database.csv
+    fluorescence_channel_ids: list[int]  # indices into the full $PnN list
+    scatter_param: list[str]
+    sat_value: int
+    scatter_extra_pat: list[str]
+    singlet_y_preference: str
+    scatter_display_ceiling: dict[str, float]
+
+
+def resolve_cytometer_params(
+    all_pnn: list[str],
+    text_keywords: dict[str, str],
+) -> Optional[CytometerInfo]:
+    """
+    Identify the cytometer and derive the fluorescence channel indices.
+
+    Parameters
+    ----------
+    all_pnn : list[str]
+        Full ordered list of $PnN channel names from the FCS file (as returned
+        by FlowData.pnn_labels).
+    text_keywords : dict[str, str]
+        The FCS TEXT segment as a flat dict (FlowData.text).  Keys are used
+        case-insensitively.
+
+    Returns
+    -------
+    CytometerInfo  if the cytometer is recognised, otherwise None.
+    """
+    # Normalise: uppercase keys, also build a $-stripped version for lookup
+    kw_upper = {k.upper(): v for k, v in text_keywords.items()}
+    kw_noprefix = {k.lstrip("$").upper(): v for k, v in text_keywords.items()}
+
+    def _get_kw(*names: str) -> str:
+        for name in names:
+            v = kw_upper.get(name.upper()) or kw_noprefix.get(name.lstrip("$").upper())
+            if v and str(v).strip():
+                return str(v).strip()
+        return ""
+
+    cyt_kw           = _get_kw("$CYT", "CYT")
+    creator_combined = f"{_get_kw('CREATOR', '$CREATOR')}".strip()
+
+    matched = _match_cytometer(all_pnn, cyt_kw, creator_combined)
+    if matched is None:
+        return None
+
+    detector_names = _derive_detector_cols(all_pnn, matched)
+    detector_names = _order_detectors(detector_names, matched.db_col)
+
+    # Map back to indices in the original all_pnn list
+    name_to_idx = {name: i for i, name in enumerate(all_pnn)}
+    fl_ids = [name_to_idx[name] for name in detector_names if name in name_to_idx]
+
+    scatter_param = _resolve_scatter(all_pnn, matched.scatter_param)
+
+    return CytometerInfo(
+        cyt_label=matched.cyt_label,
+        db_col=matched.db_col,
+        fluorescence_channel_ids=fl_ids,
+        scatter_param=scatter_param,
+        sat_value=matched.sat_value,
+        scatter_extra_pat=matched.scatter_extra_pat,
+        singlet_y_preference=matched.singlet_y_preference,
+        scatter_display_ceiling=matched.scatter_display_ceiling or {},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Internal matching logic  (mirrors .match_cytometer in R)
+# ---------------------------------------------------------------------------
+
+def _match_cytometer(
+    all_pnn: list[str],
+    cyt_kw: str,
+    creator_combined: str,
+) -> Optional[_CytParams]:
+
+    def kw_match(pattern: str) -> bool:
+        return bool(re.search(pattern, cyt_kw, re.IGNORECASE))
+
+    def creator_match(pattern: str) -> bool:
+        return bool(re.search(pattern, creator_combined, re.IGNORECASE))
+
+    # --- Priority 1: $CYT-based matching ---
+
+    if kw_match(r"ID7000"):
+        return _CYTOMETER_PARAMS["ID7000"]
+
+    if kw_match(r"FACSDiscover"):
+        return _CYTOMETER_PARAMS["FACSDiscover"]
+
+    if kw_match(r"FACSymphony"):
+        return _CYTOMETER_PARAMS["Symphony"]
+
+    if kw_match(r"NovoCyte|Opteon"):
+        return _CYTOMETER_PARAMS["Opteon"]
+
+    if kw_match(r"CytoFLEX"):
+        return _CYTOMETER_PARAMS["Mosaic"]
+
+    if kw_match(r"Attune|Xenith"):
+        return _CYTOMETER_PARAMS["Xenith"]
+
+    # Aurora / NL share $CYT = "Aurora"; distinguished by presence of UV channels
+    if re.match(r"^Aurora$", cyt_kw, re.IGNORECASE):
+        has_uv = any(re.match(r"^UV[0-9]+-A$", ch) for ch in all_pnn)
+        return _CYTOMETER_PARAMS["Aurora"] if has_uv else _CYTOMETER_PARAMS["NorthernLights"]
+
+    # --- Priority 2: CREATOR-based fallback ---
+
+    if creator_match(r"FACSDiva|FACSSuite"):
+        has_discover_style = any(re.search(r"\([0-9]+\)-A$", ch) for ch in all_pnn)
+        return _CYTOMETER_PARAMS["FACSDiscover"] if has_discover_style else _CYTOMETER_PARAMS["Symphony"]
+
+    if creator_match(r"SpectroFlo"):
+        has_uv = any(re.match(r"^UV[0-9]+-A$", ch) for ch in all_pnn)
+        return _CYTOMETER_PARAMS["Aurora"] if has_uv else _CYTOMETER_PARAMS["NorthernLights"]
+
+    if creator_match(r"NovoExpress"):
+        return _CYTOMETER_PARAMS["Opteon"]
+
+    if creator_match(r"CytExpert"):
+        return _CYTOMETER_PARAMS["Mosaic"]
+
+    if creator_match(r"Attune|VitesseSQ|Xenith"):
+        return _CYTOMETER_PARAMS["Xenith"]
+
+    return None  # unrecognised — caller falls back to flowio
+
+
+# ---------------------------------------------------------------------------
+# Internal derivation logic  (mirrors .derive_detector_cols in R)
+# ---------------------------------------------------------------------------
+
+def _derive_detector_cols(all_pnn: list[str], params: _CytParams) -> list[str]:
+    """Apply exclusion (and optionally positive) filters to the $PnN list."""
+
+    excl_pattern = "|".join(params.non_spectral_pat)
+
+    cols = [
+        ch for ch in all_pnn
+        if ch and not re.search(excl_pattern, ch)
+    ]
+
+    # Positive pass — FACSDiscover only
+    if params.spectral_pat:
+        cols = [ch for ch in cols if re.search(params.spectral_pat, ch)]
+        if not cols:
+            logger.error(
+                "No spectral detector columns survived the positive-match filter "
+                "(pattern '%s'). The FCS file may contain only pre-unmixed channels.",
+                params.spectral_pat,
+            )
+
+    return cols
+
+
+def _order_detectors(detector_names: list[str], db_col: str) -> list[str]:
+    """
+    Re-order detector_names to match the canonical excitation/emission order
+    defined in cytometer_database.csv.  Channels not present in the database
+    are appended at the end in their original order.
+    """
+    if not _DB_PATH.exists():
+        logger.warning(
+            "cytometer_database.csv not found at %s; "
+            "detector ordering follows FCS acquisition order.",
+            _DB_PATH,
+        )
+        return detector_names
+
+    try:
+        db = pd.read_csv(_DB_PATH)
+        if db_col not in db.columns:
+            logger.warning(
+                "Column '%s' not found in cytometer_database.csv; "
+                "detector ordering follows FCS acquisition order.",
+                db_col,
+            )
+            return detector_names
+
+        ref_order = [v for v in db[db_col].dropna() if str(v).strip()]
+        ordered   = [ch for ch in ref_order   if ch in set(detector_names)]
+        remainder = [ch for ch in detector_names if ch not in set(ref_order)]
+        return ordered + remainder
+
+    except Exception as exc:
+        logger.warning(
+            "Could not read cytometer_database.csv for ordering: %s. "
+            "Detector ordering follows FCS acquisition order.",
+            exc,
+        )
+        return detector_names
+    
+def _resolve_scatter(all_pnn: list[str], canonical: list[str]) -> list[str]:
+    """Use canonical scatter names if present; otherwise grep for FSC/SSC area channels."""
+    if all(ch in all_pnn for ch in canonical):
+        return canonical
+    fallback = [ch for ch in all_pnn
+                if re.match(r"^(FSC|SSC|BSSC|VSSC)", ch) and ch.endswith("-A")]
+    if not fallback:
+        logger.warning("No scatter channels found; scatter plots will be unavailable.")
+    return fallback
