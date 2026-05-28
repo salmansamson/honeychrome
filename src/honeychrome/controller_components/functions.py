@@ -104,17 +104,32 @@ def assign_default_transforms(settings, channels=None):
 
     for label in channels:
         index = settings['event_channels_pnn'].index(label)
-        if index in settings['scatter_channel_ids'] or index in settings['fluorescence_channel_ids']:
+        channel_pnr = settings.get('channel_pnr')
+        if index in settings['scatter_channel_ids']:
+            if label[-2:] == '-W' or label in settings['width_channels']:
+                ceiling = settings['width_ceiling']
+            elif channel_pnr:
+                ceiling = float(channel_pnr[index])
+            else:
+                ceiling = settings['magnitude_ceiling']
+        elif index in settings['fluorescence_channel_ids']:
             ceiling = settings['magnitude_ceiling']
         else:
             ceiling = settings['default_ceiling']
-
-        if label[-2:] == '-W' or label in settings['width_channels']:
-            ceiling = settings['width_ceiling']
+            if label[-2:] == '-W' or label in settings['width_channels']:
+                ceiling = settings['width_ceiling']
 
         if index in settings['scatter_channel_ids']:
             id = 0  # linear
-            limits = [0, 1]
+            display_ceiling_overrides = settings.get('scatter_display_ceiling', {})
+            if label in display_ceiling_overrides and ceiling > 0:
+                # Clamp the initial viewport to the override value in display space,
+                # leaving scale_t (and therefore the transform) covering the full PNR.
+                # The user can still zoom out beyond this limit.
+                display_limit = min(display_ceiling_overrides[label] / ceiling, 1.0)
+            else:
+                display_limit = 1.0
+            limits = [0, display_limit]
         elif index in settings['fluorescence_channel_ids']:
             id = 1  # logicle
             limits = [0, 1]

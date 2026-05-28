@@ -1,5 +1,6 @@
 import warnings
 from copy import deepcopy
+import re
 
 import numpy as np
 from PySide6.QtCore import QObject, Signal, QTimer
@@ -10,6 +11,7 @@ from honeychrome.controller_components.functions import timer, apply_gates_in_pl
 from honeychrome.controller_components.gml_functions_mod_from_flowkit import to_gml
 from honeychrome.settings import settings_default, process_default, cytometry_default
 from honeychrome.view_components.busy_cursor import with_busy_cursor
+from honeychrome.controller_components.cytometer_whitelist import resolve_cytometer_params
 
 import logging
 logger = logging.getLogger(__name__)
@@ -70,8 +72,65 @@ class ImportFCSController(QObject):
                     # set up all raw settings
                     time_channel_id = sample_metadata.time_index
                     scatter_channel_ids = sample_metadata.scatter_indices
-                    fluorescence_channel_ids = sample_metadata.fluoro_indices
                     event_channels_pnn = all_sample_pnn[0]
+
+                    # Attempt cytometer-aware fluorescence channel identification.
+                    # resolve_cytometer_params() reads $CYT (and CREATOR as a
+                    # fallback) and filters the $PnN list to raw detector channels
+                    # only, excluding pre-unmixed parameters written by instruments
+                    # like the FACSDiscover or Xenith.  Returns None for unrecognised
+                    # cytometers, in which case we fall back to flowio's own
+                    # classification (previous behaviour).
+                    cyt_info = resolve_cytometer_params(
+                        all_pnn=event_channels_pnn,
+                        text_keywords=sample_metadata.text,
+                    )
+
+                    if cyt_info is not None:
+                        # --- DIAGNOSTIC: remove before release ---
+                        from honeychrome.controller_components.cytometer_whitelist import _CYTOMETER_PARAMS
+                        logger.info('Opteon non_spectral_pat: %s', _CYTOMETER_PARAMS['Opteon'].non_spectral_pat)
+                        logger.info('fluoro count before override: %d', len(cyt_info.fluorescence_channel_ids))
+                        logger.info('fluoro channel names: %s', [event_channels_pnn[i] for i in cyt_info.fluorescence_channel_ids])
+                        # --- END DIAGNOSTIC ---
+                        fluorescence_channel_ids = cyt_info.fluorescence_channel_ids
+                        logger.info(
+                            'Cytometer identified as "%s". '
+                            'Using whitelisted fluorescence channels (%d channels).',
+                            cyt_info.cyt_label,
+                            len(fluorescence_channel_ids),
+                        )
+                        # Override flowio scatter detection with cytometer-specific
+                        # canonical names — flowio only recognises FSC/SSC exactly
+                        scatter_base_names = [ch.rsplit('-', 1)[0] for ch in cyt_info.scatter_param]
+                        extra_pat = (
+                            re.compile('|'.join(cyt_info.scatter_extra_pat))
+                            if cyt_info.scatter_extra_pat else None
+                        )
+                        scatter_channel_ids = [
+                            i for i, ch in enumerate(event_channels_pnn)
+                            if ch.rsplit('-', 1)[0] in scatter_base_names
+                            or (extra_pat is not None and re.search(extra_pat, ch))
+                        ]
+                        self.experiment.settings['raw']['cytometer'] = cyt_info.cyt_label
+                        self.experiment.settings['raw']['cytometer_db_col'] = cyt_info.db_col
+                        self.experiment.settings['raw']['scatter_param'] = cyt_info.scatter_param 
+                    else:
+                        fluorescence_channel_ids = sample_metadata.fluoro_indices
+                        cyt_kw = next(
+                            (v for k, v in sample_metadata.text.items() if k.upper() in ('$CYT', 'CYT') and v),
+                            ''
+                        )
+                        logger.warning(
+                            'Cytometer not recognised ($CYT="%s"). '
+                            'Falling back to flowio fluorescence channel classification. '
+                            'If this file is from a FACSDiscover or Xenith, '
+                            'pre-unmixed channels may be included.',
+                            cyt_kw,
+                        )
+                        self.experiment.settings['raw']['cytometer'] = cyt_kw or 'Unknown'
+                        self.experiment.settings['raw']['cytometer_db_col'] = None
+                    
                     event_channels_pnn_stripped = event_channels_pnn.copy()
                     for suffix in ['-A', '-H', '-W']:
                         event_channels_pnn_stripped = [c.removesuffix(suffix) if c.endswith(suffix) else c for c in event_channels_pnn_stripped]
@@ -88,10 +147,14 @@ class ImportFCSController(QObject):
                     magnitude_ceiling = self.experiment.settings['raw']['magnitude_ceiling']
                     width_ceiling = self.experiment.settings['raw']['width_ceiling']
                     default_ceiling = self.experiment.settings['raw']['default_ceiling']
-                    if len(area_channels) > 0:
-                        magnitude_ceiling = float(np.max([pnr[event_channels_pnn_stripped.index(c)] for c in area_channels]))
-                    if len(height_channels) > 0:
-                        magnitude_ceiling = float(np.max([pnr[event_channels_pnn_stripped.index(c)] for c in height_channels]))
+                    if cyt_info is not None:
+                        # Use only whitelisted fluorescence channels for the ceiling
+                        magnitude_ceiling = float(cyt_info.sat_value)
+                    else:
+                        if len(area_channels) > 0:
+                            magnitude_ceiling = float(np.max([pnr[event_channels_pnn_stripped.index(c)] for c in area_channels]))
+                        if len(height_channels) > 0:
+                            magnitude_ceiling = float(np.max([pnr[event_channels_pnn_stripped.index(c)] for c in height_channels]))
                     if len(width_channels) > 0:
                         width_ceiling = float(np.max([pnr[event_channels_pnn_stripped.index(c)] for c in width_channels]))
                     n_scatter_channels = len(scatter_channel_ids)
@@ -112,9 +175,28 @@ class ImportFCSController(QObject):
                     self.experiment.settings['raw']['n_scatter_channels'] = n_scatter_channels
                     self.experiment.settings['raw']['fluorescence_channel_ids'] = fluorescence_channel_ids
                     self.experiment.settings['raw']['n_fluorophore_channels'] = n_fluorophore_channels
+                    self.experiment.settings['raw']['channel_pnr'] = [float(v) for v in pnr]
+                    self.experiment.settings['raw']['scatter_display_ceiling'] = (
+                        cyt_info.scatter_display_ceiling if cyt_info is not None else {}
+                    )
+
+                    # --- DIAGNOSTIC: remove before release ---
+                    for i, (name, r) in enumerate(zip(event_channels_pnn, pnr)):
+                        logger.info(
+                            'Channel %d: %-25s  PNR=%-12s  scatter=%-5s  fluoro=%s',
+                            i, name, r,
+                            i in scatter_channel_ids,
+                            i in fluorescence_channel_ids,
+                        )
+                    # --- END DIAGNOSTIC ---
 
                     # set up raw transforms
                     self.experiment.cytometry['raw_transforms'] = assign_default_transforms(self.experiment.settings['raw'])
+                    # --- DIAGNOSTIC ---
+                    logger.info('FSC-H transform: %s', self.experiment.cytometry['raw_transforms'].get('FSC-H'))
+                    logger.info('FSC-A transform: %s', self.experiment.cytometry['raw_transforms'].get('FSC-A'))
+                    logger.info('channel_pnr stored: %s', self.experiment.settings['raw'].get('channel_pnr', 'NOT FOUND')[:5])
+                    # --- END DIAGNOSTIC ---
                     raw_transformations = generate_transformations(self.experiment.cytometry['raw_transforms'])
 
                     # set up raw gating
@@ -122,54 +204,109 @@ class ImportFCSController(QObject):
                     for label in event_channels_pnn:
                         raw_gating.transformations[label] = raw_transformations[label].xform
 
-                    if 'FSC' in area_channels:
-                        morph_x = 'FSC-A'
-                    elif 'FSC' in height_channels:
-                        morph_x = 'FSC-H'
+                    if cyt_info is not None and len(cyt_info.scatter_param) >= 2:
+                        # Use cytometer-specific canonical scatter channel names
+                        morph_x = cyt_info.scatter_param[0] if cyt_info.scatter_param[0] in event_channels_pnn else None
+                        morph_y = cyt_info.scatter_param[1] if cyt_info.scatter_param[1] in event_channels_pnn else None
                     else:
-                        morph_x = None
-
-                    if morph_x is not None:
-                        if 'SSC' in area_channels:
-                            morph_y = 'SSC-A'
-                        elif 'SSC' in height_channels:
-                            morph_y = 'SSC-H'
+                        # Fallback: original hardcoded FSC/SSC detection
+                        if 'FSC' in area_channels:
+                            morph_x = 'FSC-A'
+                        elif 'FSC' in height_channels:
+                            morph_x = 'FSC-H'
                         else:
-                            morph_y = None
+                            morph_x = None
+
+                        if morph_x is not None:
+                            if 'SSC' in area_channels:
+                                morph_y = 'SSC-A'
+                            elif 'SSC' in height_channels:
+                                morph_y = 'SSC-H'
+                            else:
+                                morph_y = None
 
                     if (morph_x is not None) and (morph_y is not None):
                         sing_x = morph_x
-                        if 'FSC' in width_channels:
+                        preferred = cyt_info.singlet_y_preference if cyt_info is not None else 'FSC-W'
+                        if preferred == 'FSC-H' and 'FSC' in height_channels and 'FSC-H' in event_channels_pnn:
+                            sing_y = 'FSC-H'
+                        elif preferred == 'FSC-W' and 'FSC' in width_channels:
                             sing_y = 'FSC-W'
-                        elif (sing_x == 'FSC-A') and 'FSC' in height_channels:
+                        elif 'FSC' in width_channels:
+                            sing_y = 'FSC-W'
+                        elif 'FSC' in height_channels and 'FSC-H' in event_channels_pnn:
                             sing_y = 'FSC-H'
                         else:
                             sing_y = None
 
+                    # --- DIAGNOSTIC ---
+                    logger.info('morph_x=%s morph_y=%s sing_x=%s height_channels=%s width_channels=%s',
+                                morph_x, morph_y, sing_x, height_channels, width_channels)
+                    # --- END DIAGNOSTIC ---
+                    
+                    # --- DIAGNOSTIC ---
+                    logger.info('sing_x=%s sing_y=%s preferred=%s',
+                                sing_x, sing_y,
+                                cyt_info.singlet_y_preference if cyt_info else 'None')
+                    # --- END DIAGNOSTIC ---
+                    
                     time_plot = None
                     morph_plot = None
                     singlet_plot = None
                     label = 'root'
+                    # Resolve per-channel display ceilings for gate placement.
+                    # Gates are positioned as fractions of the display ceiling (not the
+                    # full PNR), so they land on-screen when a scatter_display_ceiling
+                    # override is active (e.g. FACSDiscover FSC-A).
+                    scatter_display_ceiling = self.experiment.settings['raw'].get('scatter_display_ceiling', {})
+
+                    def _display_ceil(channel):
+                        """Raw value at the top of the initial display viewport for channel."""
+                        return scatter_display_ceiling.get(channel, pnr[event_channels_pnn.index(channel)])
+
                     if (morph_x is not None) and (morph_y is not None):
                         label = 'Cells'
-                        # range_max_x = raw_transformations[morph_x].xform.inverse(1)
-                        # range_max_y = raw_transformations[morph_y].xform.inverse(1)
-                        dim_x = Dimension(morph_x, range_min=0.2, range_max=0.8, transformation_ref=morph_x)
-                        dim_y = Dimension(morph_y, range_min=0.2, range_max=0.8, transformation_ref=morph_y)
+                        morph_x_ceil = _display_ceil(morph_x)
+                        morph_y_ceil = _display_ceil(morph_y)
+                        morph_x_pnr  = pnr[event_channels_pnn.index(morph_x)]
+                        morph_y_pnr  = pnr[event_channels_pnn.index(morph_y)]
+                        dim_x = Dimension(morph_x, range_min=0.2 * morph_x_ceil / morph_x_pnr,
+                                          range_max=0.8 * morph_x_ceil / morph_x_pnr, transformation_ref=morph_x)
+                        dim_y = Dimension(morph_y, range_min=0.2 * morph_y_ceil / morph_y_pnr,
+                                          range_max=0.8 * morph_y_ceil / morph_y_pnr, transformation_ref=morph_y)
                         gate = gates.RectangleGate(label, dimensions=[dim_x, dim_y])
                         raw_gating.add_gate(gate, gate_path=('root',))
                         morph_plot = [{'type': 'hist2d', 'channel_x': morph_x, 'channel_y': morph_y, 'source_gate': 'root', 'child_gates': ['Cells']}]
 
                         if (sing_x is not None) and (sing_y is not None):
                             label = 'Singlets'
+                            sing_x_pnr = pnr[event_channels_pnn.index(sing_x)]
+                            sing_y_pnr = pnr[event_channels_pnn.index(sing_y)]
+                            sing_x_ceil = _display_ceil(sing_x)
+                            sing_y_ceil = _display_ceil(sing_y)
+                            # --- DIAGNOSTIC ---
+                            logger.info('sing_x=%s pnr=%s ceil=%s  sing_y=%s pnr=%s ceil=%s',
+                                        sing_x, sing_x_pnr, sing_x_ceil, sing_y, sing_y_pnr, sing_y_ceil)
+                            # --- END DIAGNOSTIC ---
                             if sing_y == 'FSC-W':
-                                dim_x = Dimension(sing_x, range_min=0.2, range_max=0.8, transformation_ref=sing_x)
-                                dim_y = Dimension(sing_y, range_min=0.2, range_max=0.8, transformation_ref=sing_y)
+                                dim_x = Dimension(sing_x, range_min=0.2 * sing_x_ceil / sing_x_pnr,
+                                                  range_max=0.8 * sing_x_ceil / sing_x_pnr, transformation_ref=sing_x)
+                                dim_y = Dimension(sing_y, range_min=0.2 * sing_y_ceil / sing_y_pnr,
+                                                  range_max=0.8 * sing_y_ceil / sing_y_pnr, transformation_ref=sing_y)
                                 gate = gates.RectangleGate(label, dimensions=[dim_x, dim_y])
-                            else:  # FSC-H
+                            else:  # FSC-H — vertices in display space (post-transform)
+                                tr_x = raw_transformations[sing_x]
+                                tr_y = raw_transformations[sing_y]
+                                def _tx(v): return float(tr_x.xform.apply(np.array([v]))[0])
+                                def _ty(v): return float(tr_y.xform.apply(np.array([v]))[0])
                                 dim_x = Dimension(sing_x, range_min=0, range_max=1, transformation_ref=sing_x)
                                 dim_y = Dimension(sing_y, range_min=0, range_max=1, transformation_ref=sing_y)
-                                vertices = [(0.2, 0.1), (0.8, 0.7), (0.8, 0.9), (0.2, 0.3)]
+                                vertices = [
+                                    (_tx(0.2 * sing_x_ceil), _ty(0.1 * sing_y_ceil)),
+                                    (_tx(0.8 * sing_x_ceil), _ty(0.7 * sing_y_ceil)),
+                                    (_tx(0.8 * sing_x_ceil), _ty(0.9 * sing_y_ceil)),
+                                    (_tx(0.2 * sing_x_ceil), _ty(0.3 * sing_y_ceil)),
+                                ]
                                 gate = gates.PolygonGate(label, dimensions=[dim_x, dim_y], vertices=vertices)
                             raw_gating.add_gate(gate, gate_path=('root', 'Cells'))
                             singlet_plot = [{'type': 'hist2d', 'channel_x': sing_x, 'channel_y': sing_y, 'source_gate': 'Cells', 'child_gates': ['Singlets']}]
@@ -202,6 +339,7 @@ class ImportFCSController(QObject):
                     # otb: suggest not listing all the channels, as this can be too long
                     text = (f'Experiment successfully configured for imported FCS files.\n\n'
                             f'Number of FCS files imported: {len(raw_samples)}\n'
+                            f'Cytometer: {self.experiment.settings['raw']['cytometer']}\n'
                             f'Number of scatter channels: {n_scatter_channels}\n'
                             f'Number of fluorescence channels: {n_fluorophore_channels}\n'
                             #f'Area channels: {self.experiment.settings['raw']['area_channels']}\n'

@@ -98,8 +98,16 @@ class ProfileUpdater:
 
                 for target_gate_label in [positive_gate_label, negative_gate_label]:
                     if not self.raw_gating.find_matching_gate_paths(target_gate_label):
-                        channel_x = 'FSC-A'
-                        channel_y = 'SSC-A'
+                        # Use the actual scatter channels from the morph plot, not hardcoded FSC-A/SSC-A
+                        morph_plot = next(
+                            (p for p in raw_plots if p['type'] == 'hist2d' and p.get('source_gate') == 'root'
+                             and p['channel_x'] in self.controller.experiment.settings['raw']['event_channels_pnn']
+                             and p['channel_y'] in self.controller.experiment.settings['raw']['event_channels_pnn']),
+                            None
+                        )
+                        _sp = self.controller.experiment.settings['raw'].get('scatter_param', ['FSC-A', 'SSC-A'])
+                        channel_x = morph_plot['channel_x'] if morph_plot else _sp[0]
+                        channel_y = morph_plot['channel_y'] if morph_plot else _sp[1]
                         dim_x = Dimension(channel_x, range_min=0.2, range_max=0.8, transformation_ref=channel_x)
                         dim_y = Dimension(channel_y, range_min=(0.1 if target_gate_label == positive_gate_label else 0.3),
                                                     range_max=(0.7 if target_gate_label == positive_gate_label else 0.9),
@@ -547,7 +555,7 @@ class SpectralAutoGenerator(QObject):
             else:
                 warnings.warn(f'Unknown particle type from name, assigning as {particle_type}')
 
-            match = re.findall(r'^(.*?)(?=\(|cell|bead)', tubename, re.IGNORECASE)
+            match = re.findall(r'^(.*?)(?=\s*[\(\[]|\s+(?:cells?|beads?)\s*$)', tubename, re.IGNORECASE)
             raw_label = match[0].strip() if match else tubename
 
             # Strip leading plate-position prefixes like "A1 ", "B12 " before label matching
@@ -869,20 +877,23 @@ class SpectralCleaner(QObject):
                 extra_channel_ids=scatter_ch_ids,
             )
 
-            # Reduce scatter to FSC-A and SSC-A columns only (scatter_match_negative
-            # expects shape (n, 2); scatter_ch_ids may include -H and -W variants).
+            # Reduce scatter to the canonical morphology pair (scatter_param[0], scatter_param[1]).
+            # scatter_match_negative expects shape (n, 2); scatter_ch_ids may include -H and -W variants.
+            scatter_param = self.controller.experiment.settings['raw'].get('scatter_param', ['FSC-A', 'SSC-A'])
+            morph_x_name, morph_y_name = scatter_param[0], scatter_param[1]
+
             def _fsc_ssc_cols(all_scatter: np.ndarray) -> np.ndarray:
-                fsc_a = next((col for col, ch_id in enumerate(scatter_ch_ids)
-                            if scatter_ch_pnn[ch_id] == 'FSC-A'), None)
-                ssc_a = next((col for col, ch_id in enumerate(scatter_ch_ids)
-                            if scatter_ch_pnn[ch_id] == 'SSC-A'), None)
-                if fsc_a is None:
-                    fsc_a = next((col for col, ch_id in enumerate(scatter_ch_ids)
+                col_x = next((col for col, ch_id in enumerate(scatter_ch_ids)
+                            if scatter_ch_pnn[ch_id] == morph_x_name), None)
+                col_y = next((col for col, ch_id in enumerate(scatter_ch_ids)
+                            if scatter_ch_pnn[ch_id] == morph_y_name), None)
+                if col_x is None:
+                    col_x = next((col for col, ch_id in enumerate(scatter_ch_ids)
                                 if 'FSC' in scatter_ch_pnn[ch_id]), 0)
-                if ssc_a is None:
-                    ssc_a = next((col for col, ch_id in enumerate(scatter_ch_ids)
+                if col_y is None:
+                    col_y = next((col for col, ch_id in enumerate(scatter_ch_ids)
                                 if 'SSC' in scatter_ch_pnn[ch_id]), 1)
-                return all_scatter[:, [fsc_a, ssc_a]]
+                return all_scatter[:, [col_x, col_y]]
             
             pos_scatter = _fsc_ssc_cols(pos_scatter_all) if pos_scatter_all.shape[1] > 2 else pos_scatter_all
 

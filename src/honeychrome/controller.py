@@ -192,10 +192,13 @@ class Controller(QObject):
 
     @Slot(str)
     def save_experiment(self, experiment_path=None):
+        if self.raw_transformations is None:
+            logger.warning('Controller: save_experiment called before transformations initialised, skipping')
+            return
         # convert ephemeral gating back to gml
         self.experiment.cytometry['raw_gating'] = to_gml(self.raw_gating)
         update_transforms(self.experiment.cytometry['raw_transforms'], self.raw_transformations)
-        if self.experiment.process['unmixing_matrix'] is not None:
+        if self.experiment.process['unmixing_matrix'] is not None and self.unmixed_gating is not None:
             self.experiment.cytometry['gating'] = to_gml(self.unmixed_gating)
             update_transforms(self.experiment.cytometry['transforms'], self.unmixed_transformations)
 
@@ -263,6 +266,8 @@ class Controller(QObject):
             sets_to_update = [(self.raw_transformations, self.raw_gating, self.raw_lookup_tables)]
         elif mode == 'unmixed':
             sets_to_update = [(self.unmixed_transformations, self.unmixed_gating, self.unmixed_lookup_tables)]
+        else:
+            return
 
         for n in range(len(sets_to_update)):
             transformations, gating, lookup_tables = sets_to_update[n]
@@ -479,7 +484,7 @@ class Controller(QObject):
         # extra lines here for debugging that horrible error caused by raw_transformations not being updated
         try:
             self.calculate_lookup_tables() # (re)create all lookup tables
-        except:
+        except Exception:
             logger.warning(self.raw_transformations)
             logger.warning(self.raw_gating)
             logger.warning(self.data_for_cytometry_plots_raw['transformations'] is self.raw_transformations)
@@ -559,6 +564,7 @@ class Controller(QObject):
             combined = combine_af_precomputed(cached)
 
         self.af_precomputed = combined
+        assert af_spectra is not None
         self.af_spectra = af_spectra
         logger.info(
         f'Controller: AF matrices set for {self.current_sample_path} '
@@ -604,8 +610,6 @@ class Controller(QObject):
             )
             return True
         except Exception as e:
-            logger.error(f'cache_af_profile: failed for "{profile_name}": {e}')
-            return False
             logger.error(f'cache_af_profile: failed for "{profile_name}": {e}')
             return False
 
@@ -1306,7 +1310,7 @@ class Controller(QObject):
                 gate = gating.get_gate(gate_name)
                 gate.quadrants = {q.id: q for q in quadrants}
 
-            logger.info('Quad gate dividers:', [q[1]._divider_ranges for q in gate.quadrants.items()])
+            logger.info(f'Quad gate dividers: {[q[1]._divider_ranges for q in gate.quadrants.items()]}')
 
         elif gate_type == 'range':
             x1 = gate_data['x1']
@@ -1320,7 +1324,7 @@ class Controller(QObject):
                 gate = gating.get_gate(gate_name)
                 gate.dimensions = [dim_x]
 
-            logger.info([gate, gate.dimensions, gate.dimensions[0].min, gate.dimensions[0].max])
+            logger.info(str([gate, gate.dimensions, gate.dimensions[0].min, gate.dimensions[0].max]))
 
         elif gate_type == 'polygon':
             origin = gate_data['origin']
@@ -1336,7 +1340,7 @@ class Controller(QObject):
                 gate = gating.get_gate(gate_name)
                 gate.vertices = vertices
 
-            logger.info([gate, gate.vertices])
+            logger.info(str([gate, gate.vertices]))
 
         elif gate_type == 'rectangle':
             pos = np.array(gate_data['pos'])
@@ -1351,8 +1355,8 @@ class Controller(QObject):
                 gate = gating.get_gate(gate_name)
                 gate.dimensions = [dim_x, dim_y]
 
-            logger.info([gate, gate.dimensions, gate.dimensions[0].min, gate.dimensions[0].max, gate.dimensions[1].min,
-                   gate.dimensions[1].max])
+            logger.info(str([gate, gate.dimensions, gate.dimensions[0].min, gate.dimensions[0].max, gate.dimensions[1].min,
+                   gate.dimensions[1].max]))
 
 
         elif gate_type == 'ellipse':
@@ -1371,7 +1375,7 @@ class Controller(QObject):
                 gate.covariance_matrix = covariance_matrix
                 gate.distance_square = distance_square
 
-            logger.info([gate, gate.coordinates, gate.covariance_matrix, gate.distance_square])
+            logger.info(str([gate, gate.coordinates, gate.covariance_matrix, gate.distance_square]))
 
         logger.info(gating.get_gate_ids())
 
@@ -1418,7 +1422,7 @@ class Controller(QObject):
                 fl_pnn = [self.experiment.settings['raw']['event_channels_pnn'][n] for n in self.experiment.settings['raw']['fluorescence_channel_ids']]
                 update_transforms(self.experiment.cytometry['raw_transforms'], self.raw_transformations)
                 for label in self.experiment.cytometry['raw_transforms']:
-                    if label not in fl_pnn:
+                    if label not in fl_pnn and label in self.experiment.cytometry['transforms']:
                         self.experiment.cytometry['transforms'][label].update(self.experiment.cytometry['raw_transforms'][label])
 
                 # copy all non-fl gates from raw
