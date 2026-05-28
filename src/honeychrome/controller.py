@@ -1252,6 +1252,9 @@ class Controller(QObject):
             # apply gates to event data
             # if gates_to_calculate is none, then initialise gates_membership dict, otherwise reference it from data_for_cytometry_plots
             if not gates_to_calculate:
+                gating = self.data_for_cytometry_plots['gating']
+                if gating is None:
+                    return
                 #todo hopefully verify bug has gone here?
                 #fixed, I think, but always reinitialising from scratch
                 gate_membership = {'root': np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)}
