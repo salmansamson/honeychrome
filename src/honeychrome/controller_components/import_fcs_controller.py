@@ -199,16 +199,16 @@ class ImportFCSController(QObject):
                     self.experiment.cytometry['raw_plots'] = raw_plots
                     self.experiment.cytometry['gating'] = None
                     self.experiment.save()
-
+                    # otb: suggest not listing all the channels, as this can be too long
                     text = (f'Experiment successfully configured for imported FCS files.\n\n'
                             f'Number of FCS files imported: {len(raw_samples)}\n'
                             f'Number of scatter channels: {n_scatter_channels}\n'
                             f'Number of fluorescence channels: {n_fluorophore_channels}\n'
-                            f'Area channels: {self.experiment.settings['raw']['area_channels']}\n'
-                            f'Height channels: {self.experiment.settings['raw']['height_channels']}\n'
-                            f'Width channels: {self.experiment.settings['raw']['width_channels']}\n'
+                            #f'Area channels: {self.experiment.settings['raw']['area_channels']}\n'
+                            #f'Height channels: {self.experiment.settings['raw']['height_channels']}\n'
+                            #f'Width channels: {self.experiment.settings['raw']['width_channels']}\n'
                             f'Scatter channels: {self.experiment.settings['raw']['scatter_channels']}\n'
-                            f'Fluorescence channels: {self.experiment.settings['raw']['fluorescence_channels']}\n'
+                            #f'Fluorescence channels: {self.experiment.settings['raw']['fluorescence_channels']}\n'
                             f'Magnitude ceiling: {self.experiment.settings['raw']['magnitude_ceiling']}\n'
                             f'Time channel ID: {self.experiment.settings['raw']['time_channel_id']}\n'
                             f'Event ID channel ID: {self.experiment.settings['raw']['event_id_channel_id']}\n'
