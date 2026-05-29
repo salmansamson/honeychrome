@@ -70,13 +70,18 @@ def create_folder_link(experiment_path, link_name, target_path):
         return
     except OSError as e:
         # If not on Windows, or error isn't permission related, re-raise
-        if sys.platform != "win32" or e.winerror != 1314:
+        if sys.platform != "win32" or e.winerror not in (1314, 5):
             raise e
 
         print("Standard symlink failed (Privilege Error). Attempting Windows Junction...")
 
     # 3. Windows Fallback: Create a Junction (/J)
     # Junctions don't require Admin privileges.
+    # — but only if target is not a UNC path
+    if str(target).startswith('\\\\'):
+        # Junctions don't support UNC targets; warn the user
+        raise OSError(f"Cannot create a junction to a UNC network path: {str(target)}. "
+                      "Map the network drive and use the mapped drive letter instead.")
     try:
         # mklink is a shell built-in, so shell=True is required
         cmd = f'mklink /J "{link}" "{target}"'

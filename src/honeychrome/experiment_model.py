@@ -31,6 +31,7 @@ methods:
 -create or update gate
 '''
 
+import time
 import json
 import sys
 from copy import deepcopy
@@ -59,13 +60,22 @@ def safe_save(content, filename):
     # Write to temp file
     with open(temp_name, 'w') as f:
         f.write(content)
+        f.flush()
         os.fsync(f.fileno())
 
-    # Atomic rename
-    try:
-        os.replace(temp_name, filename)
-    except Exception as e:
-        logger.error(f'Failed to replace {filename}. Saved as {temp_name}. {e}')
+    # Retry loop handles transient locks (antivirus, indexer, concurrent save)
+    for attempt in range(5):
+        try:
+            os.replace(temp_name, filename)
+            return
+        except PermissionError as e:
+            if attempt < 4:
+                time.sleep(0.1 * (attempt + 1))
+            else:
+                logger.error(f'Failed to replace {filename}. Saved as {temp_name}. {e}')
+        except Exception as e:
+            logger.error(f'Failed to replace {filename}. Saved as {temp_name}. {e}')
+            return
 
 def check_fcs_matches_experiment(sample_full_path, experiment_pnn_raw, magnitude_ceiling):
     # sample_metadata = flowio_v14.FlowData(sample_full_path, only_text=True)

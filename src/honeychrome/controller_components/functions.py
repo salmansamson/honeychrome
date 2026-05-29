@@ -383,7 +383,11 @@ def calc_hists(data_for_cytometry_plots, indices_plots_to_calculate=None, status
             status_message_signal.emit(f'Calculating {n}/{len(plots)} histograms...')
 
         source_gate = plot['source_gate']
-        mask = gate_membership[source_gate]
+        mask = gate_membership.get(source_gate)
+        if mask is None:
+            logger.warning(f"calc_hists: gate '{source_gate}' not in gate_membership — skipping plot {n}] - is this due to _reinitialise_process_plots_worker from a background thread and gate_membership is only partially built when calc_hists is called concurrently?")
+            continue
+
         if plot['type'] == 'hist1d':
             id_channel = pnn.index(plot['channel_x'])
             transform = transformations[plot['channel_x']]
@@ -443,12 +447,13 @@ def calc_stats(data_for_cytometry_plots, initialise=True):
             gate_node = gating._get_gate_node(gate_id_full[0], gate_id_full[1])
             if gate_node.gate_type != 'QuadrantGate':  # bit of a hack. Can't find a better way of excluding Quadrants
                 gate_id = gate_id_full[0]
+                gate_path = gate_id_full[1]
                 # parent_id = gate_id[0][1][-1]
-                parent_id = data_for_cytometry_plots['gating'].get_parent_gate_id(gate_id)
+                parent_id = data_for_cytometry_plots['gating'].get_parent_gate_id(gate_id, gate_path=gate_path)
                 if parent_id is None:
                     parent_id = 'root'
                 else:
-                    parent_id = gating.get_parent_gate_id(gate_id)
+                    parent_id = gating.get_parent_gate_id(gate_id, gate_path=gate_path)
                     if gating._get_gate_node(parent_id[0], parent_id[1]).gate_type != 'QuadrantGate':
                         parent_id = parent_id[0]
                     else:
@@ -474,14 +479,18 @@ def calc_stats(data_for_cytometry_plots, initialise=True):
                 # print(gate_id, parent_id)
 
                 # if gate has dimensions, calculate MFI and rCV for each channel
-                channels = [dim.id for dim in gate_node.gate.dimensions]
-                intensity = {}
-                rCV = {}
-                if len(gate_membership[gate_id]) > 0:
-                    intensity = {channel: event_data[gate_membership[gate_id], pnn.index(channel)].mean() for channel in channels}
-                    rCV = {channel: robust_cv(event_data[gate_membership[gate_id], pnn.index(channel)]) for channel in channels}
+                if hasattr(gate_node.gate, 'dimensions'):
+                    channels = [dim.id for dim in gate_node.gate.dimensions]
+                    intensity = {}
+                    rCV = {}
+                    if len(gate_membership[gate_id]) > 0:
+                        intensity = {channel: event_data[gate_membership[gate_id], pnn.index(channel)].mean() for channel in channels}
+                        rCV = {channel: robust_cv(event_data[gate_membership[gate_id], pnn.index(channel)]) for channel in channels}
 
-                statistics[gate_id] = {'n_events_gate': n_events_gate, 'p_gate_total': p_gate_total, 'p_gate_parent': p_gate_parent, 'event_conc': np.nan, 'intensity': intensity, 'rCV': rCV}
+                    statistics[gate_id] = {'n_events_gate': n_events_gate, 'p_gate_total': p_gate_total, 'p_gate_parent': p_gate_parent, 'event_conc': np.nan, 'intensity': intensity, 'rCV': rCV}
+                else:
+                    statistics[gate_id] = {'n_events_gate': n_events_gate, 'p_gate_total': p_gate_total, 'p_gate_parent': p_gate_parent, 'event_conc': np.nan}
+
 
     return statistics
 

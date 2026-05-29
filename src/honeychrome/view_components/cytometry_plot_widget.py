@@ -430,8 +430,15 @@ class CytometryPlotWidget(QFrame):
         gate_names = ['root'] + [g[0] for g in gate_ids if g[0] not in descendant_set]
         self.plot_title.leftClickMenuItems = gate_names
         self.plot_title.leftClickMenuFunction = self.set_source_gate
+
+        if self.plot['source_gate'] not in gate_names:
+            # source gate was removed; fall back to root
+            logger.warning(f"CytometryPlotWidget configure_title: source_gate '{self.plot['source_gate']}' not in gate_names, reset to root")
+            self.plot['source_gate'] = 'root'
+
         self.plot_title.setText(self.plot['source_gate'])
         self.plot_title.leftItemSelected = gate_names.index(self.plot['source_gate'])
+
 
     def set_axis_transform(self, n, parent):
         if self.plot['type'] == 'ribbon':
