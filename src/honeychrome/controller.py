@@ -1084,32 +1084,8 @@ class Controller(QObject):
         if self.current_mode == 'process':
             self.data_for_cytometry_plots.update({'event_data': self.unmixed_event_data})
             self.data_for_cytometry_plots['histograms'] = initialise_hists(self.data_for_cytometry_plots['plots'], self.data_for_cytometry_plots)
-            # Seed gate_membership with root so calc_hists_and_stats enters the correct branch
-            # and calc_stats never encounters a missing gate key.
-            if self.unmixed_event_data is not None:
-                self.data_for_cytometry_plots['gate_membership'] = {
-                    'root': np.ones(len(self.unmixed_event_data), dtype=np.bool_)
-                }
-            else:
-                self.data_for_cytometry_plots['gate_membership'] = {}
-            # Capture the dict reference now — protects the thread if set_mode switches later
-            process_data_snapshot = self.data_for_cytometry_plots
-            threading.Thread(
-                target=self._reinitialise_process_plots_worker,
-                args=(process_data_snapshot,),
-                daemon=True,
-            ).start()
-
-    def _reinitialise_process_plots_worker(self, data_snapshot):
-        # Use the snapshot captured at slot-fire time, not self.data_for_cytometry_plots
-        # which may have been redirected to a different dict by set_mode on the main thread.
-        original = self.data_for_cytometry_plots
-        self.data_for_cytometry_plots = data_snapshot
-        try:
             self.calc_hists_and_stats()
-        finally:
-            self.data_for_cytometry_plots = original
-        logger.info(f'Controller: prepared hists for process plots')
+            logger.info('Controller: prepared hists for process plots')
 
     @Slot(str, str)
     def create_new_plot(self, channel_x, channel_y):
