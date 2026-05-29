@@ -13,6 +13,7 @@ from flowkit.exceptions import GateReferenceError
 from honeychrome.controller_components.functions import define_quad_gates, define_range_gate, define_ellipse_gate, define_rectangle_gate, define_polygon_gate, get_set_or_initialise_label_offset, rename_label_offset
 from honeychrome.controller_components.transform import transforms_menu_items
 import honeychrome.settings as settings
+from honeychrome.controller_components.cytometer_whitelist import get_detector_laser_map, LASER_LABEL_COLORS
 
 import warnings
 
@@ -97,7 +98,6 @@ def pm_to_png_buffer(pm):
     image.save(buffer, "PNG")
     image_stream = io.BytesIO(buffer.data())
     return image_stream
-
 
 
 class CytometryPlotWidget(QFrame):
@@ -289,6 +289,9 @@ class CytometryPlotWidget(QFrame):
 
         #todo handle default (non-transformed) axes
 
+        self.configure_title()
+        self.axis_bottom.tick_colors = {}
+        
         # Apply labels to axes, activate heatmap image or 1d histogram, set autorange if applicable
         if self.plot['type'] == 'ribbon':
             # set labels and view
@@ -309,7 +312,35 @@ class CytometryPlotWidget(QFrame):
             self.label_y.rightClickMenuItems = transforms_menu_items
 
             # set axes
-            ticks = [[(m, self.data_for_cytometry_plots['pnn'][n]) for m, n in enumerate(self.data_for_cytometry_plots['fluoro_indices'])], []]
+            # set axes — with adaptive label thinning and laser colour-coding
+            pnn = self.data_for_cytometry_plots['pnn']
+            fluoro_indices = self.data_for_cytometry_plots['fluoro_indices']
+            n_detectors = len(fluoro_indices)
+
+            # Thinning: keep roughly LABEL_DENSITY_TARGET labels regardless of panel size.
+            # At ≤80 detectors every label is shown; above that we skip proportionally.
+            LABEL_DENSITY_TARGET = 80
+            stride = max(1, round(n_detectors / LABEL_DENSITY_TARGET))
+
+            all_pairs = [(m, pnn[n]) for m, n in enumerate(fluoro_indices)]
+            ticks = [
+                [(m, label) for m, label in all_pairs if m % stride == 0],
+                [],
+            ]
+
+            # Laser colour-coding: look up which laser each detector belongs to.
+            db_col = self.data_for_cytometry_plots.get('cytometer_db_col')
+            if db_col:
+                detector_laser_map = get_detector_laser_map(db_col)
+                tick_colors = {
+                    label: LASER_LABEL_COLORS[laser]
+                    for _, label in all_pairs
+                    if (laser := detector_laser_map.get(label)) in LASER_LABEL_COLORS
+                }
+            else:
+                tick_colors = {}
+
+            self.axis_bottom.tick_colors = tick_colors
             self.axis_bottom.setTicks(ticks, angle=90)
             self.axis_left.setTicks(self.transformations['ribbon'].ticks())
             self.axis_left.zoomZero = self.transformations['ribbon'].zero

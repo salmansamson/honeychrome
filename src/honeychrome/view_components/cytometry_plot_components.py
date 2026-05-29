@@ -45,49 +45,29 @@ class ZoomAxis(pg.AxisItem):
         # Draw tick lines normally (skip text)
         super().drawPicture(p, axisSpec, tickSpecs, [])
 
-        # Draw rotated text labels manually
+        tick_colors = getattr(self, 'tick_colors', {})   # safe even if called before __init__ finishes
+        default_pen = p.pen()
+
         p.save()
-        for rect, flags, text in textSpecs:
-            p.save()
+        try:
+            for rect, flags, text in textSpecs:
+                p.save()
+                try:
+                    color = tick_colors.get(text)
+                    p.setPen(QPen(color) if color else default_pen)
 
-            # --- DEBUG VISUALS ---
-            # 1. Draw the original (unrotated) text rect in red
-            # p.setPen(QPen(QColor("red"), 1, Qt.DashLine))
-            # p.drawRect(rect)
-
-            # 2. Draw the tick anchor point in green
-            tick_anchor = QPointF(rect.center())
-            # p.setPen(QPen(QColor("green"), 3))
-            # p.drawPoint(tick_anchor)
-
-            # --- TRANSFORMATIONS ---
-            if self.orientation == 'bottom' and self.angle == 90:
-                p.translate(tick_anchor)
-                p.rotate(-self.angle)
-
-                # 3. Draw local origin axes in blue (X) and magenta (Y)
-                # p.setPen(QPen(QColor("blue"), 1))
-                # p.drawLine(0, 0, 40, 0)  # X-axis
-                # p.setPen(QPen(QColor("magenta"), 1))
-                # p.drawLine(0, 0, 0, 40)  # Y-axis
-
-                # 4. Draw the rotated text bounding rect in yellow
-                text_rect = QRectF(0, -rect.height()/2, rect.width(), rect.height())
-                # p.setPen(QPen(QColor("yellow"), 1))
-                # p.drawRect(text_rect)
-
-                # --- Draw the text ---
-                align = Qt.AlignRight | Qt.AlignVCenter
-                # p.setPen(QPen(QColor("white")))
-                p.drawText(text_rect, int(align), text)
-
-            else:
-                # Non-rotated text fallback
-                # p.setPen(QPen(QColor("white")))
-                p.drawText(rect, int(flags), text)
-
+                    if self.orientation == 'bottom' and self.angle == 90:
+                        tick_anchor = QPointF(rect.center())
+                        p.translate(tick_anchor)
+                        p.rotate(-self.angle)
+                        text_rect = QRectF(0, -rect.height() / 2, rect.width(), rect.height())
+                        p.drawText(text_rect, int(Qt.AlignRight | Qt.AlignVCenter), text)
+                    else:
+                        p.drawText(rect, int(flags), text)
+                finally:
+                    p.restore()
+        finally:
             p.restore()
-        p.restore()
 
 
     def hoverEnterEvent(self, event):
@@ -151,6 +131,9 @@ class NoPanViewBox(pg.ViewBox):
 
 class InteractiveLabel(pg.LabelItem):
     def __init__(self, text="", parent_plot=None, angle=0, **kwargs):
+        self.angle = angle
+        self._label_padding = 15
+        self.tick_colors: dict = {}  
         super().__init__(text, angle=angle, **kwargs)
         self.setAcceptHoverEvents(True)
         self._default_font = self.item.font()

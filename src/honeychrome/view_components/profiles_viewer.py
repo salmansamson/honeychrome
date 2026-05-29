@@ -1,5 +1,5 @@
 from PySide6.QtCore import QPointF, QRectF, Qt, QRect, QSize, QPoint, Slot, QObject, QEvent
-from PySide6.QtGui import QWheelEvent
+from PySide6.QtGui import QWheelEvent, QPen, QColor
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QLayout, QWidget, QHBoxLayout, QLabel, QSizePolicy, QCheckBox, QComboBox
 import pyqtgraph as pg
 import numpy as np
@@ -11,6 +11,9 @@ from honeychrome.view_components.cytometry_plot_components import (
     NoPanViewBox, ZoomAxis, TransparentGraphicsLayoutWidget,
 )
 from honeychrome.view_components.help_toggle_widget import WheelBlocker
+from honeychrome.controller_components.cytometer_whitelist import (
+    get_detector_laser_map, LASER_LABEL_COLORS,
+)
 
 
 # --------------------- Flow Layout -------------------------
@@ -116,6 +119,7 @@ class BottomAxisVerticalTickLabels(pg.AxisItem):
         self.angle = 90
         self._label_padding = 15
         self.orientation = 'bottom'
+        self.tick_colors: dict = {}        # must be before super().__init__()
         super().__init__(self.orientation, **kwargs)
 
         # Give extra space by default to prevent clipping
@@ -129,52 +133,31 @@ class BottomAxisVerticalTickLabels(pg.AxisItem):
         self.update()
 
     def drawPicture(self, p, axisSpec, tickSpecs, textSpecs):
-        # Draw tick lines normally (skip text)
         super().drawPicture(p, axisSpec, tickSpecs, [])
 
-        # Draw rotated text labels manually
+        tick_colors = getattr(self, 'tick_colors', {})
+        default_pen = p.pen()
+
         p.save()
-        for rect, flags, text in textSpecs:
-            p.save()
+        try:
+            for rect, flags, text in textSpecs:
+                p.save()
+                try:
+                    color = tick_colors.get(text)
+                    p.setPen(QPen(color) if color else default_pen)
 
-            # --- DEBUG VISUALS ---
-            # 1. Draw the original (unrotated) text rect in red
-            # p.setPen(QPen(QColor("red"), 1, Qt.DashLine))
-            # p.drawRect(rect)
-
-            # 2. Draw the tick anchor point in green
-            tick_anchor = QPointF(rect.center())
-            # p.setPen(QPen(QColor("green"), 3))
-            # p.drawPoint(tick_anchor)
-
-            # --- TRANSFORMATIONS ---
-            if self.orientation == 'bottom' and self.angle == 90:
-                p.translate(tick_anchor)
-                p.rotate(-self.angle)
-
-                # 3. Draw local origin axes in blue (X) and magenta (Y)
-                # p.setPen(QPen(QColor("blue"), 1))
-                # p.drawLine(0, 0, 40, 0)  # X-axis
-                # p.setPen(QPen(QColor("magenta"), 1))
-                # p.drawLine(0, 0, 0, 40)  # Y-axis
-
-                # 4. Draw the rotated text bounding rect in yellow
-                text_rect = QRectF(0, -rect.height() / 2, rect.width(), rect.height())
-                # p.setPen(QPen(QColor("yellow"), 1))
-                # p.drawRect(text_rect)
-
-                # --- Draw the text ---
-                align = Qt.AlignRight | Qt.AlignVCenter
-                # p.setPen(QPen(QColor("white")))
-                p.drawText(text_rect, int(align), text)
-
-            else:
-                # Non-rotated text fallback
-                # p.setPen(QPen(QColor("white")))
-                p.drawText(rect, int(flags), text)
-
+                    if self.orientation == 'bottom' and self.angle == 90:
+                        tick_anchor = QPointF(rect.center())
+                        p.translate(tick_anchor)
+                        p.rotate(-self.angle)
+                        text_rect = QRectF(0, -rect.height() / 2, rect.width(), rect.height())
+                        p.drawText(text_rect, int(Qt.AlignRight | Qt.AlignVCenter), text)
+                    else:
+                        p.drawText(rect, int(flags), text)
+                finally:
+                    p.restore()
+        finally:
             p.restore()
-        p.restore()
 
 class TransparentPlotWidget(pg.PlotWidget):
     def wheelEvent(self, event: QWheelEvent):
@@ -633,9 +616,33 @@ class ProfilesViewer(QFrame):
         profiles = self.controller.experiment.process['profiles']
 
         x = list(range(len(self.controller.filtered_raw_fluorescence_channel_ids)))
-        ticks = [[(m, self.controller.experiment.settings['raw']['event_channels_pnn'][n]) for m, n in
-                   enumerate(self.controller.filtered_raw_fluorescence_channel_ids)], []]
-        self.plot_widget.getAxis('bottom').setTicks(ticks)
+
+        pnn = self.controller.experiment.settings['raw']['event_channels_pnn']
+        fluoro_ids = self.controller.filtered_raw_fluorescence_channel_ids
+        # plot max 80 detectors for legibility
+        LABEL_DENSITY_TARGET = 80
+        stride = max(1, round(len(fluoro_ids) / LABEL_DENSITY_TARGET))
+
+        all_pairs = [(m, pnn[n]) for m, n in enumerate(fluoro_ids)]
+        ticks = [
+            [(m, label) for m, label in all_pairs if m % stride == 0],
+            [],
+        ]
+
+        db_col = self.controller.experiment.settings['raw'].get('cytometer_db_col')
+        if db_col:
+            detector_laser_map = get_detector_laser_map(db_col)
+            tick_colors = {
+                label: LASER_LABEL_COLORS[laser]
+                for _, label in all_pairs
+                if (laser := detector_laser_map.get(label)) in LASER_LABEL_COLORS
+            }
+        else:
+            tick_colors = {}
+
+        axis = self.plot_widget.getAxis('bottom')
+        axis.tick_colors = tick_colors
+        axis.setTicks(ticks)
 
 
         # Plot each profile

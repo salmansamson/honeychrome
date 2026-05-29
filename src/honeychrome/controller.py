@@ -427,7 +427,8 @@ class Controller(QObject):
                     'pnn': self.experiment.settings['raw']['event_channels_pnn'],
                     'fluoro_indices': self.experiment.settings['raw']['fluorescence_channel_ids'],
                     'transformations': self.raw_transformations, 'gating': self.raw_gating,
-                    'lookup_tables': self.raw_lookup_tables, 'plots': self.experiment.cytometry['raw_plots']
+                    'lookup_tables': self.raw_lookup_tables, 'plots': self.experiment.cytometry['raw_plots'],
+                    'cytometer_db_col': self.experiment.settings['raw'].get('cytometer_db_col'),
                  }
             )
 

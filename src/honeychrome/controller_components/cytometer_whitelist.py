@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+from PySide6.QtGui import QColor
 
 logger = logging.getLogger(__name__)
 
@@ -382,3 +383,50 @@ def _resolve_scatter(all_pnn: list[str], canonical: list[str]) -> list[str]:
     if not fallback:
         logger.warning("No scatter channels found; scatter plots will be unavailable.")
     return fallback
+
+# ---------------------------------------------------------------------------
+# Laser colour map and detector-laser lookup  (shared by all plot widgets)
+# ---------------------------------------------------------------------------
+
+# Keys match the laser values found in the *_laser columns of cytometer_database.csv.
+LASER_LABEL_COLORS: dict[str, QColor] = {
+    'DeepUV':      QColor("#EDD5F6"),
+    'UV':          QColor("#D886F9"),
+    'Violet':      QColor("#7F00FF"),
+    'Blue':        QColor("#328FE7"),
+    'YellowGreen': QColor("#ACF312"),
+    'Red':         QColor('#E74C3C'),
+    'IR':          QColor('#A93226'),
+}
+
+
+def get_detector_laser_map(db_col: str) -> dict[str, str]:
+    """
+    Return a dict mapping detector channel name → laser name for the given
+    cytometer database column (e.g. 'ID7000').
+
+    Reads the <db_col>_laser column from cytometer_database.csv paired with
+    the <db_col> column.  Returns an empty dict if the column is missing or
+    the CSV cannot be read — callers treat that as "no colour information".
+    """
+    if not db_col or not _DB_PATH.exists():
+        return {}
+    laser_col = f"{db_col}_laser"
+    try:
+        db = pd.read_csv(_DB_PATH)
+        if db_col not in db.columns or laser_col not in db.columns:
+            logger.warning(
+                "Column '%s' or '%s' not found in cytometer_database.csv; "
+                "laser colour-coding will be skipped.",
+                db_col, laser_col,
+            )
+            return {}
+        return {
+            str(row[db_col]): str(row[laser_col])
+            for _, row in db.iterrows()
+            if pd.notna(row[db_col]) and pd.notna(row[laser_col])
+            and str(row[db_col]).strip() and str(row[laser_col]).strip()
+        }
+    except Exception as exc:
+        logger.warning("Could not build detector–laser map: %s", exc)
+        return {}
