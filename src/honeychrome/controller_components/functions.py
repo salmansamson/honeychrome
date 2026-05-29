@@ -62,18 +62,387 @@ def add_recent_file(path):
     recent.insert(0, path)
     q_settings.setValue("recent_files", recent)  # store full history
 
-def export_unmixed_sample(sample_name, unmixed_folder, unmixed_event_data_without_fine_tuning, unmixed_event_channels_pnn, spillover, subsample=None, extra_null_channels=None):
-    # note that FlowKit compensation matrix is actually spillover matrix
-    null_channels = ['event_id']
-    if extra_null_channels:
-        null_channels = null_channels + extra_null_channels
-    unmixed_sample_name = sample_name + ' (Unmixed).fcs'
-    unmixed_sample = Sample(unmixed_event_data_without_fine_tuning,
-                                    channel_labels=unmixed_event_channels_pnn, # ssr review: should we add antigens to pnn?
-                                    null_channel_list=null_channels,
-                                    compensation=spillover.T,
-                                    sample_id=sample_name)
-    unmixed_sample.export(unmixed_sample_name, subsample=subsample, directory=unmixed_folder, source='comp', include_metadata=True)
+def export_unmixed_sample(
+    sample_name: str,
+    unmixed_folder: 'Path | str',
+    export_event_data: np.ndarray,
+    export_pnn: list,
+    spillover: np.ndarray,
+    raw_keywords: 'dict[str, str]',
+    spectral_model: list,
+    unmixed_settings: dict,
+    raw_settings: dict,
+    af_spectra: 'np.ndarray | None',
+    unmixing_spectra: 'np.ndarray | None',
+    version: str,
+    subsample: 'int | None' = None,
+    extra_null_channels: 'list | None' = None,
+    unmixing_method: str = 'OLS',
+    extra_whitelist: 'frozenset | set' = frozenset(),
+) -> None:
+    """
+    Write an unmixed FCS file with full FCS 3.1 compliant metadata.
+
+    Parameters
+    ----------
+    sample_name       : base name without extension (used for $FIL and filename).
+    unmixed_folder    : destination directory (must exist).
+    export_event_data : (n_events, n_channels) float array in output column order.
+    export_pnn        : ordered list of output channel names, matching export_event_data columns.
+    spillover         : (n_fluor x n_fluor) fine-tuning spillover; written to $SPILLOVER.
+    raw_keywords      : TEXT keywords from the source FCS (sample.get_metadata()['text']).
+    spectral_model    : controller.experiment.process['spectral_model'].
+    unmixed_settings  : controller.experiment.settings['unmixed'].
+    raw_settings      : controller.experiment.settings['raw'].
+    af_spectra        : stacked AF spectra (n_profiles x n_detectors) or None.
+    unmixing_spectra  : fluorophore spectra matrix (n_fluor x n_raw_detectors) or None.
+                        Pass controller._build_fluor_spectra() output.
+    version           : honeychrome.__version__.
+    subsample         : if set, randomly subsample to this many events before writing.
+    extra_null_channels: channel names (e.g. 'AF Index') whose values should be zeroed.
+    unmixing_method   : written to UNMIXINGMETHOD keyword.
+    extra_whitelist   : additional channel names to carry through from the raw file
+                        verbatim. Pass imaging_carry_through_set for FACSDiscover.
+    """
+    # Optional subsampling
+    if subsample is not None and subsample < export_event_data.shape[0]:
+        idx = np.sort(np.random.choice(export_event_data.shape[0], subsample, replace=False))
+        export_event_data = export_event_data[idx]
+
+    # Zero out null channels in a copy (event_id, AF Index when not meaningful, etc.)
+    null_set = {'event_id'} | set(extra_null_channels or [])
+    if null_set & set(export_pnn):
+        export_event_data = export_event_data.copy()
+        for col_name in null_set:
+            if col_name in export_pnn:
+                export_event_data[:, export_pnn.index(col_name)] = 0.0
+
+    file_name = sample_name + ' (Unmixed).fcs'
+    file_path = Path(unmixed_folder) / file_name
+
+    keywords = define_fcs_keywords(
+        raw_keywords=raw_keywords,
+        pnn=export_pnn,
+        event_data=export_event_data,
+        spectral_model=spectral_model,
+        unmixed_settings=unmixed_settings,
+        raw_settings=raw_settings,
+        spillover=spillover,
+        af_spectra=af_spectra,
+        unmixing_spectra=unmixing_spectra,
+        file_name=file_name,
+        version=version,
+        unmixing_method=unmixing_method,
+        extra_whitelist=extra_whitelist,
+    )
+
+    write_fcs(export_event_data, keywords, file_path)
+
+def define_fcs_keywords(
+    raw_keywords: 'dict[str, str]',
+    pnn: list,
+    event_data: np.ndarray,
+    spectral_model: list,
+    unmixed_settings: dict,
+    raw_settings: dict,
+    spillover: np.ndarray,
+    af_spectra: 'np.ndarray | None',
+    unmixing_spectra: 'np.ndarray | None',
+    file_name: str,
+    version: str,
+    unmixing_method: str = 'OLS',
+    extra_whitelist: 'frozenset | set' = frozenset(),
+) -> dict:
+    """
+    Build a complete FCS 3.1 TEXT keyword dict for an unmixed export file.
+    Mirrors AutoSpectral define.keywords().
+
+    Parameters
+    ----------
+    raw_keywords      : dict returned by sample.get_metadata()['text'] on the raw FCS.
+    pnn               : ordered list of output channel names (the export column order).
+    event_data        : (n_events, n_channels) array — used only for $TOT.
+    spectral_model    : controller.experiment.process['spectral_model'] list of dicts.
+    unmixed_settings  : controller.experiment.settings['unmixed'].
+    raw_settings      : controller.experiment.settings['raw'].
+    spillover         : (n_fluor x n_fluor) fine-tuning spillover matrix.
+    af_spectra        : (n_profiles x n_detectors) AF spectra, or None.
+    unmixing_spectra  : (n_fluor x n_detectors) fluorophore spectra used for unmixing,
+                        or None. Pass controller._build_fluor_spectra() output.
+    file_name         : output filename string (written to $FIL).
+    version           : honeychrome.__version__ string.
+    unmixing_method   : written to custom keyword UNMIXINGMETHOD.
+    extra_whitelist   : additional channel names to carry through from the raw file
+                        verbatim (same treatment as scatter/time). Used for FACSDiscover
+                        imaging channels: pass imaging_carry_through_set from the caller.
+    """
+    import re
+    from datetime import datetime, timezone
+
+    # ---- 1. Carry-through non-parameter keywords from raw file ----
+    non_param_keys = {
+        k: v for k, v in raw_keywords.items()
+        if not re.match(r'^\$?P\d+', k, re.IGNORECASE)
+        and not re.match(r'^\$?CH\d+', k, re.IGNORECASE)
+        and k.upper() not in ('BDCHORUSDATARECORD',)
+    }
+
+    # ---- 2. Whitelist for raw param carry-through ----
+    sc_ids = set(raw_settings.get('scatter_channel_ids', []))
+    time_id = raw_settings.get('time_channel_id')
+    raw_pnn = raw_settings.get('event_channels_pnn', [])
+
+    whitelist = set()
+    if time_id is not None and time_id < len(raw_pnn):
+        whitelist.add(raw_pnn[time_id])
+    for i in sc_ids:
+        if i < len(raw_pnn):
+            whitelist.add(raw_pnn[i])
+    whitelist |= set(extra_whitelist)   # imaging channels (or empty on non-FACSDiscover)
+
+    raw_param_lookup = _build_raw_param_lookup(raw_keywords, whitelist)
+
+    # ---- 3. Antigen lookup from spectral model ----
+    label_to_antigen = {
+        c['label']: (c.get('antigen') or '')
+        for c in (spectral_model or [])
+    }
+
+    # ---- 4. Channel-type index sets for the *output* pnn ----
+    fl_ids_out = set(unmixed_settings.get('fluorescence_channel_ids', []))
+    magnitude_ceiling = unmixed_settings.get('magnitude_ceiling', 262144)
+
+    BIT_DEPTH = '32'
+    param_keywords = {}
+
+    for i, ch in enumerate(pnn, start=1):
+        prefix = f'$P{i}'
+        ch_safe = ch.replace(',', '_')   # FCS 3.1 §3.2.23
+
+        if ch == 'AF Abundance':
+            param_keywords.update({
+                f'{prefix}N': 'AF Abundance',
+                f'{prefix}S': 'Autofluorescence Abundance',
+                f'{prefix}B': BIT_DEPTH,
+                f'{prefix}E': '0,0',
+                f'{prefix}R': str(magnitude_ceiling),
+                f'{prefix}G': '1',
+                f'{prefix}DISPLAY': 'LOG',
+            })
+
+        elif ch == 'AF Index':
+            n_profiles = af_spectra.shape[0] if af_spectra is not None else 1
+            param_keywords.update({
+                f'{prefix}N': 'AF Index',
+                f'{prefix}S': 'Autofluorescence Index',
+                f'{prefix}B': BIT_DEPTH,
+                f'{prefix}E': '0,0',
+                f'{prefix}R': str(n_profiles),
+                f'{prefix}G': '1',
+                f'{prefix}DISPLAY': 'LIN',
+            })
+
+        elif ch in raw_param_lookup:
+            # Scatter / Time: carry selected fields from raw file
+            old = raw_param_lookup[ch]
+            for field in ('N', 'S', 'B', 'E', 'R', 'G', 'V', 'DISPLAY', 'TYPE'):
+                old_key = next(
+                    (k for k in old if re.sub(r'^\$?P\d+', '', k, flags=re.IGNORECASE).upper() == field),
+                    None
+                )
+                if old_key:
+                    param_keywords[f'{prefix}{field}'] = old[old_key]
+            # Guarantee mandatory fields
+            param_keywords.setdefault(f'{prefix}N', ch_safe)
+            param_keywords.setdefault(f'{prefix}E', '0,0')
+            param_keywords.setdefault(f'{prefix}R', str(magnitude_ceiling))
+            param_keywords.setdefault(f'{prefix}DISPLAY', 'LIN')
+            param_keywords.setdefault(f'{prefix}B', BIT_DEPTH)
+
+        else:
+            # Unmixed fluorophore (or imaging channel not in raw_param_lookup)
+            antigen = label_to_antigen.get(ch) or label_to_antigen.get(ch.removesuffix('-A'), '')
+            is_fl = (i - 1) in fl_ids_out
+            param_keywords.update({
+                f'{prefix}N': ch_safe,
+                f'{prefix}S': antigen if antigen else ch_safe,
+                f'{prefix}B': BIT_DEPTH,
+                f'{prefix}E': '0,0',
+                f'{prefix}R': str(magnitude_ceiling),
+                f'{prefix}G': '1',
+                f'{prefix}DISPLAY': 'LOG' if is_fl else 'LIN',
+            })
+
+    # ---- 5. Spillover keyword ----
+    fl_pnn_out = [pnn[i] for i in sorted(fl_ids_out) if i < len(pnn)]
+    spillover_str = _format_spillover(fl_pnn_out, spillover)
+
+    # ---- 6. Spectra matrix keywords ----
+    def _fmt_matrix(m, row_names, col_names):
+        vals = ','.join(f'{v:.8g}' for v in m.flatten())
+        return f'{m.shape[0]},{m.shape[1]},{",".join(row_names)},{",".join(col_names)},{vals}'
+
+    spectra_kw = {}
+    raw_fl_pnn = [raw_pnn[i] for i in sorted(sc_ids.__class__(raw_settings.get('fluorescence_channel_ids', [])))]
+    # Re-use the full raw fluorescence channel list for detector column names
+    raw_fl_ids = raw_settings.get('fluorescence_channel_ids', [])
+    det_names = [raw_pnn[i] for i in raw_fl_ids]
+
+    if unmixing_spectra is not None and unmixing_spectra.ndim == 2:
+        fluor_names_short = [pnn[i].removesuffix('-A') for i in sorted(fl_ids_out) if i < len(pnn)]
+        if unmixing_spectra.shape == (len(fluor_names_short), len(det_names)):
+            spectra_kw['SPECTRA'] = _fmt_matrix(unmixing_spectra, fluor_names_short, det_names)
+            spectra_kw['FLUOROCHROMES'] = ','.join(fluor_names_short)
+
+    if af_spectra is not None and af_spectra.ndim == 2:
+        af_row_names = [f'AF{i + 1}' for i in range(af_spectra.shape[0])]
+        if af_spectra.shape[1] == len(det_names):
+            spectra_kw['AUTOFLUORESCENCE'] = _fmt_matrix(af_spectra, af_row_names, det_names)
+
+    # ---- 7. Provenance keywords ----
+    now_str = datetime.now(timezone.utc).strftime('%d-%b-%Y %H:%M:%S').upper()
+    provenance = {
+        '$FIL':           file_name,
+        '$PAR':           str(len(pnn)),
+        '$TOT':           str(event_data.shape[0]),
+        '$DATATYPE':      'F',
+        '$BYTEORD':       '1,2,3,4',
+        '$MODE':          'L',
+        '$NEXTDATA':      '0',
+        '$BEGINANALYSIS': '0',
+        '$ENDANALYSIS':   '0',
+        '$BEGINSTEXT':    '0',
+        '$ENDSTEXT':      '0',
+        '$ORIGINALITY':   'DataModified',
+        '$LAST_MODIFIED': now_str,
+        '$LAST_MODIFIER': f'Honeychrome_{version}',
+        'HONEYCHROME':    version,
+        'UNMIXINGMETHOD': unmixing_method,
+    }
+    if spillover_str:
+        provenance['$SPILLOVER'] = spillover_str
+
+    # ---- 8. Merge: raw non-param ← param ← provenance ← spectra ----
+    keywords = {**non_param_keys, **param_keywords, **provenance, **spectra_kw}
+    return keywords
+
+
+def _build_raw_param_lookup(raw_keywords: dict, whitelist: set[str]) -> dict:
+    """
+    Extract per-parameter keywords from raw FCS TEXT for whitelisted channels.
+    Returns {channel_name: {original_keyword: value, ...}}.
+    """
+    import re
+    pN_keys = [k for k in raw_keywords if re.match(r'^\$?P\d+N$', k, re.IGNORECASE)]
+    lookup = {}
+    for key in pN_keys:
+        ch_name = raw_keywords[key]
+        if ch_name not in whitelist:
+            continue
+        idx = re.sub(r'^\$?P(\d+)N$', r'\1', key, flags=re.IGNORECASE)
+        matches = {k: raw_keywords[k]
+                   for k in raw_keywords
+                   if re.match(rf'^\$?P{idx}[A-Z]+$', k, re.IGNORECASE)}
+        lookup[ch_name] = matches
+    return lookup
+
+
+def _format_spillover(fl_pnn: list[str], spillover: np.ndarray) -> str:
+    """
+    Serialise the fine-tuning spillover matrix as an FCS 3.1 $SPILLOVER string.
+    fl_pnn: ordered list of fluorophore $PnN names (must match spillover shape).
+    spillover: square (n_fluor × n_fluor) matrix.
+    """
+    n = len(fl_pnn)
+    if spillover is None or spillover.shape != (n, n):
+        return ''
+    vals = ','.join(f'{v:.8g}' for v in spillover.flatten())
+    names = ','.join(fl_pnn)
+    return f'{n},{names},{vals}'
+
+def write_fcs(
+    event_data: np.ndarray,  # (n_events, n_channels), float32 written row-major
+    keywords: dict[str, str],
+    file_path: Path | str,
+    chunk_rows: int = 131_072,
+) -> None:
+    """
+    Write a minimal FCS 3.1 file (HEADER + TEXT + DATA).
+    Data written as little-endian float32, row-major (one event per row).
+    Mirrors writeFCS.R from AutoSpectral.
+    """
+    import struct
+
+    DELIM = '|'
+    file_path = Path(file_path)
+
+    # Mandatory field overrides (ensure consistency)
+    kw = dict(keywords)
+    kw['$TOT']           = str(event_data.shape[0])
+    kw['$PAR']           = str(event_data.shape[1])
+    kw['$DATATYPE']      = 'F'
+    kw['$BYTEORD']       = '1,2,3,4'
+    kw['$NEXTDATA']      = '0'
+    kw['$MODE']          = 'L'
+    kw['$BEGINDATA']     = '0'   # placeholder; updated below
+    kw['$ENDDATA']       = '0'
+    kw['$BEGINSTEXT']    = '0'
+    kw['$ENDSTEXT']      = '0'
+    kw['$BEGINANALYSIS'] = '0'
+    kw['$ENDANALYSIS']   = '0'
+
+    TEXT_START = 58  # HEADER is always 58 bytes
+
+    def _build_text(kw_dict):
+        return DELIM + ''.join(
+            f'{k}{DELIM}{v}{DELIM}' for k, v in kw_dict.items()
+        )
+
+    text = _build_text(kw)
+    text_bytes = text.encode('utf-8')
+    TEXT_END = TEXT_START + len(text_bytes) - 1
+    data_bytes = event_data.shape[0] * event_data.shape[1] * 4  # float32
+
+    # Iterative layout to handle offset-length growth (mirrors writeFCS.R)
+    kw_len_old = 2
+    while True:
+        DATA_START = TEXT_END + 1
+        DATA_END   = DATA_START + data_bytes - 1
+        kw_len_new = len(str(DATA_START)) + len(str(DATA_END))
+        if kw_len_new > kw_len_old:
+            TEXT_END  += kw_len_new - kw_len_old
+            kw_len_old = kw_len_new
+        else:
+            break
+
+    # Patch the placeholder offsets in the text string
+    kw['$BEGINDATA'] = str(DATA_START)
+    kw['$ENDDATA']   = str(DATA_END)
+    text = _build_text(kw)
+    text_bytes = text.encode('utf-8')
+
+    # HEADER (58 bytes):  "FCS3.1    " + 4×8-char right-justified offsets + 2×8 zeros
+    def _h(n): return f'{n:>8d}'
+    header = (
+        f'{"FCS3.1":<10}'
+        + _h(TEXT_START) + _h(TEXT_START + len(text_bytes) - 1)
+        + _h(DATA_START)  + _h(DATA_END)
+        + _h(0)           + _h(0)
+    )
+
+    with open(file_path, 'wb') as fh:
+        fh.write(header.encode('ascii'))
+        fh.write(text_bytes)
+        # Write event data in chunks (row-major, float32 little-endian)
+        rows_remaining = event_data.shape[0]
+        offset = 0
+        while rows_remaining > 0:
+            rows = min(chunk_rows, rows_remaining)
+            chunk = event_data[offset:offset + rows, :]
+            fh.write(chunk.astype('<f4').tobytes())   # little-endian float32
+            offset         += rows
+            rows_remaining -= rows
+        fh.write(b'00000000')  # CRC placeholder
 
 # All subfolders recursively
 def get_all_subfolders_recursive(path, experiment_dir):
