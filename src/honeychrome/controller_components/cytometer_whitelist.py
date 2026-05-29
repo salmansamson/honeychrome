@@ -150,7 +150,7 @@ _CYTOMETER_PARAMS: dict[str, _CytParams] = {
         scatter_param = ["FSC51-A", "SSC52-A"],
         sat_value = 100000,
         scatter_extra_pat = ["FSC", "SSC"],
-        singlet_y_preference = "FSC-H",
+        singlet_y_preference = "FSC51-H",
     ),
 
     "Symphony": _CytParams(

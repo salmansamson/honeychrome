@@ -206,8 +206,11 @@ class ImportFCSController(QObject):
 
                     if (morph_x is not None) and (morph_y is not None):
                         sing_x = morph_x
+                        sing_y = None
                         preferred = cyt_info.singlet_y_preference if cyt_info is not None else 'FSC-W'
-                        if preferred == 'FSC-H' and 'FSC' in height_channels and 'FSC-H' in event_channels_pnn:
+                        if preferred in event_channels_pnn:
+                            sing_y = preferred
+                        elif preferred == 'FSC-H' and 'FSC' in width_channels:
                             sing_y = 'FSC-H'
                         elif preferred == 'FSC-W' and 'FSC' in width_channels:
                             sing_y = 'FSC-W'
