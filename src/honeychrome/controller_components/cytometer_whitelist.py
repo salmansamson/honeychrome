@@ -102,11 +102,13 @@ _CYTOMETER_PARAMS: dict[str, _CytParams] = {
         ],
         spectral_pat    = r"\([0-9]+\)-A$",     # must match e.g. "UV3 (420)-A"
         db_col          = "Discover",
-        scatter_param = ["FSC-A", "SSC (Violet)-A"],
+        scatter_param = ["LightLoss (Violet)-A", "SSC (Imaging)-A"],
         sat_value = 24140237,
-        scatter_extra_pat = [r"LightLoss", r"SSC \(Imaging\)"],
+        scatter_extra_pat = [r"LightLoss", "FSC", r"SSC \(Imaging\)"],
         singlet_y_preference = "FSC-H",
-        scatter_display_ceiling = {"FSC-A": 3e7, "SSC (Violet)-A": 3e7, "SSC (Imaging)-A": 3e7}, 
+        scatter_display_ceiling = {
+            "FSC-A": 3e7, "SSC (Violet)-A": 3e7, "SSC (Imaging)-A": 3e7, "LightLoss (Violet)-A": 3e7
+        }, 
     ),
 
     "Opteon": _CytParams(
@@ -133,6 +135,7 @@ _CYTOMETER_PARAMS: dict[str, _CytParams] = {
         sat_value = 16777215,
         scatter_extra_pat = ["FSC", "SSC"],
         singlet_y_preference = "FSC-H",
+        scatter_display_ceiling = {"FSC-A": 4e6, "BSSC-A": 4e6}, 
     ),
 
     "Xenith": _CytParams(
