@@ -133,10 +133,10 @@ _CYTOMETER_PARAMS: dict[str, _CytParams] = {
         spectral_pat    = None,
         db_col          = "Mosaic",
         scatter_param = ["FSC-A", "BSSC-A"],
-        sat_value = 16777215,
+        sat_value = 10000,
         scatter_extra_pat = ["FSC", "SSC"],
         singlet_y_preference = "FSC-H",
-        scatter_display_ceiling = {"FSC-A": 4e6, "BSSC-A": 4e6}, 
+        scatter_display_ceiling = {"FSC-A": 1e5, "BSSC-A": 1e5, "FSC-H": 1e5},
     ),
 
     "Xenith": _CytParams(
