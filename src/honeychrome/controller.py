@@ -131,10 +131,13 @@ class Controller(QObject):
         self.index_tail_events_cache = index_tail_events_cache
         self.adc_rate = adc_rate
 
-        # live data processing stop signal
+        # live data processing stop signals
         self.stop_live_data_processing = threading.Event()
         self.stop_live_data_processing.set()
         self.thread = None
+        self.stop_process_plots_worker = threading.Event()
+        self.stop_process_plots_worker.set()
+        self.process_plots_thread = None
 
         if self.events_cache_name is not None:
             self.shm_events = shared_memory.SharedMemory(name=self.events_cache_name)
@@ -819,6 +822,7 @@ class Controller(QObject):
                 self.bus.statusMessage.emit(f'Loaded sample {self.current_sample_path}: {n_events} events.')
                 # self.bus.statusMessage.emit(f'{str(Path(self.current_sample_path).relative_to(self.experiment_dir))}: {n_events} events.')
 
+            self._stop_background_threads()
             self.clear_data_for_cytometry_plots()
             self.initialise_data_for_cytometry_plots()
         else:
@@ -841,6 +845,8 @@ class Controller(QObject):
         self.raw_event_data = None
         self.unmixed_event_data = None
         self.af_sidecar_data = None
+
+        self._stop_background_threads()
         self.clear_data_for_cytometry_plots()
         self.initialise_data_for_cytometry_plots()
         logger.info(f"Controller: unloaded sample")
@@ -852,6 +858,8 @@ class Controller(QObject):
         if self.raw_event_data is not None:
             self.initialise_af_matrices()
             self.unmixed_event_data = self._apply_unmixing(self.raw_event_data)
+
+            self._stop_background_threads()
             self.clear_data_for_cytometry_plots()
             self.initialise_data_for_cytometry_plots()
 
@@ -1077,6 +1085,11 @@ class Controller(QObject):
     @Slot()
     def reinitialise_data_for_process_plots(self):
         if self.current_mode == 'process':
+            # Cancel any in-flight worker before mutating shared data
+            self.stop_process_plots_worker.set()
+            if self.process_plots_thread is not None and self.process_plots_thread.is_alive():
+                self.process_plots_thread.join(timeout=2.0)
+
             self.data_for_cytometry_plots.update({'event_data': self.unmixed_event_data})
             self.data_for_cytometry_plots['histograms'] = initialise_hists(self.data_for_cytometry_plots['plots'], self.data_for_cytometry_plots)
             # Seed gate_membership with root so calc_hists_and_stats enters the correct branch
@@ -1089,22 +1102,44 @@ class Controller(QObject):
                 self.data_for_cytometry_plots['gate_membership'] = {}
             # Capture the dict reference now — protects the thread if set_mode switches later
             process_data_snapshot = self.data_for_cytometry_plots
-            threading.Thread(
+
+            # Arm a fresh stop event for the new worker
+            self.stop_process_plots_worker.clear()
+            self.process_plots_thread = threading.Thread(
                 target=self._reinitialise_process_plots_worker,
                 args=(process_data_snapshot,),
                 daemon=True,
-            ).start()
+            )
+            self.process_plots_thread.start()
 
     def _reinitialise_process_plots_worker(self, data_snapshot):
-        # Use the snapshot captured at slot-fire time, not self.data_for_cytometry_plots
-        # which may have been redirected to a different dict by set_mode on the main thread.
-        original = self.data_for_cytometry_plots
-        self.data_for_cytometry_plots = data_snapshot
         try:
+            # Bail out immediately if a newer request has already superseded this one
+            if self.stop_process_plots_worker.is_set():
+                logger.info('Controller: process plots worker cancelled before start')
+                return
             self.calc_hists_and_stats()
         finally:
-            self.data_for_cytometry_plots = original
-        logger.info(f'Controller: prepared hists for process plots')
+            pass
+        logger.info('Controller: prepared hists for process plots')
+
+    def _stop_background_threads(self):
+        """Signal both background compute threads to stop and wait for them to finish."""
+        # Stop the live acquisition update thread
+        self.stop_live_data_processing.set()
+        if self.thread is not None and self.thread.is_alive():
+            self.thread.join(timeout=2.0)
+            if self.thread.is_alive():
+                logger.warning('Controller: live update thread did not stop in time')
+        self.thread = None
+
+        # Stop the process plots worker thread
+        self.stop_process_plots_worker.set()
+        if self.process_plots_thread is not None and self.process_plots_thread.is_alive():
+            self.process_plots_thread.join(timeout=2.0)
+            if self.process_plots_thread.is_alive():
+                logger.warning('Controller: process plots worker did not stop in time')
+        self.process_plots_thread = None
 
     @Slot(str, str)
     def create_new_plot(self, channel_x, channel_y):
@@ -1248,6 +1283,9 @@ class Controller(QObject):
             time.sleep(live_data_process_repeat_time)
 
     def calc_hists_and_stats(self, gates_to_calculate=None, indices_plots_to_calculate=None, status_message_signal=None):
+        # guard first against this being reached by wrong path
+        if self.data_for_cytometry_plots is None:
+            return
         if self.data_for_cytometry_plots['event_data'] is not None:
             # apply gates to event data
             # if gates_to_calculate is none, then initialise gates_membership dict, otherwise reference it from data_for_cytometry_plots
@@ -1271,7 +1309,10 @@ class Controller(QObject):
                 indices_plots_to_calculate = list(range(len(self.data_for_cytometry_plots['plots'])))
 
             for m, n in enumerate(indices_plots_to_calculate):
-                self.data_for_cytometry_plots['histograms'][n] += hists[m]
+                if self.data_for_cytometry_plots['histograms'][n].shape == hists[m].shape:
+                    self.data_for_cytometry_plots['histograms'][n] += hists[m]
+                else:
+                    logger.warning(f'Controller: calc_hists_and_stats: histogram shape mismatch for plot {n} — discarding stale result')
 
             if self.bus is not None:
                 self.bus.histsStatsRecalculated.emit(self.current_mode, indices_plots_to_calculate)

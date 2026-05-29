@@ -1008,7 +1008,7 @@ class SpectralControlsEditor(QFrame):
 
             # append if label - antigen has been changed f'{antigen} {name}'.strip() if antigen else name
             if self.controller.data_for_cytometry_plots_unmixed.get('pnn_labels'):
-                antigen_labels = [(f'{c['antigen']} {c['label']}'.strip() if c['antigen'] else c['label']) for c in self.model._data]
+                antigen_labels = [(f'{c.get("antigen") or ""} {c["label"]}'.strip() or c['label']) for c in self.model._data]
                 full_labels_from_cytometry_plots = list(self.controller.data_for_cytometry_plots_unmixed['pnn_labels'].values())
                 changed_antigen_label_indices_in_spectral_model = [n for n, k in enumerate(antigen_labels) if k not in full_labels_from_cytometry_plots]
                 for n in changed_antigen_label_indices_in_spectral_model:

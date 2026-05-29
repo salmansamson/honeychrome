@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QVBoxLayout, QMenu, QFrame, QFileDialog, QApplicat
 import colorcet as cc
 from flowkit import gates as Gates
 from flowkit.exceptions import GateReferenceError
+from networkx import NetworkXError
 
 from honeychrome.controller_components.functions import define_quad_gates, define_range_gate, define_ellipse_gate, define_rectangle_gate, define_polygon_gate, get_set_or_initialise_label_offset, rename_label_offset
 from honeychrome.controller_components.transform import transforms_menu_items
@@ -879,17 +880,21 @@ class CytometryPlotWidget(QFrame):
                     parent_name = 'root'
                 else:
                     parent_name = parent_name[0]
-                self.gating.remove_gate(gate_name, keep_children=True)
 
-                roi.request_remove(delete_gate=False) # just to delete the roi elements, don't clobber deletion of the gate
-                self.rois.remove(roi)
-                self.plot['child_gates'].remove(gate_name)
+                try:
+                    self.gating.remove_gate(gate_name, keep_children=True)
+                    roi.request_remove(delete_gate=False) # just to delete the roi elements, don't clobber deletion of the gate
+                    self.rois.remove(roi)
+                    self.plot['child_gates'].remove(gate_name)
 
-                if self.bus is not None:
-                    self.bus.updateSourceChildGates.emit(self.mode, parent_name)
-                    self.bus.changedGatingHierarchy.emit(self.mode, parent_name)
-                self.configure_axes()
-                print(f'CytometryPlotWidget {self.mode} {self.n_in_plot_sequence}: removed gate {gate_name}')
+                    if self.bus is not None:
+                        self.bus.updateSourceChildGates.emit(self.mode, parent_name)
+                        self.bus.changedGatingHierarchy.emit(self.mode, parent_name)
+                    self.configure_axes()
+                    print(f'CytometryPlotWidget {self.mode} {self.n_in_plot_sequence}: removed gate {gate_name}')
+                except (GateReferenceError, ValueError, NetworkXError) as e:
+                    print(f'Already deleted or invalid gate: {e}')
+
             except GateReferenceError as e:
                 print(f'Already deleted: {e}')
             except ValueError as e:

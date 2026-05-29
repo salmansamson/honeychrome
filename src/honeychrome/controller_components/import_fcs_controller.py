@@ -69,6 +69,12 @@ class ImportFCSController(QObject):
 
                     # set up all raw settings
                     time_channel_id = sample_metadata.time_index
+                    if time_channel_id is None:
+                        text = "No Time channel found. The FCS file does not conform to standard."
+                        warnings.warn(text)
+                        if self.bus:
+                            self.bus.warningMessage.emit(text)
+
                     scatter_channel_ids = sample_metadata.scatter_indices
                     fluorescence_channel_ids = sample_metadata.fluoro_indices
                     event_channels_pnn = all_sample_pnn[0]

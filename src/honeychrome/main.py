@@ -116,7 +116,18 @@ def setup_logging(log_file):
     return logger
 
 
+def configure_multiprocessing():
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller executable
+        mp.freeze_support()  # Required for Windows
+        # On Unix systems, also need:
+        if os.name == 'posix':
+            mp.set_start_method('spawn', force=True)
+
+
 def main():
+    configure_multiprocessing()
+
     # create experiments directory and plugins directory
     experiment_path = Path.home() / experiments_folder
     experiment_path.mkdir(parents=True, exist_ok=True)
@@ -295,13 +306,4 @@ def main():
     sys.exit(exit_code)
 
 if __name__ == '__main__':
-    if getattr(sys, 'frozen', False):
-        # Running as PyInstaller executable
-        import multiprocessing
-        multiprocessing.freeze_support()  # Required for Windows
-        # On Unix systems, also need:
-        if os.name == 'posix':
-            import multiprocessing
-            multiprocessing.set_start_method('spawn', force=True)
-
     main()
