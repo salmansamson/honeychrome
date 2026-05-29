@@ -87,12 +87,6 @@ class ImportFCSController(QObject):
                     )
 
                     if cyt_info is not None:
-                        # --- DIAGNOSTIC: remove before release ---
-                        from honeychrome.controller_components.cytometer_whitelist import _CYTOMETER_PARAMS
-                        logger.info('Opteon non_spectral_pat: %s', _CYTOMETER_PARAMS['Opteon'].non_spectral_pat)
-                        logger.info('fluoro count before override: %d', len(cyt_info.fluorescence_channel_ids))
-                        logger.info('fluoro channel names: %s', [event_channels_pnn[i] for i in cyt_info.fluorescence_channel_ids])
-                        # --- END DIAGNOSTIC ---
                         fluorescence_channel_ids = cyt_info.fluorescence_channel_ids
                         logger.info(
                             'Cytometer identified as "%s". '
@@ -180,23 +174,8 @@ class ImportFCSController(QObject):
                         cyt_info.scatter_display_ceiling if cyt_info is not None else {}
                     )
 
-                    # --- DIAGNOSTIC: remove before release ---
-                    for i, (name, r) in enumerate(zip(event_channels_pnn, pnr)):
-                        logger.info(
-                            'Channel %d: %-25s  PNR=%-12s  scatter=%-5s  fluoro=%s',
-                            i, name, r,
-                            i in scatter_channel_ids,
-                            i in fluorescence_channel_ids,
-                        )
-                    # --- END DIAGNOSTIC ---
-
                     # set up raw transforms
                     self.experiment.cytometry['raw_transforms'] = assign_default_transforms(self.experiment.settings['raw'])
-                    # --- DIAGNOSTIC ---
-                    logger.info('FSC-H transform: %s', self.experiment.cytometry['raw_transforms'].get('FSC-H'))
-                    logger.info('FSC-A transform: %s', self.experiment.cytometry['raw_transforms'].get('FSC-A'))
-                    logger.info('channel_pnr stored: %s', self.experiment.settings['raw'].get('channel_pnr', 'NOT FOUND')[:5])
-                    # --- END DIAGNOSTIC ---
                     raw_transformations = generate_transformations(self.experiment.cytometry['raw_transforms'])
 
                     # set up raw gating
@@ -239,17 +218,6 @@ class ImportFCSController(QObject):
                         else:
                             sing_y = None
 
-                    # --- DIAGNOSTIC ---
-                    logger.info('morph_x=%s morph_y=%s sing_x=%s height_channels=%s width_channels=%s',
-                                morph_x, morph_y, sing_x, height_channels, width_channels)
-                    # --- END DIAGNOSTIC ---
-                    
-                    # --- DIAGNOSTIC ---
-                    logger.info('sing_x=%s sing_y=%s preferred=%s',
-                                sing_x, sing_y,
-                                cyt_info.singlet_y_preference if cyt_info else 'None')
-                    # --- END DIAGNOSTIC ---
-                    
                     time_plot = None
                     morph_plot = None
                     singlet_plot = None
@@ -284,10 +252,7 @@ class ImportFCSController(QObject):
                             sing_y_pnr = pnr[event_channels_pnn.index(sing_y)]
                             sing_x_ceil = _display_ceil(sing_x)
                             sing_y_ceil = _display_ceil(sing_y)
-                            # --- DIAGNOSTIC ---
-                            logger.info('sing_x=%s pnr=%s ceil=%s  sing_y=%s pnr=%s ceil=%s',
-                                        sing_x, sing_x_pnr, sing_x_ceil, sing_y, sing_y_pnr, sing_y_ceil)
-                            # --- END DIAGNOSTIC ---
+                            
                             if sing_y == 'FSC-W':
                                 dim_x = Dimension(sing_x, range_min=0.2 * sing_x_ceil / sing_x_pnr,
                                                   range_max=0.8 * sing_x_ceil / sing_x_pnr, transformation_ref=sing_x)
