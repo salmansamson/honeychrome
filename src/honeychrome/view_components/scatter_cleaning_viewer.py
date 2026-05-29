@@ -295,14 +295,22 @@ class ScatterCleaningViewer(QFrame):
         return super().eventFilter(obj, event)
     
     def refresh_combo(self):
+        from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
         cleaned = self.controller.cleaned_events
         spectral_model = self.controller.experiment.process.get('spectral_model', [])
         # Only include controls that actually underwent scatter matching,
         # ordered as they appear in the spectral model.
         model_order = [c['label'] for c in spectral_model if 'label' in c]
+        # Build a lookup so we can cross-check the *current* model state, not just
+        # whatever n_scatter_matched is stored in cleaned_events (which may be stale
+        # if the user changed a control to [Internal Negative] without re-running cleaning).
+        control_by_label = {c['label']: c for c in spectral_model if 'label' in c}
         labels = [
             label for label in model_order
-            if label in cleaned and cleaned[label].get('n_scatter_matched', 0) > 0
+            if label in cleaned
+            and cleaned[label].get('n_scatter_matched', 0) > 0
+            and control_by_label.get(label, {}).get('particle_type') != 'Beads'
+            and control_by_label.get(label, {}).get('universal_negative_name') != INTERNAL_NEGATIVE_SENTINEL
         ]
         current = self._combo.currentText()
         self._combo.blockSignals(True)
@@ -428,6 +436,19 @@ class ScatterCleaningViewer(QFrame):
         control = next((c for c in spectral_model if c.get('label') == label), None)
         if control is None:
             self._status.setText('Control not found in spectral model.')
+            return
+
+        from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
+        _use_internal = (
+            control.get('particle_type') == 'Beads'
+            or control.get('universal_negative_name') == INTERNAL_NEGATIVE_SENTINEL
+        )
+        if _use_internal:
+            self._neg_title.setText('No scatter-matching — internal negative')
+            self._pos_title.setText(f'{label} — {control.get("sample_name", "—")}')
+            self._status.setText(
+                'Internal / bead negative: scatter matching is not performed for this control.'
+            )
             return
 
         experiment_dir  = self.controller.experiment_dir
