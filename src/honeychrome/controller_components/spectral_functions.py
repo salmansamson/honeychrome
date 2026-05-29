@@ -153,10 +153,8 @@ def get_profile_from_events(
         slope_change = np.max(np.abs(slopes - prev_slopes))
         prev_slopes[:] = slopes
         if slope_change < 1e-6:
-            logger.info(f'get_profile_from_events: "{label}": IRLS converged at iteration {i+1} (slope_change={slope_change:.2e})')
             break
     else:
-        logger.info(f'get_profile_from_events: "{label}": IRLS reached max iterations (slope_change={slope_change:.2e}) — falling back to mean-difference profile')
         pos_mean = positive_events.mean(axis=0)
         neg_mean = negative_events.mean(axis=0)
         peak_denom = pos_mean[peak_ch_idx] - neg_mean[peak_ch_idx]
