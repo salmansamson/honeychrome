@@ -31,6 +31,7 @@ methods:
 -create or update gate
 '''
 
+import time
 import json
 import sys
 from copy import deepcopy
@@ -60,13 +61,22 @@ def safe_save(content, filename):
     # Write to temp file
     with open(temp_name, 'w') as f:
         f.write(content)
+        f.flush()
         os.fsync(f.fileno())
 
-    # Atomic rename
-    try:
-        os.replace(temp_name, filename)
-    except Exception as e:
-        logger.error(f'Failed to replace {filename}. Saved as {temp_name}. {e}')
+    # Retry loop handles transient locks (antivirus, indexer, concurrent save)
+    for attempt in range(5):
+        try:
+            os.replace(temp_name, filename)
+            return
+        except PermissionError as e:
+            if attempt < 4:
+                time.sleep(0.1 * (attempt + 1))
+            else:
+                logger.error(f'Failed to replace {filename}. Saved as {temp_name}. {e}')
+        except Exception as e:
+            logger.error(f'Failed to replace {filename}. Saved as {temp_name}. {e}')
+            return
 
 def check_fcs_matches_experiment(sample_full_path, experiment_pnn_raw, magnitude_ceiling):
     # sample_metadata = flowio_v14.FlowData(sample_full_path, only_text=True)
@@ -202,18 +212,10 @@ class ExperimentModel:
         experiment_dir_raw_samples = self.settings['raw']['raw_samples_subdirectory']
         experiment_dir_unmixed_samples = self.settings['unmixed']['unmixed_samples_subdirectory']
 
-        # use relative paths if available. On Microshaft Windblows this doesn't work for links. Therefore use absolute paths as fallback
-        if check_for_windows_junction(experiment_dir/experiment_dir_single_stain_controls):
-            single_stain_controls = [str(p) for p in sorted((experiment_dir/experiment_dir_single_stain_controls).resolve().glob('**/*.fcs'))]
-            logger.info(f"ExperimentModel: experiment_dir_single_stain_controls {experiment_dir_single_stain_controls} is a junction; using absolute paths to files")
-        else:
-            single_stain_controls = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_single_stain_controls).glob('**/*.fcs'))]
-
-        if check_for_windows_junction(experiment_dir/experiment_dir_raw_samples):
-            raw_samples = [str(p) for p in sorted((experiment_dir/experiment_dir_raw_samples).resolve().glob('**/*.fcs'))]
-            logger.info(f"ExperimentModel: experiment_dir_raw_samples {experiment_dir_raw_samples} is a junction; using absolute paths to files")
-        else:
-            raw_samples = [str(p.relative_to(experiment_dir)) for p in sorted((experiment_dir/experiment_dir_raw_samples).glob('**/*.fcs'))]
+        single_stain_controls = [str(p.relative_to(experiment_dir)) for p in
+                                 sorted((experiment_dir / experiment_dir_single_stain_controls).glob('**/*.fcs'))]
+        raw_samples = [str(p.relative_to(experiment_dir)) for p in
+                       sorted((experiment_dir / experiment_dir_raw_samples).glob('**/*.fcs'))]
 
         # add all single stain controls to raw samples if not already present
         for sample_path in single_stain_controls:

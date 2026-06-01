@@ -22,11 +22,11 @@ class CytometryToolbarPopout(QToolBar):
         self.addAction(self.action_quadrant_gates)
 
         grid_widget = self.parent()
-        self.action_range_gate.triggered.connect(lambda: grid_widget.selected_plot.new_range_gate())
-        self.action_rectangle_gate.triggered.connect(lambda: grid_widget.selected_plot.new_rectangle_gate())
-        self.action_polygon_gate.triggered.connect(lambda: grid_widget.selected_plot.initiate_polygon_roi())
-        self.action_ellipse_gate.triggered.connect(lambda: grid_widget.selected_plot.new_ellipse_gate())
-        self.action_quadrant_gates.triggered.connect(lambda: grid_widget.selected_plot.new_quadrant_gate())
+        self.action_range_gate.triggered.connect(lambda: grid_widget.selected_plot.new_range_gate() if grid_widget.selected_plot else None)
+        self.action_rectangle_gate.triggered.connect(lambda: grid_widget.selected_plot.new_rectangle_gate() if grid_widget.selected_plot else None)
+        self.action_polygon_gate.triggered.connect(lambda: grid_widget.selected_plot.initiate_polygon_roi() if grid_widget.selected_plot else None)
+        self.action_ellipse_gate.triggered.connect(lambda: grid_widget.selected_plot.new_ellipse_gate() if grid_widget.selected_plot else None)
+        self.action_quadrant_gates.triggered.connect(lambda: grid_widget.selected_plot.new_quadrant_gate() if grid_widget.selected_plot else None)
 
 
         # Adaptive stylesheet

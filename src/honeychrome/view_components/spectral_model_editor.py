@@ -1008,7 +1008,7 @@ class SpectralControlsEditor(QFrame):
 
             # append if label - antigen has been changed f'{antigen} {name}'.strip() if antigen else name
             if self.controller.data_for_cytometry_plots_unmixed.get('pnn_labels'):
-                antigen_labels = [(f'{c['antigen']} {c['label']}'.strip() if c['antigen'] else c['label']) for c in self.model._data]
+                antigen_labels = [(f'{c.get("antigen") or ""} {c["label"]}'.strip() or c['label']) for c in self.model._data]
                 full_labels_from_cytometry_plots = list(self.controller.data_for_cytometry_plots_unmixed['pnn_labels'].values())
                 changed_antigen_label_indices_in_spectral_model = [n for n, k in enumerate(antigen_labels) if k not in full_labels_from_cytometry_plots]
                 for n in changed_antigen_label_indices_in_spectral_model:
@@ -1110,6 +1110,10 @@ class SpectralControlsEditor(QFrame):
         all_samples_reverse = {v: k for k, v in self.controller.experiment.samples['all_samples'].items()}
         sample_rel_path = all_samples_reverse.get(control.get('sample_name', ''))
         try:
+            if sample_rel_path is None:
+                logger.warning(f'SpectralModelEditor: _move_pos_neg_gates: sample "{control.get("sample_name")}" not in experiment samples — using fallback bounds')
+                raise ValueError("sample not found")  # caught by the existing except block
+
             sample_full_path = str(self.controller.experiment_dir / sample_rel_path)
             sample = sample_from_fcs(sample_full_path)
             fluor_ids = self.controller.filtered_raw_fluorescence_channel_ids
@@ -1129,7 +1133,10 @@ class SpectralControlsEditor(QFrame):
             fl_bottom = np.percentile(ch_values, [0, neg_pct])
         except Exception as e:
             logger.warning(f'_move_pos_neg_gates: could not derive bounds for "{label}": {e} — using full-range fallback')
-            lo, hi = xform.limits
+            transformation = self.controller.raw_transformations.get(channel_x)
+            if transformation is None:
+                return
+            lo, hi = transformation.limits
             fl_top    = np.array([lo + 0.6 * (hi - lo), hi])
             fl_bottom = np.array([lo, lo + 0.25 * (hi - lo)])
 

@@ -145,8 +145,9 @@ class PluginWidget(QWidget):
                 selection = self.picker.get_ordered_list()
                 if not selection:
                     all_samples = self.controller.experiment.samples['all_samples']
-                    # source_samples_relative_to_raw = [str(Path(sample).relative_to(self.controller.experiment.settings['raw']['raw_samples_subdirectory'])) for sample in all_samples]
-                    self.picker.set_items(all_samples)
+                    raw_samples_subdirectory = self.controller.experiment.settings['raw']['raw_samples_subdirectory']
+                    source_samples_relative_to_raw = [str(Path(sample).relative_to(raw_samples_subdirectory)) for sample in all_samples if Path(sample).is_relative_to(raw_samples_subdirectory)]
+                    self.picker.set_items(source_samples_relative_to_raw)
 
                 # populate gate selection if selection wasn't already made
                 if self.gate_combo.currentText() == "Select Gate:":

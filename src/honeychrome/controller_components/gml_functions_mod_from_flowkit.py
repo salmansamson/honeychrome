@@ -8,6 +8,9 @@ from flowkit._utils.xml_utils import _construct_gates, _construct_transforms, _c
 from flowkit.exceptions import QuadrantReferenceError
 from lxml import etree
 
+import logging
+logger = logging.getLogger(__name__)
+
 def to_gml(gating_strategy):
     """
     **** Based on export_gatingml in Flowkit ****
@@ -176,7 +179,12 @@ def from_gml(xml):
     process_order = list(nx.algorithms.topological_sort(dag))
 
     for q_id in quadrants:
-        process_order.remove(q_id)
+        try:
+            process_order.remove(q_id)
+        except ValueError:
+            logger.warning(f"from_gml: quadrant id '{q_id}' not found in process_order — skipping")
+
+
 
     # remove boolean edges to create a true ancestor graph
     dag.remove_edges_from(bool_edges)

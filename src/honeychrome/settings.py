@@ -12,22 +12,23 @@ devices_boot_order = [
 transfer_target_repeat_time = 0.05 #s
 n_channels_trace = 16
 adc_rate = 2.5  # [MHz]
-max_event_time = 20  # [us]
+max_event_time = 120  # [us]
 deltaT = 1/adc_rate # [us]
+adc_scale_mv = 30 # the adc level for 1 mV
 
 ### peak detection settings
 trigger_channel = 'FSC'
 FSC_sense = -1
-threshold = 150 # mV
-baseline_time = 3e-6  # time in us, sets decay rate of exponentially moving average
-window_extension_time_pre = 3e-6  # time in us, sets time before threshold crossing to start integration and stop averaging signal
-window_extension_time_post = 3e-6  # time in us, sets time before threshold crossing to start integration and stop averaging signal
+threshold = 100 # mV
+baseline_time = 15e-6  # time in s, sets decay rate of exponentially moving average
+window_extension_time_pre = 15e-6  # time in s, sets time before threshold crossing to start integration and stop averaging signal
+window_extension_time_post = 15e-6  # time in s, sets time before threshold crossing to start integration and stop averaging signal
 
 baseline_length = int(baseline_time * adc_rate * 1e6)
 baseline_decay_rate = 1 / baseline_length
 window_extension_length_pre = int(window_extension_time_pre * adc_rate * 1e6)
 window_extension_length_post = int(window_extension_time_post * adc_rate * 1e6)
-timeout_length = int(max_event_time * adc_rate * 1e6)
+timeout_length = int(max_event_time * adc_rate)
 
 ### define traces cache
 max_events_in_traces_cache = 100_000
@@ -36,6 +37,9 @@ bytes_per_value = 2
 traces_cache_dtype = 'uint16'
 trace_n_points = n_channels_trace * n_time_points_in_event
 traces_cache_size = max_events_in_traces_cache * trace_n_points  # e.g. 160_000_000 for 100_000 events, 16 channels, 20 us --> 50 time points, 2 bytes per value
+nearly_floor_uint16 = 65536*0.1
+nearly_ceiling_uint16 = 65536*0.9
+half_uint16 = 65536*0.5
 
 ### folder in home directory where experiments will be stored
 experiments_folder = 'Experiments'

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import numpy as np
@@ -93,6 +94,7 @@ class DictTreeModel(QAbstractItemModel):
     def update_statistics(self, new_statistics):
         """Update the statistics without rebuilding the tree"""
         self.statistics = new_statistics
+        # print(json.dumps(new_statistics, indent=2))
 
         # Start recursive update from root
         self._update_tree_item_data(self.root_item)

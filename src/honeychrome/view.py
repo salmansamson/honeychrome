@@ -187,7 +187,7 @@ class View(QObject):
         for developing both new instrumentation and new methods in data analysis/visualisation.
         <p>
                 
-        <p>Visit <a href="https://cytkit.com/honeychrome">https://cytkit.com/honeychrome</a> for more info.</p>
+        <p>Visit <a href="https://honeychrome.cytkit.com">https://honeychrome.cytkit.com</a> for more info.</p>
         <p>Send your feedback to <a href="mailto:hello@cytkit.com">hello@cytkit.com</a>.</p>
         </body>
         </html>

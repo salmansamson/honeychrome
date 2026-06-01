@@ -6,33 +6,7 @@ Honeychrome - open source cytometry data acquisition and analysis software
 
 import os
 import sys
-from pathlib import Path, WindowsPath, PosixPath
-
-# Monkey-patch the Path div operator to handle absolute paths on Windows
-original_truediv = Path.__truediv__
-def smart_truediv(self, other):
-    """
-    Overridden / operator for pathlib.Path.
-    If 'other' looks like an absolute Windows path (e.g., 'D:\\data'),
-    it bypasses the relative restriction and returns 'other' directly.
-    """
-    if isinstance(other, (str, Path)):
-        other_str = str(other)
-
-        # Check if 'other' is an absolute Windows path (starts with drive letter like D:)
-        # This happens when os.path.relpath falls back to an absolute path.
-        if len(other_str) >= 2 and other_str[1] == ':' and other_str[0].isalpha():
-            return Path(other)
-
-    # Otherwise, behave exactly like standard pathlib
-    return original_truediv(self, other)
-
-# Apply the patch globally to Path and its OS-specific subclasses
-Path.__truediv__ = smart_truediv
-WindowsPath.__truediv__ = smart_truediv
-PosixPath.__truediv__ = smart_truediv
-
-
+from pathlib import Path
 import platform
 import shutil
 
@@ -142,7 +116,18 @@ def setup_logging(log_file):
     return logger
 
 
+def configure_multiprocessing():
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller executable
+        mp.freeze_support()  # Required for Windows
+        # On Unix systems, also need:
+        if os.name == 'posix':
+            mp.set_start_method('spawn', force=True)
+
+
 def main():
+    configure_multiprocessing()
+
     # create experiments directory and plugins directory
     experiment_path = Path.home() / experiments_folder
     experiment_path.mkdir(parents=True, exist_ok=True)
@@ -264,7 +249,7 @@ def main():
 
     if sys.platform == 'win32':
         import ctypes
-        myappid = 'honeychrome.cytometry.v0.8.0'
+        myappid = f'honeychrome.cytometry.v{__version__}'
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
     # Use Fusion style (works consistently across platforms)
@@ -321,13 +306,4 @@ def main():
     sys.exit(exit_code)
 
 if __name__ == '__main__':
-    if getattr(sys, 'frozen', False):
-        # Running as PyInstaller executable
-        import multiprocessing
-        multiprocessing.freeze_support()  # Required for Windows
-        # On Unix systems, also need:
-        if os.name == 'posix':
-            import multiprocessing
-            multiprocessing.set_start_method('spawn', force=True)
-
     main()

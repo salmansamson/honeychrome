@@ -108,8 +108,8 @@ class Controller(QObject):
         self.af_precomputed_cache: dict = {}
         self.raw_transformations = None
         self.unmixed_transformations = None
-        self.raw_gating = None
-        self.unmixed_gating = None
+        self.raw_gating = GatingStrategy()
+        self.unmixed_gating = GatingStrategy()
         self.data_for_cytometry_plots = deepcopy(cytometry_data_dictionary)
         self.data_for_cytometry_plots_raw = deepcopy(self.data_for_cytometry_plots)
         self.data_for_cytometry_plots_process = deepcopy(self.data_for_cytometry_plots)
@@ -387,8 +387,8 @@ class Controller(QObject):
         self.af_precomputed_cache = {}
         self.raw_transformations = None
         self.unmixed_transformations = None
-        self.raw_gating = None
-        self.unmixed_gating = None
+        self.raw_gating = GatingStrategy()
+        self.unmixed_gating = GatingStrategy()
         self.cleaned_events: dict = {}   # runtime-only; numpy arrays; not serialised
         self.data_for_cytometry_plots = {'pnn': None, 'fluoro_indices': None, 'lookup_tables': None, 'event_data': None, 'transformations': None, 'statistics': {}, 'gating': GatingStrategy(), 'plots': [], 'histograms': [], 'gate_membership': {}}
         self.data_for_cytometry_plots_raw = deepcopy(self.data_for_cytometry_plots)
@@ -448,7 +448,7 @@ class Controller(QObject):
                 logger.info(f'Controller: using {source_gate} as base gate for process NxN plots')
                 process_plots = define_process_plots(self.experiment.settings['unmixed']['fluorescence_channels'], self.experiment.settings['unmixed']['fluorescence_channels'], source_gate=source_gate)
             else:
-                self.unmixed_gating = None
+                self.unmixed_gating = GatingStrategy()
                 self.unmixed_transformations = None
                 self.unmixed_lookup_tables = {}
                 process_plots = []
@@ -1229,6 +1229,9 @@ class Controller(QObject):
             time.sleep(live_data_process_repeat_time)
 
     def calc_hists_and_stats(self, gates_to_calculate=None, indices_plots_to_calculate=None, status_message_signal=None):
+        # guard first against this being reached by wrong path
+        if self.data_for_cytometry_plots is None:
+            return
         if self.data_for_cytometry_plots['event_data'] is not None:
             # apply gates to event data
             # if gates_to_calculate is none, then initialise gates_membership dict, otherwise reference it from data_for_cytometry_plots
@@ -1255,7 +1258,10 @@ class Controller(QObject):
                 indices_plots_to_calculate = list(range(len(self.data_for_cytometry_plots['plots'])))
 
             for m, n in enumerate(indices_plots_to_calculate):
-                self.data_for_cytometry_plots['histograms'][n] += hists[m]
+                if self.data_for_cytometry_plots['histograms'][n].shape == hists[m].shape:
+                    self.data_for_cytometry_plots['histograms'][n] += hists[m]
+                else:
+                    logger.warning(f'Controller: calc_hists_and_stats: histogram shape mismatch for plot {n} — discarding stale result')
 
             if self.bus is not None:
                 self.bus.histsStatsRecalculated.emit(self.current_mode, indices_plots_to_calculate)

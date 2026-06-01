@@ -249,12 +249,12 @@ class ReportGenerator(QObject):
             row.cells[5].text = 'Gate Label'
             for control in self.controller.experiment.process['spectral_model']:
                 row = table.add_row()
-                row.cells[0].text = control['label'] if control['label'] else ''
-                row.cells[1].text = control['antigen'] if control['antigen'] else ''
-                row.cells[2].text = control['control_type'] if control['control_type'] else ''
-                row.cells[3].text = control['particle_type'] if control['particle_type'] else ''
-                row.cells[4].text = control['gate_channel'] if control['gate_channel'] else ''
-                row.cells[5].text = control['gate_label'] if control['gate_label'] else ''
+                row.cells[0].text = control.get('label') or ''
+                row.cells[1].text = control.get('antigen') or ''
+                row.cells[2].text = control.get('control_type')or ''
+                row.cells[3].text = control.get('particle_type')  or ''
+                row.cells[4].text = control.get('gate_channel') or ''
+                row.cells[5].text = control.get('gate_label') or ''
             reliable_table_autofit(table)
             format_table(table)
 
@@ -321,16 +321,22 @@ class ReportGenerator(QObject):
             compensation_editor.deleteLater()
             nxn_viewer.deleteLater()
 
-        # Save - one line!
-        doc.save(docx_path)
+        # try to save - make sure destination is writable!
+        try:
+            doc.save(docx_path)
+            logger.info(f'ReportGenerator: finished {docx_path}')
+            self.bus.statusMessage.emit(f'ReportGenerator: exported {docx_path}')
+            self.bus.popupMessage.emit(f"Exported report: {docx_path}")
+
+        except Exception as e:
+            self.bus.warningMessage.emit(f'Could not write report to file. {e}')
+            logger.warning(f'Could not write report to file. Is it open? {e}')
+
         container.deleteLater()
 
         # restore cytometry
         self.controller.set_mode(current_mode)
         pg.setConfigOptions(background=old_bg, foreground=old_fg)
 
-        logger.info(f'ReportGenerator: finished {docx_path}')
-        self.bus.statusMessage.emit(f'ReportGenerator: exported {docx_path}')
-        self.bus.popupMessage.emit(f"Exported report: {docx_path}")
         self.finished.emit()
 
