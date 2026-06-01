@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from PySide6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout, QRadioButton, QButtonGroup, QLineEdit,
                                QLabel, QPushButton, QDialogButtonBox, QCheckBox)
 from PySide6.QtGui import QRegularExpressionValidator, Qt
@@ -10,7 +12,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 class BatchExportSamplesModal(QDialog):
-    def __init__(self, parent=None, bus=None, path=None, experiment_dir=None, root_label=None):
+    def __init__(self, parent=None, bus=None, path=None, experiment_dir=None, root_label=None, extra_roots=None):
+        """
+        path          : primary root to walk (raw folder)
+        experiment_dir: experiment base directory
+        root_label    : display name for the primary root (None = default)
+        extra_roots   : list of (abs_path_str, label_str) for additional roots
+                        (e.g. a symlinked SSC folder that lives outside raw)
+        """
+
         super().__init__(parent)
         self.bus = bus
         self.setWindowTitle("Batch Export Unmixed")
@@ -19,6 +29,16 @@ class BatchExportSamplesModal(QDialog):
         self.folders = get_all_subfolders_recursive(path, experiment_dir)
         self.sample_sets = [str((experiment_dir / f).relative_to(path)) for f in self.folders]
         self.sample_sets[0] = root_label if root_label else '[All FCS files in experiment folder]'
+
+        if extra_roots:
+            for extra_path_str, extra_label in extra_roots:
+                extra_path = Path(extra_path_str)
+                extra_folders = get_all_subfolders_recursive(extra_path, experiment_dir)
+                extra_sample_sets = [str((experiment_dir / f).relative_to(extra_path)) for f in extra_folders]
+                extra_sample_sets[0] = extra_label
+
+                self.folders += extra_folders
+                self.sample_sets += extra_sample_sets
 
         layout = QVBoxLayout(self)
         description = QLabel('''

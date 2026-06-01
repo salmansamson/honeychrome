@@ -394,20 +394,22 @@ class SampleWidget(QWidget):
     def show_export_modal(self):
         raw = self.controller.experiment.settings['raw']['raw_samples_subdirectory']
         ssc = self.controller.experiment.settings['raw']['single_stain_controls_subdirectory']
-        # In the normal case ssc is nested inside raw (e.g. "Raw/Single stain controls")
-        # and walking raw covers it. In the symlink case ssc is a top-level Link_to__...
-        # folder and raw is empty — walk ssc instead so the modal sees the real files.
+        exp_dir = self.controller.experiment_dir
+
+        raw_path = str(exp_dir / raw)
+        raw_label = Path(raw).name  # e.g. "Raw"
+
         if Path(ssc).is_relative_to(raw):
-            path = str(self.controller.experiment_dir / raw)
-            root_label = None  # non-symlink: use default "[All FCS files in experiment folder]"
+            # Normal case: ssc is nested inside raw, walking raw covers everything.
+            dialog = BatchExportSamplesModal(self, self.bus, raw_path, exp_dir, root_label=raw_label, extra_roots=None)
         else:
-            path = str(self.controller.experiment_dir / ssc)
-            # The folder is a symlink whose disk name is opaque (Link_to__...).
-            # Derive a readable label from the experiment setting value, which is what
-            # the user saw when they picked the folder in Experiment Settings.
-            ssc_path = Path(ssc)
-            root_label = str(ssc_path.name)  # e.g. "SSC" or the last component of the setting
-        dialog = BatchExportSamplesModal(self, self.bus, path, self.controller.experiment_dir, root_label=root_label)
+            # Symlink case: ssc lives outside raw as a top-level symlink.
+            # Pass it as a second root so both appear in the modal with their
+            # user-facing names from the experiment settings.
+            ssc_path = str(exp_dir / ssc)
+            ssc_label = Path(ssc).name  # e.g. "SSC" or "Link_to__..."
+            dialog = BatchExportSamplesModal(self, self.bus, raw_path, exp_dir, root_label=raw_label, extra_roots=[(ssc_path, ssc_label)])
+
         dialog.open()
 
     @Slot(str, bool)
