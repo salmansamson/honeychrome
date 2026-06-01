@@ -61,14 +61,14 @@ A set of compressed binary installers are available below.
 2. Double click to run the installer
 
 #### Linux (Ubuntu with Wayland) > 24.04)
-1. Download [Honeychrome for Linux x64 Ubuntu > 24.04](https://github.com/salmansamson/honeychrome/releases/download/v0.8.0/honeychrome-v0.8.0-linux-x64.tar.gz)
+1. Download [Honeychrome for Linux x64 Ubuntu > 24.04](https://github.com/salmansamson/honeychrome/releases/download/v0.8.2/honeychrome-v0.8.2-linux-x64.tar.gz)
 2. Extract the honeychrome folder and put it somewhere appropriate for the single user or system
 3. Change to the honeychrome folder and run ./install_linux.sh
 
 (For other Linux systems, please use the Python instructions below.)
 
 #### MacOs
-1. Download [Honeychrome for MacOS (arm64)](https://github.com/salmansamson/honeychrome/releases/download/v0.8.0/honeychrome-v0.8.0-macos.dmg)
+1. Download [Honeychrome for MacOS (arm64)](https://github.com/salmansamson/honeychrome/releases/download/v0.8.2/honeychrome-v0.8.2-macos.dmg)
 2. Open the disk image and drag honeychrome.app to your Applications folder.
 3. Double click the app in your Applications folder to run 
 
