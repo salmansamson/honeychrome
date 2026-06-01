@@ -34,8 +34,8 @@ jobs:
             artifact_name: win-x64
 #          - os: macos-14
 #            artifact_name: mac-intel
-#          - os: macos-latest
-#            artifact_name: mac-arm64
+          - os: macos-latest
+            artifact_name: mac-arm64
 
     steps:
       - name: Check out code
@@ -61,7 +61,15 @@ jobs:
 
       - name: Build macOS
         if: startsWith(matrix.os, 'macos')
-        run: | 
+        run: |
+          echo "$APPLE_CERT_BASE64" | base64 --decode > cert.p12
+          security create-keychain -p "" build.keychain
+          security import cert.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" build.keychain
+          security list-keychains -d user -s build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+
           make build
           brew install create-dmg
           chmod +x create_dmg_mac.sh
@@ -71,6 +79,12 @@ jobs:
           echo "--- Contents of dist/honeychrome.app/Contents/ ---"
           ls -R dist/honeychrome.app/Contents/
           ./create_dmg_mac.sh
+        env:
+          APPLE_CERT_BASE64: ${{ secrets.APPLE_CERT_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Build Windows
         if: matrix.os == 'windows-2022'
@@ -92,26 +106,17 @@ jobs:
         if: matrix.os == 'windows-2022'
         shell: powershell
         run: |
-          # 1. Ensure clean directory paths
-          $distDir = "$env:GITHUB_WORKSPACE\dist\honeychrome"
-          $manifest = "$env:GITHUB_WORKSPACE\AppxManifest.xml"
-          $output = "$env:GITHUB_WORKSPACE\honeychrome.msix"
-          
-          # 2. Copy dependencies into the dist folder
-          Copy-Item -Path $manifest -Destination $distDir\AppxManifest.xml
-          
-          if (Test-Path "$env:GITHUB_WORKSPACE\assets") {
-              Copy-Item -Path "$env:GITHUB_WORKSPACE\assets" -Destination $distDir\ -Recurse -Force
+          Copy-Item -Path .\AppxManifest.xml -Destination .\dist\honeychrome\
+          if (Test-Path .\assets) {
+              Copy-Item -Path .\assets -Destination .\dist\honeychrome\ -Recurse -Force
           }
           
-          # 3. Aggressive Sanitization (only run this ONCE on the final source)
-          Get-ChildItem -Path $distDir -Recurse -Force | Where-Object { 
-              $_.Name -match '^\.' -or $_.Name -match '\.$' -or $_.Name -match '[<>:"|?*]' 
-          } | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+          cd dist
           
-          # 4. PACK: Use absolute paths, remove the /m mapping file entirely
-          # We use /f (force) to ensure it treats the manifest in the folder as the primary
-          & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64\makeappx.exe" pack /v /o /d "$distDir" /p "$output"
+          rm -r honeychrome\_internal\docx\templates\default-docx-template
+          
+          # PACK
+          MakeAppx.exe pack /v /o /d "honeychrome" /p "honeychrome.msix"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v6
@@ -121,7 +126,7 @@ jobs:
             **/*.exe
             **/*.dmg
             **/*.tar.gz
-            *.msix
+            **/*.msix
 
       - name: Release Raw Binaries
         uses: softprops/action-gh-release@v2
@@ -132,6 +137,6 @@ jobs:
             **/*.exe
             **/*.dmg
             **/*.tar.gz
-            *.msix
+            **/*.msix
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
