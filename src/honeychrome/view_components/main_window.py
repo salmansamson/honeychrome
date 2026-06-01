@@ -370,7 +370,7 @@ class MainWindow(QMainWindow):
                             for _t in _node.targets:
                                 if isinstance(_t, ast.Name) and _t.id == 'plugin_name':
                                     if isinstance(_node.value, ast.Constant):
-                                        _name = _node.value.s
+                                        _name = _node.value.value
                 except Exception:
                     pass
                 _ph = QWidget()

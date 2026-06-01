@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class BatchExportSamplesModal(QDialog):
-    def __init__(self, parent=None, bus=None, path=None, experiment_dir=None):
+    def __init__(self, parent=None, bus=None, path=None, experiment_dir=None, root_label=None):
         super().__init__(parent)
         self.bus = bus
         self.setWindowTitle("Batch Export Unmixed")
@@ -18,7 +18,7 @@ class BatchExportSamplesModal(QDialog):
 
         self.folders = get_all_subfolders_recursive(path, experiment_dir)
         self.sample_sets = [str((experiment_dir / f).relative_to(path)) for f in self.folders]
-        self.sample_sets[0] = '[All FCS files in experiment folder]'
+        self.sample_sets[0] = root_label if root_label else '[All FCS files in experiment folder]'
 
         layout = QVBoxLayout(self)
         description = QLabel('''

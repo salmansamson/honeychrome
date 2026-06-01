@@ -492,7 +492,6 @@ class NxNGrid(QFrame):
             step = -settings.wheel_speed if event.angleDelta().y() > 0 else settings.wheel_speed
             new_value = float(old) + step
             self.controller.experiment.process['spillover'][rr][c] = new_value
-            self.controller.reapply_fine_tuning()
             self._timer.start()
 
             return True  # consume wheel event

@@ -44,7 +44,8 @@ def _root_scatter_channels(controller) -> tuple[str, str]:
                 return cx, cy
             if first_root_hist2d is None:
                 first_root_hist2d = (cx, cy)
-    return first_root_hist2d or ('FSC-A', 'SSC-A')
+    scatter_param = controller.experiment.settings['raw'].get('scatter_param', ['FSC-A', 'SSC-A'])
+    return first_root_hist2d or (scatter_param[0], scatter_param[1])
 
 
 def _scatter_col_indices(controller, ch_x: str, ch_y: str) -> tuple[int | None, int | None]:
@@ -92,12 +93,17 @@ class _SquareScatterWidget(pg.GraphicsLayoutWidget):
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self._axis_left   = pg.AxisItem('left')
-        self._axis_bottom = pg.AxisItem('bottom')
+        from honeychrome.view_components.cytometry_plot_components import ZoomAxis
+        self._axis_left   = ZoomAxis('left',   viewbox=None)
+        self._axis_bottom = ZoomAxis('bottom', viewbox=None)
         self.vb = pg.ViewBox()
-        self.vb.setAspectLocked(True)
+        self.vb.setAspectLocked(False)   # aspect enforced by resizeEvent, not viewbox
         self.vb.setMenuEnabled(False)
         self.vb.setMouseEnabled(x=False, y=False)
+        self._axis_left.vb   = self.vb
+        self._axis_bottom.vb = self.vb
+        self._axis_left.enableAutoSIPrefix(False)
+        self._axis_bottom.enableAutoSIPrefix(False)
 
         self.addItem(self._axis_left,   row=0, col=0)
         self.addItem(self.vb,           row=0, col=1)
@@ -121,6 +127,17 @@ class _SquareScatterWidget(pg.GraphicsLayoutWidget):
 
     def auto_range(self):
         self.vb.autoRange()
+
+    def set_range(self, tr_x, tr_y):
+        """Configure axes to match the Raw Data tab using Transform objects."""
+        self._axis_bottom.setTicks(tr_x.ticks())
+        self._axis_left.setTicks(tr_y.ticks())
+        self._axis_bottom.zoomZero = tr_x.zero
+        self._axis_left.zoomZero   = tr_y.zero
+        self._axis_bottom.limits   = tuple(tr_x.limits)
+        self._axis_left.limits     = tuple(tr_y.limits)
+        self.vb.setXRange(tr_x.limits[0], tr_x.limits[1], padding=0)
+        self.vb.setYRange(tr_y.limits[0], tr_y.limits[1], padding=0)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -218,14 +235,16 @@ class ScatterCleaningViewer(QFrame):
         self._neg_title.setStyleSheet('font-weight: bold; padding: 2px;')
         self._neg_title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         left_box.addWidget(self._neg_title)
-        self._neg_plot = _SquareScatterWidget('FSC-A', 'SSC-A')
+        _scatter_param = controller.experiment.settings['raw'].get('scatter_param', ['FSC-A', 'SSC-A'])
+        self._neg_plot = _SquareScatterWidget(_scatter_param[0], _scatter_param[1])
         self._neg_plot.setMinimumSize(320, 320)
         self._neg_plot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._neg_wheel_blocker = WheelBlocker(self)
         self._neg_plot.viewport().installEventFilter(self._neg_wheel_blocker)
         left_box.addWidget(self._neg_plot)
-        left_w = QWidget(); left_w.setLayout(left_box)
-        left_w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._left_w = QWidget(); self._left_w.setLayout(left_box)
+        self._left_w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        left_w = self._left_w
 
         right_box = QVBoxLayout()
         right_box.setSpacing(2)
@@ -234,20 +253,24 @@ class ScatterCleaningViewer(QFrame):
         self._pos_title.setStyleSheet('font-weight: bold; padding: 2px;')
         self._pos_title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         right_box.addWidget(self._pos_title)
-        self._pos_plot = _SquareScatterWidget('FSC-A', 'SSC-A')
+        self._pos_plot = _SquareScatterWidget(_scatter_param[0], _scatter_param[1])
         self._pos_plot.setMinimumSize(320, 320)
         self._pos_plot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._pos_wheel_blocker = WheelBlocker(self)
         self._pos_plot.viewport().installEventFilter(self._pos_wheel_blocker)
         right_box.addWidget(self._pos_plot)
-        right_w = QWidget(); right_w.setLayout(right_box)
-        right_w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self._right_w = QWidget(); self._right_w.setLayout(right_box)
+        self._right_w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        right_w = self._right_w
 
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.addWidget(left_w)
-        splitter.addWidget(right_w)
-        splitter.setSizes([500, 500])
-        content_layout.addWidget(splitter)
+        self._plot_pair = QWidget()
+        self._plot_pair.installEventFilter(self)
+        plot_pair_layout = QHBoxLayout(self._plot_pair)
+        plot_pair_layout.setContentsMargins(0, 0, 0, 0)
+        plot_pair_layout.setSpacing(8)
+        plot_pair_layout.addWidget(left_w, stretch=1)
+        plot_pair_layout.addWidget(right_w, stretch=1)
+        content_layout.addWidget(self._plot_pair)
 
         self._content.setVisible(False)
         outer.addWidget(self._content)
@@ -260,15 +283,34 @@ class ScatterCleaningViewer(QFrame):
     # Public
     # ------------------------------------------------------------------
 
+    def eventFilter(self, obj, event):
+        from PySide6.QtCore import QEvent
+        if obj is self._plot_pair and event.type() == QEvent.Type.Resize:
+            half = (self._plot_pair.width() - 8) // 2
+            if half > 0:
+                for w in (self._left_w, self._right_w):
+                    w.setFixedWidth(half)
+                for plot in (self._neg_plot, self._pos_plot):
+                    plot.setFixedSize(half - 18, half - 18)  # 18px for wrapper margins/padding
+        return super().eventFilter(obj, event)
+    
     def refresh_combo(self):
+        from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
         cleaned = self.controller.cleaned_events
         spectral_model = self.controller.experiment.process.get('spectral_model', [])
         # Only include controls that actually underwent scatter matching,
         # ordered as they appear in the spectral model.
         model_order = [c['label'] for c in spectral_model if 'label' in c]
+        # Build a lookup so we can cross-check the *current* model state, not just
+        # whatever n_scatter_matched is stored in cleaned_events (which may be stale
+        # if the user changed a control to [Internal Negative] without re-running cleaning).
+        control_by_label = {c['label']: c for c in spectral_model if 'label' in c}
         labels = [
             label for label in model_order
-            if label in cleaned and cleaned[label].get('n_scatter_matched', 0) > 0
+            if label in cleaned
+            and cleaned[label].get('n_scatter_matched', 0) > 0
+            and control_by_label.get(label, {}).get('particle_type') != 'Beads'
+            and control_by_label.get(label, {}).get('universal_negative_name') != INTERNAL_NEGATIVE_SENTINEL
         ]
         current = self._combo.currentText()
         self._combo.blockSignals(True)
@@ -318,6 +360,58 @@ class ScatterCleaningViewer(QFrame):
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _smooth_hull(pts: np.ndarray, density_percentile: float = 0.20, grid_n: int = 50, bw_factor: float = 1.0) -> np.ndarray | None:
+        """
+        Return convex hull vertices of the dense core of pts (n, 2).
+        Mirrors the scatter_match_negative KDE approach in spectral_cleaning.py.
+        """
+        try:
+            from scipy.stats import gaussian_kde
+            from scipy.spatial import ConvexHull
+            import matplotlib.figure
+            import matplotlib.contour  # noqa
+
+            if len(pts) < 4:
+                return None
+
+            std_x = np.std(pts[:, 0])
+            std_y = np.std(pts[:, 1])
+            n = len(pts)
+            bw_x = 1.06 * std_x * n ** (-1 / 5) * bw_factor
+            bw_y = 1.06 * std_y * n ** (-1 / 5) * bw_factor
+            scale = np.array([bw_x, bw_y])
+            if scale[0] == 0 or scale[1] == 0:
+                return None
+
+            whitened = pts / scale
+            kde = gaussian_kde(whitened.T, bw_method=1.0)
+
+            xi = np.linspace(pts[:, 0].min(), pts[:, 0].max(), grid_n)
+            yi = np.linspace(pts[:, 1].min(), pts[:, 1].max(), grid_n)
+            xx, yy = np.meshgrid(xi, yi)
+            grid_w = np.vstack([xx.ravel() / scale[0], yy.ravel() / scale[1]])
+            zz = kde(grid_w).reshape(grid_n, grid_n)
+
+            z_sort = np.sort(zz.ravel())[::-1]
+            cumdens = np.cumsum(z_sort) / z_sort.sum()
+            threshold = z_sort[np.argmin(np.abs(cumdens - density_percentile))]
+
+            fig = matplotlib.figure.Figure()
+            ax = fig.add_subplot(111)
+            cs = ax.contour(xi, yi, zz, levels=[threshold])
+            paths = [p for col in cs.collections for p in col.get_paths()]
+            if not paths:
+                return None
+            contour_pts = max(paths, key=lambda p: len(p.vertices)).vertices
+            if len(contour_pts) < 3:
+                return None
+
+            hull = ConvexHull(contour_pts)
+            return contour_pts[hull.vertices]
+        except Exception:
+            return None
+
+    @staticmethod
     def _pts(x, y, rgba, size=2) -> pg.ScatterPlotItem:
         r, g, b, a = rgba
         return pg.ScatterPlotItem(
@@ -344,6 +438,19 @@ class ScatterCleaningViewer(QFrame):
             self._status.setText('Control not found in spectral model.')
             return
 
+        from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
+        _use_internal = (
+            control.get('particle_type') == 'Beads'
+            or control.get('universal_negative_name') == INTERNAL_NEGATIVE_SENTINEL
+        )
+        if _use_internal:
+            self._neg_title.setText('No scatter-matching — internal negative')
+            self._pos_title.setText(f'{label} — {control.get("sample_name", "—")}')
+            self._status.setText(
+                'Internal / bead negative: scatter matching is not performed for this control.'
+            )
+            return
+
         experiment_dir  = self.controller.experiment_dir
         all_samples     = self.controller.experiment.samples.get('all_samples', {})
         all_samples_rev = {v: k for k, v in all_samples.items()}
@@ -356,8 +463,21 @@ class ScatterCleaningViewer(QFrame):
             self._status.setText(f'Channels {ch_x}/{ch_y} not found in event data.')
             return
 
-        # scatter_pos / scatter_neg are stored as 2-column (FSC-A, SSC-A) arrays
-        # by _clean_one — columns 0 and 1 are always the correct indices.
+        # Fetch transforms matching the Raw Data tab
+        raw_tr = getattr(self.controller, 'raw_transformations', {})
+        tr_x = raw_tr.get(ch_x)
+        tr_y = raw_tr.get(ch_y)
+        _has_tr = (tr_x is not None and tr_y is not None
+                   and tr_x.xform is not None and tr_y.xform is not None)
+
+        def _txform(arr: np.ndarray | None) -> np.ndarray | None:
+            """Transform a (n, 2) raw-space array into plot (transformed) space."""
+            if not _has_tr or arr is None or not len(arr):
+                return arr
+            out = arr.copy().astype(float)
+            out[:, 0] = tr_x.xform.apply(out[:, 0])
+            out[:, 1] = tr_y.xform.apply(out[:, 1])
+            return out
 
         # Update axis labels on both plots
         self._neg_plot.set_channel_labels(ch_x, ch_y)
@@ -424,15 +544,22 @@ class ScatterCleaningViewer(QFrame):
                     logger.warning(
                         f'ScatterCleaningViewer: neg load failed for "{label}": {exc}')
 
+        # ---- Apply transforms to all arrays ----
+        neg_scatter_all_t    = _txform(neg_scatter_all)
+        neg_scatter_matched_t = _txform(neg_scatter_matched)
+        pos_scatter_all_t    = _txform(pos_scatter_all)
+        pos_scatter_gated_t  = _txform(pos_scatter_gated)
+        pos_scatter_clean_t  = _txform(pos_scatter_clean)
+
         # ---- Draw negative plot ----
-        if neg_scatter_all is not None and len(neg_scatter_all):
+        if neg_scatter_all_t is not None and len(neg_scatter_all_t):
             self._neg_plot.add_item(self._pts(
-                neg_scatter_all[:, 0], neg_scatter_all[:, 1],
+                neg_scatter_all_t[:, 0], neg_scatter_all_t[:, 1],
                 self._COL_ALL_NEG, size=2))
 
-        if neg_scatter_matched is not None and len(neg_scatter_matched):
+        if neg_scatter_matched_t is not None and len(neg_scatter_matched_t):
             self._neg_plot.add_item(self._pts(
-                neg_scatter_matched[:, 0], neg_scatter_matched[:, 1],
+                neg_scatter_matched_t[:, 0], neg_scatter_matched_t[:, 1],
                 self._COL_MATCHED, size=3))
 
         # Hull on negative plot: use the stored hull_vertices (exact boundary used
@@ -440,7 +567,7 @@ class ScatterCleaningViewer(QFrame):
         # stored hull exists (e.g. data cleaned before hull storage was added).
         stored_hull = cleaned.get('hull_vertices')
         if stored_hull is not None and len(stored_hull) >= 3:
-            closed = np.vstack([stored_hull, stored_hull[0]])
+            closed = np.vstack([_txform(stored_hull), _txform(stored_hull[:1])])
             self._neg_plot.add_item(pg.PlotCurveItem(
                 closed[:, 0], closed[:, 1],
                 pen=pg.mkPen(self._COL_HULL, width=2),
@@ -450,33 +577,40 @@ class ScatterCleaningViewer(QFrame):
                         else (pos_scatter_gated if (pos_scatter_gated is not None and len(pos_scatter_gated) >= 4)
                               else None))
             if hull_src is not None:
-                hull_pts = self._smooth_hull(hull_src)
-                if hull_pts is not None and len(hull_pts) >= 3:
-                    closed = np.vstack([hull_pts, hull_pts[0]])
-                    self._neg_plot.add_item(pg.PlotCurveItem(
-                        closed[:, 0], closed[:, 1],
-                        pen=pg.mkPen(self._COL_HULL, width=2, style=Qt.DashLine),
-                    ))
-
-        self._neg_plot.auto_range()
+                try:
+                    hull_pts = self._smooth_hull(hull_src)
+                    if hull_pts is not None and len(hull_pts) >= 3:
+                        closed = np.vstack([_txform(hull_pts), _txform(hull_pts[:1])])
+                        self._neg_plot.add_item(pg.PlotCurveItem(
+                            closed[:, 0], closed[:, 1],
+                            pen=pg.mkPen(self._COL_HULL, width=2, style=Qt.DashLine),
+                        ))
+                except AttributeError:
+                    pass
 
         # ---- Draw positive plot ----
-        if pos_scatter_all is not None and len(pos_scatter_all):
+        if pos_scatter_all_t is not None and len(pos_scatter_all_t):
             self._pos_plot.add_item(self._pts(
-                pos_scatter_all[:, 0], pos_scatter_all[:, 1],
+                pos_scatter_all_t[:, 0], pos_scatter_all_t[:, 1],
                 self._COL_ALL_POS, size=2))
 
-        if pos_scatter_gated is not None and len(pos_scatter_gated):
+        if pos_scatter_gated_t is not None and len(pos_scatter_gated_t):
             self._pos_plot.add_item(self._pts(
-                pos_scatter_gated[:, 0], pos_scatter_gated[:, 1],
+                pos_scatter_gated_t[:, 0], pos_scatter_gated_t[:, 1],
                 self._COL_GATED_POS, size=3))
 
-        if pos_scatter_clean is not None and len(pos_scatter_clean):
+        if pos_scatter_clean_t is not None and len(pos_scatter_clean_t):
             self._pos_plot.add_item(self._pts(
-                pos_scatter_clean[:, 0], pos_scatter_clean[:, 1],
+                pos_scatter_clean_t[:, 0], pos_scatter_clean_t[:, 1],
                 self._COL_CLEAN_POS, size=4))
 
-        self._pos_plot.auto_range()
+        # ---- Set axis ranges to match the Raw Data tab ----
+        if _has_tr:
+            self._neg_plot.set_range(tr_x, tr_y)
+            self._pos_plot.set_range(tr_x, tr_y)
+        else:
+            self._neg_plot.auto_range()
+            self._pos_plot.auto_range()
 
         n_matched  = cleaned.get('n_scatter_matched', '?')
         n_pos      = cleaned.get('n_surviving_positive', '?')
@@ -486,36 +620,3 @@ class ScatterCleaningViewer(QFrame):
             f'{n_pos} brightest-selected positive (of {n_gated} gated)  ·  '
             f'{n_matched} scatter-matched negative'
         )
-
-    # ------------------------------------------------------------------
-    # Hull helper
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _smooth_hull(pts: np.ndarray, n: int = 120) -> np.ndarray | None:
-        """KDE-core convex hull interpolated to n points for smooth rendering."""
-        try:
-            from scipy.stats import gaussian_kde
-            from scipy.spatial import ConvexHull
-            from scipy.interpolate import interp1d
-
-            kde = gaussian_kde(pts.T, bw_method='scott')
-            dens = kde(pts.T)
-            core = pts[dens >= np.quantile(dens, 0.50)]
-            if len(core) < 4:
-                core = pts
-
-            hull  = ConvexHull(core)
-            verts = core[hull.vertices]
-            vc    = np.vstack([verts, verts[0]])
-            diffs = np.diff(vc, axis=0)
-            arc   = np.concatenate([[0], np.cumsum(np.hypot(diffs[:, 0], diffs[:, 1]))])
-            total = arc[-1]
-            if total == 0:
-                return verts
-            t_new = np.linspace(0, total, n, endpoint=False)
-            fx = interp1d(arc, vc[:, 0])
-            fy = interp1d(arc, vc[:, 1])
-            return np.column_stack([fx(t_new), fy(t_new)])
-        except Exception:
-            return None

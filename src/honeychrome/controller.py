@@ -131,13 +131,10 @@ class Controller(QObject):
         self.index_tail_events_cache = index_tail_events_cache
         self.adc_rate = adc_rate
 
-        # live data processing stop signals
+        # live data processing stop signal
         self.stop_live_data_processing = threading.Event()
         self.stop_live_data_processing.set()
         self.thread = None
-        self.stop_process_plots_worker = threading.Event()
-        self.stop_process_plots_worker.set()
-        self.process_plots_thread = None
 
         if self.events_cache_name is not None:
             self.shm_events = shared_memory.SharedMemory(name=self.events_cache_name)
@@ -195,10 +192,13 @@ class Controller(QObject):
 
     @Slot(str)
     def save_experiment(self, experiment_path=None):
+        if self.raw_transformations is None:
+            logger.warning('Controller: save_experiment called before transformations initialised, skipping')
+            return
         # convert ephemeral gating back to gml
         self.experiment.cytometry['raw_gating'] = to_gml(self.raw_gating)
         update_transforms(self.experiment.cytometry['raw_transforms'], self.raw_transformations)
-        if self.experiment.process['unmixing_matrix'] is not None:
+        if self.experiment.process['unmixing_matrix'] is not None and self.unmixed_gating is not None:
             self.experiment.cytometry['gating'] = to_gml(self.unmixed_gating)
             update_transforms(self.experiment.cytometry['transforms'], self.unmixed_transformations)
 
@@ -266,6 +266,8 @@ class Controller(QObject):
             sets_to_update = [(self.raw_transformations, self.raw_gating, self.raw_lookup_tables)]
         elif mode == 'unmixed':
             sets_to_update = [(self.unmixed_transformations, self.unmixed_gating, self.unmixed_lookup_tables)]
+        else:
+            return
 
         for n in range(len(sets_to_update)):
             transformations, gating, lookup_tables = sets_to_update[n]
@@ -425,7 +427,8 @@ class Controller(QObject):
                     'pnn': self.experiment.settings['raw']['event_channels_pnn'],
                     'fluoro_indices': self.experiment.settings['raw']['fluorescence_channel_ids'],
                     'transformations': self.raw_transformations, 'gating': self.raw_gating,
-                    'lookup_tables': self.raw_lookup_tables, 'plots': self.experiment.cytometry['raw_plots']
+                    'lookup_tables': self.raw_lookup_tables, 'plots': self.experiment.cytometry['raw_plots'],
+                    'cytometer_db_col': self.experiment.settings['raw'].get('cytometer_db_col'),
                  }
             )
 
@@ -482,7 +485,7 @@ class Controller(QObject):
         # extra lines here for debugging that horrible error caused by raw_transformations not being updated
         try:
             self.calculate_lookup_tables() # (re)create all lookup tables
-        except:
+        except Exception:
             logger.warning(self.raw_transformations)
             logger.warning(self.raw_gating)
             logger.warning(self.data_for_cytometry_plots_raw['transformations'] is self.raw_transformations)
@@ -562,6 +565,7 @@ class Controller(QObject):
             combined = combine_af_precomputed(cached)
 
         self.af_precomputed = combined
+        assert af_spectra is not None
         self.af_spectra = af_spectra
         logger.info(
         f'Controller: AF matrices set for {self.current_sample_path} '
@@ -607,8 +611,6 @@ class Controller(QObject):
             )
             return True
         except Exception as e:
-            logger.error(f'cache_af_profile: failed for "{profile_name}": {e}')
-            return False
             logger.error(f'cache_af_profile: failed for "{profile_name}": {e}')
             return False
 
@@ -822,7 +824,6 @@ class Controller(QObject):
                 self.bus.statusMessage.emit(f'Loaded sample {self.current_sample_path}: {n_events} events.')
                 # self.bus.statusMessage.emit(f'{str(Path(self.current_sample_path).relative_to(self.experiment_dir))}: {n_events} events.')
 
-            self._stop_background_threads()
             self.clear_data_for_cytometry_plots()
             self.initialise_data_for_cytometry_plots()
         else:
@@ -845,8 +846,6 @@ class Controller(QObject):
         self.raw_event_data = None
         self.unmixed_event_data = None
         self.af_sidecar_data = None
-
-        self._stop_background_threads()
         self.clear_data_for_cytometry_plots()
         self.initialise_data_for_cytometry_plots()
         logger.info(f"Controller: unloaded sample")
@@ -858,8 +857,6 @@ class Controller(QObject):
         if self.raw_event_data is not None:
             self.initialise_af_matrices()
             self.unmixed_event_data = self._apply_unmixing(self.raw_event_data)
-
-            self._stop_background_threads()
             self.clear_data_for_cytometry_plots()
             self.initialise_data_for_cytometry_plots()
 
@@ -1085,61 +1082,10 @@ class Controller(QObject):
     @Slot()
     def reinitialise_data_for_process_plots(self):
         if self.current_mode == 'process':
-            # Cancel any in-flight worker before mutating shared data
-            self.stop_process_plots_worker.set()
-            if self.process_plots_thread is not None and self.process_plots_thread.is_alive():
-                self.process_plots_thread.join(timeout=2.0)
-
             self.data_for_cytometry_plots.update({'event_data': self.unmixed_event_data})
             self.data_for_cytometry_plots['histograms'] = initialise_hists(self.data_for_cytometry_plots['plots'], self.data_for_cytometry_plots)
-            # Seed gate_membership with root so calc_hists_and_stats enters the correct branch
-            # and calc_stats never encounters a missing gate key.
-            if self.unmixed_event_data is not None:
-                self.data_for_cytometry_plots['gate_membership'] = {
-                    'root': np.ones(len(self.unmixed_event_data), dtype=np.bool_)
-                }
-            else:
-                self.data_for_cytometry_plots['gate_membership'] = {}
-            # Capture the dict reference now — protects the thread if set_mode switches later
-            process_data_snapshot = self.data_for_cytometry_plots
-
-            # Arm a fresh stop event for the new worker
-            self.stop_process_plots_worker.clear()
-            self.process_plots_thread = threading.Thread(
-                target=self._reinitialise_process_plots_worker,
-                args=(process_data_snapshot,),
-                daemon=True,
-            )
-            self.process_plots_thread.start()
-
-    def _reinitialise_process_plots_worker(self, data_snapshot):
-        try:
-            # Bail out immediately if a newer request has already superseded this one
-            if self.stop_process_plots_worker.is_set():
-                logger.info('Controller: process plots worker cancelled before start')
-                return
             self.calc_hists_and_stats()
-        finally:
-            pass
-        logger.info('Controller: prepared hists for process plots')
-
-    def _stop_background_threads(self):
-        """Signal both background compute threads to stop and wait for them to finish."""
-        # Stop the live acquisition update thread
-        self.stop_live_data_processing.set()
-        if self.thread is not None and self.thread.is_alive():
-            self.thread.join(timeout=2.0)
-            if self.thread.is_alive():
-                logger.warning('Controller: live update thread did not stop in time')
-        self.thread = None
-
-        # Stop the process plots worker thread
-        self.stop_process_plots_worker.set()
-        if self.process_plots_thread is not None and self.process_plots_thread.is_alive():
-            self.process_plots_thread.join(timeout=2.0)
-            if self.process_plots_thread.is_alive():
-                logger.warning('Controller: process plots worker did not stop in time')
-        self.process_plots_thread = None
+            logger.info('Controller: prepared hists for process plots')
 
     @Slot(str, str)
     def create_new_plot(self, channel_x, channel_y):
@@ -1290,8 +1236,9 @@ class Controller(QObject):
             # apply gates to event data
             # if gates_to_calculate is none, then initialise gates_membership dict, otherwise reference it from data_for_cytometry_plots
             if not gates_to_calculate:
-                #todo hopefully verify bug has gone here?
-                #fixed, I think, but always reinitialising from scratch
+                gating = self.data_for_cytometry_plots['gating']
+                if gating is None:
+                    return
                 gate_membership = {'root': np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)}
                 self.data_for_cytometry_plots.update({'gate_membership': gate_membership})
                 # self.data_for_cytometry_plots['gate_membership']['root'] = np.ones(len(self.data_for_cytometry_plots['event_data']), dtype=np.bool_)
@@ -1344,7 +1291,7 @@ class Controller(QObject):
                 gate = gating.get_gate(gate_name)
                 gate.quadrants = {q.id: q for q in quadrants}
 
-            logger.info('Quad gate dividers:', [q[1]._divider_ranges for q in gate.quadrants.items()])
+            logger.info(f'Quad gate dividers: {[q[1]._divider_ranges for q in gate.quadrants.items()]}')
 
         elif gate_type == 'range':
             x1 = gate_data['x1']
@@ -1358,7 +1305,7 @@ class Controller(QObject):
                 gate = gating.get_gate(gate_name)
                 gate.dimensions = [dim_x]
 
-            logger.info([gate, gate.dimensions, gate.dimensions[0].min, gate.dimensions[0].max])
+            logger.info(str([gate, gate.dimensions, gate.dimensions[0].min, gate.dimensions[0].max]))
 
         elif gate_type == 'polygon':
             origin = gate_data['origin']
@@ -1374,7 +1321,7 @@ class Controller(QObject):
                 gate = gating.get_gate(gate_name)
                 gate.vertices = vertices
 
-            logger.info([gate, gate.vertices])
+            logger.info(str([gate, gate.vertices]))
 
         elif gate_type == 'rectangle':
             pos = np.array(gate_data['pos'])
@@ -1389,8 +1336,8 @@ class Controller(QObject):
                 gate = gating.get_gate(gate_name)
                 gate.dimensions = [dim_x, dim_y]
 
-            logger.info([gate, gate.dimensions, gate.dimensions[0].min, gate.dimensions[0].max, gate.dimensions[1].min,
-                   gate.dimensions[1].max])
+            logger.info(str([gate, gate.dimensions, gate.dimensions[0].min, gate.dimensions[0].max, gate.dimensions[1].min,
+                   gate.dimensions[1].max]))
 
 
         elif gate_type == 'ellipse':
@@ -1409,7 +1356,7 @@ class Controller(QObject):
                 gate.covariance_matrix = covariance_matrix
                 gate.distance_square = distance_square
 
-            logger.info([gate, gate.coordinates, gate.covariance_matrix, gate.distance_square])
+            logger.info(str([gate, gate.coordinates, gate.covariance_matrix, gate.distance_square]))
 
         logger.info(gating.get_gate_ids())
 
@@ -1456,7 +1403,7 @@ class Controller(QObject):
                 fl_pnn = [self.experiment.settings['raw']['event_channels_pnn'][n] for n in self.experiment.settings['raw']['fluorescence_channel_ids']]
                 update_transforms(self.experiment.cytometry['raw_transforms'], self.raw_transformations)
                 for label in self.experiment.cytometry['raw_transforms']:
-                    if label not in fl_pnn:
+                    if label not in fl_pnn and label in self.experiment.cytometry['transforms']:
                         self.experiment.cytometry['transforms'][label].update(self.experiment.cytometry['raw_transforms'][label])
 
                 # copy all non-fl gates from raw

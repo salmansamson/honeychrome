@@ -41,6 +41,7 @@ import numpy as np
 import warnings
 import os
 from flowio import FlowData
+from typing import Optional
 
 from honeychrome.controller_components.functions import generate_transformations, assign_default_transforms
 from honeychrome.controller_components.gml_functions_mod_from_flowkit import to_gml
@@ -90,14 +91,14 @@ def check_fcs_matches_experiment(sample_full_path, experiment_pnn_raw, magnitude
 class ExperimentModel:
     def __init__(self):
         ### experiment_path is file path and data directory (minus extension) ###
-        self.experiment_path = None
+        self.experiment_path: Optional[str] = None
 
         ### data to save and load ###
-        self.settings = None
-        self.samples = None
-        self.process = None
-        self.cytometry = None
-        self.statistics = None
+        self.settings: dict = deepcopy(settings_default)
+        self.samples: dict = deepcopy(samples_default)
+        self.process: dict = deepcopy(process_default)
+        self.cytometry: dict = deepcopy(cytometry_default)
+        self.statistics: list = []
 
         self.progress_indicator = 0
 
@@ -118,17 +119,25 @@ class ExperimentModel:
         for label in self.settings['raw']['event_channels_pnn']:
             raw_gating.transformations[label] = raw_transformations[label].xform
 
+        _raw = self.settings['raw']
+        _scatter_pnn = _raw.get('scatter_param')  # None until FCS import resolves cytometer
+        _morph_x  = _scatter_pnn[0] if _scatter_pnn else 'FSC-A'
+        _morph_y  = _scatter_pnn[1] if _scatter_pnn else 'SSC-A'
+        # Singlet Y: use FSC-H if available, fall back to FSC-W, then morph_x
+        _pnn      = _raw.get('event_channels_pnn', [])
+        _sing_y   = next((ch for ch in [_morph_x.replace('-A', '-H'), 'FSC-H', 'FSC-W'] if ch in _pnn), 'FSC-W')
+
         label = 'Cells'
-        channel_x = 'FSC-A'
-        channel_y = 'SSC-A'
+        channel_x = _morph_x
+        channel_y = _morph_y
         dim_x = Dimension(channel_x, range_min=0.2, range_max=0.8, transformation_ref=channel_x)
         dim_y = Dimension(channel_y, range_min=0.2, range_max=0.8, transformation_ref=channel_y)
         gate = gates.RectangleGate(label, dimensions=[dim_x, dim_y])
         raw_gating.add_gate(gate, gate_path=('root',))
 
         label = 'Singlets'
-        channel_x = 'FSC-A'
-        channel_y = 'FSC-W'
+        channel_x = _morph_x
+        channel_y = _sing_y
         dim_x = Dimension(channel_x, range_min=0, range_max=1, transformation_ref=channel_x)
         dim_y = Dimension(channel_y, range_min=0, range_max=1, transformation_ref=channel_y)
         vertices = [(0.2,0.2), (0.8,0.2), (0.8,0.8), (0.2,0.8)]
@@ -141,8 +150,8 @@ class ExperimentModel:
         # ---hist2d: channel_x, channel_y, source_gate, child_gates
         # ---ribbon: source_gate, child_gates
         time_plot = [{'type': 'hist1d', 'channel_x': 'Time', 'source_gate': 'root', 'child_gates': []}]
-        morph_plot = [{'type': 'hist2d', 'channel_x': 'FSC-A', 'channel_y': 'SSC-A', 'source_gate': 'root', 'child_gates': ['Cells']}]
-        singlet_plot = [{'type': 'hist2d', 'channel_x': 'FSC-A', 'channel_y': 'FSC-W', 'source_gate': 'Cells', 'child_gates': ['Singlets']}]
+        morph_plot   = [{'type': 'hist2d', 'channel_x': _morph_x, 'channel_y': _morph_y, 'source_gate': 'root', 'child_gates': ['Cells']}]
+        singlet_plot = [{'type': 'hist2d', 'channel_x': _morph_x, 'channel_y': _sing_y,  'source_gate': 'Cells', 'child_gates': ['Singlets']}]
         ribbon_plot = [{'type': 'ribbon', 'source_gate': 'Singlets', 'child_gates': []}]
         fluorescence_plots = [
             {'type': 'hist1d', 'channel_x': self.settings['raw']['event_channels_pnn'][i], 'source_gate': 'Singlets', 'child_gates': []} for i

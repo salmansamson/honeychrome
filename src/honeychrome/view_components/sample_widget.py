@@ -392,8 +392,22 @@ class SampleWidget(QWidget):
         dialog.open()
 
     def show_export_modal(self):
-        path = str(self.controller.experiment_dir / self.controller.experiment.settings['raw']['raw_samples_subdirectory'])
-        dialog = BatchExportSamplesModal(self, self.bus, path, self.controller.experiment_dir)
+        raw = self.controller.experiment.settings['raw']['raw_samples_subdirectory']
+        ssc = self.controller.experiment.settings['raw']['single_stain_controls_subdirectory']
+        # In the normal case ssc is nested inside raw (e.g. "Raw/Single stain controls")
+        # and walking raw covers it. In the symlink case ssc is a top-level Link_to__...
+        # folder and raw is empty — walk ssc instead so the modal sees the real files.
+        if Path(ssc).is_relative_to(raw):
+            path = str(self.controller.experiment_dir / raw)
+            root_label = None  # non-symlink: use default "[All FCS files in experiment folder]"
+        else:
+            path = str(self.controller.experiment_dir / ssc)
+            # The folder is a symlink whose disk name is opaque (Link_to__...).
+            # Derive a readable label from the experiment setting value, which is what
+            # the user saw when they picked the folder in Experiment Settings.
+            ssc_path = Path(ssc)
+            root_label = str(ssc_path.name)  # e.g. "SSC" or the last component of the setting
+        dialog = BatchExportSamplesModal(self, self.bus, path, self.controller.experiment_dir, root_label=root_label)
         dialog.open()
 
     @Slot(str, bool)
