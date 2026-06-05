@@ -1008,6 +1008,9 @@ class CytometryPlotWidget(QFrame):
             warnings.warn('Signals bus not connected')
 
     def plot_histogram(self):
+        histograms = self.data_for_cytometry_plots.get('histograms', [])
+        if self.n_in_plot_sequence >= len(histograms):
+            return
         if self.plot['type'] == 'ribbon':
             self.plot_ribbon_plot()
         elif self.plot['type'] == 'hist1d':
