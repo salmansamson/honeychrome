@@ -196,6 +196,7 @@ unmixed_settings = {
 settings_default = {
     'raw':raw_settings,
     'unmixed':unmixed_settings,
+    'unmixing_method': 'OLS',
 }
 
 samples_default = {
