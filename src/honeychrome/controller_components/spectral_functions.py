@@ -173,7 +173,84 @@ def get_profile_from_events(
         profile /= profile.max()
     return profile
 
-def calculate_spectral_process(raw_settings, spectral_model, profiles, existing_spillover=None):
+def compute_sample_means_for_wls(
+    experiment_dir,
+    experiment_samples: dict,
+    fluorescence_channel_ids: list,
+) -> 'np.ndarray | None':
+    """
+    Compute per-detector mean raw fluorescence across real experimental samples,
+    for use as WLS (Poisson) weights.
+
+    Selection priority:
+      1. Samples in all_samples that are NOT in single_stain_controls and NOT
+         tagged or named as unstained.
+      2. If none qualify, fall back to all samples in all_samples.
+
+    Returns a (n_channels,) float64 array, or None if no files could be read.
+    """
+    import re
+    from pathlib import Path
+    from honeychrome.controller_components.functions import sample_from_fcs
+
+    all_samples = experiment_samples.get('all_samples', {})
+    controls = set(experiment_samples.get('single_stain_controls', []))
+    unstained = set(experiment_samples.get('unstained_samples', []))
+
+    def _is_unstained(path, name):
+        return (path in unstained
+                or re.search(r'unstained', name, re.IGNORECASE)
+                or re.search(r'unstained', path, re.IGNORECASE))
+
+    preferred = [
+        p for p, name in all_samples.items()
+        if p not in controls and not _is_unstained(p, name)
+    ]
+    candidates = preferred if preferred else list(all_samples.keys())
+
+    if not candidates:
+        return None
+
+    channel_sums = None
+    n_events_total = 0
+    for path in candidates:
+        try:
+            sample = sample_from_fcs(Path(experiment_dir) / path)
+            fl = sample.get_events('raw')[:, fluorescence_channel_ids].astype(np.float64)
+            channel_sums = fl.sum(axis=0) if channel_sums is None else channel_sums + fl.sum(axis=0)
+            n_events_total += fl.shape[0]
+        except Exception:
+            continue
+
+    if channel_sums is None or n_events_total == 0:
+        return None
+
+    return channel_sums / n_events_total
+
+
+def _build_omega_inv(
+    M: np.ndarray,
+    method: str = 'OLS',
+    sample_means: 'np.ndarray | None' = None,
+) -> np.ndarray:
+    """
+    Build diagonal weight matrix Ω⁻¹ for spectral unmixing.
+    M shape: (n_fluors, n_channels). Returns (n_channels, n_channels).
+
+    For WLS (Poisson), sample_means must be provided: a (n_channels,) array of
+    mean raw fluorescence across the experiment's real samples.
+    Falls back to OLS if sample_means is None.
+    """
+    n_channels = M.shape[1]
+    if method == 'WLS' and sample_means is not None:
+        weights = np.where(sample_means > 1e-9, sample_means, 1.0)
+    else:
+        weights = np.ones(n_channels)
+    return np.diag(1.0 / weights)
+
+def calculate_spectral_process(raw_settings, spectral_model, profiles,
+                                existing_spillover=None, unmixing_method='OLS',
+                                experiment_dir=None, experiment_samples=None):
     from sklearn.metrics.pairwise import cosine_similarity
     from pandas import DataFrame
 
@@ -193,7 +270,14 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles, existing_
 
     # calculate unmixing matrix
     variance_per_detector = np.ones(raw_length)  # trivial example... try something better like cv on each detector for brightest fluorophores?
-    Omega_inv = np.diag(1 / variance_per_detector)  # This is our weight matrix
+    # otb: pure variance is too noisy and varies between samples. could be done per experiment
+    # sd is a bit better, but mean (Poisson-like) works well empirically
+    # we probably will want to measure the noise in the detectors on the CytKit
+    sample_means = None
+    if unmixing_method == 'WLS' and experiment_dir is not None and experiment_samples is not None:
+        fl_ids = raw_settings.get('fluorescence_channel_ids', [])
+        sample_means = compute_sample_means_for_wls(experiment_dir, experiment_samples, fl_ids)
+    Omega_inv = _build_omega_inv(M, method=unmixing_method, sample_means=sample_means)
     unmixing_matrix = np.linalg.inv(M @ Omega_inv @ M.T) @ M @ Omega_inv  # "W" matrix in Novo paper
 
     # define unmixed channels
@@ -241,12 +325,18 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles, existing_
         spillover = np.eye(n_fluorophore_channels)
 
 
+    # Extract the diagonal weights for FCS export (Ω diagonal = 1/weight)
+    omega_diag = np.diag(Omega_inv)
+    weights_vector = np.where(omega_diag > 0, 1.0 / omega_diag, 1.0)
+
     # populate process variables
     spectral_process = {
         'similarity_matrix': similarity_matrix.tolist(),
         'hotspot_matrix': hotspot_matrix.tolist(),
         'unmixing_matrix': unmixing_matrix.tolist(),
-        'spillover': spillover.tolist()
+        'spillover': spillover.tolist(),
+        'unmixing_method': unmixing_method,
+        'unmixing_weights': weights_vector.tolist(),
     }
 
     # # set up unmixed channels with default transforms

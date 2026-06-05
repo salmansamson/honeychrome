@@ -316,6 +316,14 @@ class SpectralControlsEditor(QFrame):
         self.fluorescence_channel_filter_combo.addItems(['Using area channels only', 'Using all fluorescence channels'])
         self.fluorescence_channel_filter_combo.installEventFilter(WheelBlocker(self.fluorescence_channel_filter_combo))
         self.fluorescence_channel_filter_combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        self.unmixing_method_combo = QComboBox()
+        self.unmixing_method_combo.addItems(['OLS', 'WLS'])
+        self.unmixing_method_combo.installEventFilter(WheelBlocker(self.unmixing_method_combo))
+        self.unmixing_method_combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        self.unmixing_method_combo.setToolTip(
+            'OLS: uniform weights (default).\n'
+            'WLS: shot-noise model'
+        )
         self.update_combos()
         self.bus.spectralModelUpdated.connect(self.update_combos)
 
@@ -337,6 +345,7 @@ class SpectralControlsEditor(QFrame):
         btn_top_layout.addWidget(self.auto_generate_button)
         btn_top_layout.addWidget(self.negatives_combo)
         btn_top_layout.addWidget(self.fluorescence_channel_filter_combo)
+        btn_top_layout.addWidget(self.unmixing_method_combo)
         btn_top_layout.addWidget(self.force_recalc_btn)
         btn_top_layout.addStretch()
 
@@ -352,6 +361,10 @@ class SpectralControlsEditor(QFrame):
         self._negative_type_timer.timeout.connect(self.set_negative_type)
         self.negatives_combo.currentTextChanged.connect(self._negative_type_timer.start)
         self.fluorescence_channel_filter_combo.currentTextChanged.connect(self.set_fluorescence_channel_filter)
+        _METHOD_MAP = {'OLS': 'OLS', 'WLS': 'WLS'}
+        self.unmixing_method_combo.currentTextChanged.connect(
+            lambda text: self._on_unmixing_method_changed(_METHOD_MAP[text])
+        )
         self.force_recalc_btn.clicked.connect(self._on_force_recalc)
         self.add_row_btn.clicked.connect(self.add_row)
         self.select_all_btn.clicked.connect(self.view.selectAll)
@@ -537,6 +550,7 @@ class SpectralControlsEditor(QFrame):
         # trigger unnecessary recalculation.
         self.negatives_combo.blockSignals(True)
         self.fluorescence_channel_filter_combo.blockSignals(True)
+        self.unmixing_method_combo.blockSignals(True)
         try:
             if self.controller.experiment.process['negative_type'] == 'unstained':
                 self.negatives_combo.setCurrentText('Using unstained negative')
@@ -552,10 +566,15 @@ class SpectralControlsEditor(QFrame):
                 self.fluorescence_channel_filter_combo.setCurrentText('Using all fluorescence channels')
                 self.fluorescence_channel_filter_combo.setToolTip('Including both area and height channels in spectral model')
 
+            _REVERSE_METHOD_MAP = {'OLS': 'OLS', 'WLS': 'WLS'}
+            saved_method = self.controller.experiment.settings.get('unmixing_method', 'OLS')
+            self.unmixing_method_combo.setCurrentText(_REVERSE_METHOD_MAP.get(saved_method, 'OLS'))
+
             self._update_universal_negative_column_visibility()
         finally:
             self.negatives_combo.blockSignals(False)
             self.fluorescence_channel_filter_combo.blockSignals(False)
+            self.unmixing_method_combo.blockSignals(False)
 
     def _update_universal_negative_column_visibility(self):
         using_unstained = self.controller.experiment.process.get('negative_type') == 'unstained'
@@ -1354,6 +1373,14 @@ class SpectralControlsEditor(QFrame):
         self.bus.spectralModelUpdated.emit()
         self.refresh_table_and_enable()
         logger.info(f'SpectralModelEditor: forced recalculation complete')
+
+    def _on_unmixing_method_changed(self, method_key: str):
+        self.controller.experiment.settings['unmixing_method'] = method_key
+        self.controller.experiment.save()
+        self.controller.refresh_spectral_process()
+        if self.controller.current_sample_path:
+            path = self.controller.current_sample_path
+            QTimer.singleShot(0, lambda: self.controller.load_sample(path))
 
     @Slot()
     def _on_clean_controls(self):

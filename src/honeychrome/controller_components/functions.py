@@ -78,6 +78,7 @@ def export_unmixed_sample(
     subsample: 'int | None' = None,
     extra_null_channels: 'list | None' = None,
     unmixing_method: str = 'OLS',
+    unmixing_weights: 'np.ndarray | None' = None,
     extra_whitelist: 'frozenset | set' = frozenset(),
 ) -> None:
     """
@@ -133,6 +134,7 @@ def export_unmixed_sample(
         file_name=file_name,
         version=version,
         unmixing_method=unmixing_method,
+        unmixing_weights=unmixing_weights,
         extra_whitelist=extra_whitelist,
     )
 
@@ -151,6 +153,7 @@ def define_fcs_keywords(
     file_name: str,
     version: str,
     unmixing_method: str = 'OLS',
+    unmixing_weights: 'np.ndarray | None' = None,
     extra_whitelist: 'frozenset | set' = frozenset(),
 ) -> dict:
     """
@@ -298,6 +301,11 @@ def define_fcs_keywords(
         af_row_names = [f'AF{i + 1}' for i in range(af_spectra.shape[0])]
         if af_spectra.shape[1] == len(det_names):
             spectra_kw['AUTOFLUORESCENCE'] = _fmt_matrix(af_spectra, af_row_names, det_names)
+
+    if unmixing_weights is not None and unmixing_weights.ndim == 1:
+        if len(unmixing_weights) == len(det_names):
+            vals = ','.join(f'{v:.8g}' for v in unmixing_weights)
+            spectra_kw['WEIGHTS'] = f'{len(det_names)},{",".join(det_names)},{vals}'
 
     # ---- 7. Provenance keywords ----
     now_str = datetime.now(timezone.utc).strftime('%d-%b-%Y %H:%M:%S').upper()

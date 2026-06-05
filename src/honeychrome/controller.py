@@ -1390,8 +1390,14 @@ class Controller(QObject):
             if self.bus:
                 self.bus.statusMessage.emit(f'Refreshing spectral process...')
             existing_spillover = self.experiment.process.get('spillover')
-            unmixed_settings, spectral_process = calculate_spectral_process(raw_settings, spectral_model, profiles,
-                                                                            existing_spillover=existing_spillover)
+            unmixing_method = self.experiment.settings.get('unmixing_method', 'OLS')
+            unmixed_settings, spectral_process = calculate_spectral_process(
+                raw_settings, spectral_model, profiles,
+                existing_spillover=existing_spillover,
+                unmixing_method=unmixing_method,
+                experiment_dir=self.experiment_dir,
+                experiment_samples=self.experiment.samples,
+            )
             self.experiment.process.update(spectral_process)
 
             # update cytometry only if channels have changed
