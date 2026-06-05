@@ -105,11 +105,11 @@ _CYTOMETER_PARAMS: dict[str, _CytParams] = {
         db_col          = "Discover",
         scatter_param = ["LightLoss (Violet)-A", "SSC (Imaging)-A"],
         sat_value = 24140237,
-        scatter_extra_pat = [r"LightLoss", "FSC", r"SSC \(Imaging\)"],
-        singlet_y_preference = "FSC-H",
+        scatter_extra_pat = [r"^LightLoss", r"^FSC", r"^SSC \(Imaging\)"],
+        singlet_y_preference = "LightLoss (Violet)-H",
         scatter_display_ceiling = {
-            "FSC-A": 3e7, "SSC (Violet)-A": 3e7, "SSC (Imaging)-A": 3e7, "LightLoss (Violet)-A": 3e7
-        }, 
+            "FSC-A": 1e8, "SSC (Violet)-A": 3e7, "SSC (Imaging)-A": 3e7, "LightLoss (Violet)-A": 1e8, "LightLoss (Violet)-H": 1e5
+        },
     ),
 
     "Opteon": _CytParams(
