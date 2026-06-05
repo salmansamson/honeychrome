@@ -115,6 +115,8 @@ class ImportFCSController(QObject):
                         self.experiment.settings['raw']['cytometer'] = cyt_info.cyt_label
                         self.experiment.settings['raw']['cytometer_db_col'] = cyt_info.db_col
                         self.experiment.settings['raw']['scatter_param'] = cyt_info.scatter_param 
+                        if cyt_info.db_col in ('ID7000', 'Discover'):
+                            self.experiment.settings.setdefault('unmixing_method', 'WLS')
                     else:
                         fluorescence_channel_ids = sample_metadata.fluoro_indices
                         cyt_kw = next(
