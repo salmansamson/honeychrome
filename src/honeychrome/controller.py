@@ -801,6 +801,15 @@ class Controller(QObject):
                 self.raw_event_data = self.current_sample.get_events(source='raw')
                 n_events = self.current_sample.event_count
 
+                # Display cap — applied before unmixing so both arrays are consistently capped.
+                _cap = settings.max_display_events
+                if _cap and len(self.raw_event_data) > _cap:
+                    _rng = np.random.default_rng(seed=42)
+                    _idx = np.sort(_rng.choice(len(self.raw_event_data), _cap, replace=False))
+                    self.raw_event_data = self.raw_event_data[_idx]
+                    logger.info('load_sample: capped display events %d → %d', n_events, _cap)
+                logger.debug('load_sample: raw_event_data shape %s', self.raw_event_data.shape)
+
             # apply spectral unmixing and compensation if defined
             if self.experiment.process['unmixing_matrix'] is not None:
                 profiles_assigned = bool(
