@@ -105,6 +105,10 @@ class UnmixedExporter(QObject):
             # and stacks rows in spectral_model order → (n_fluor × n_raw_detectors).
             unmixing_spectra = self.controller._build_fluor_spectra()  # may be None if model incomplete
 
+            unmixing_method = self.controller.experiment.settings.get('unmixing_method', 'OLS')
+            unmixing_weights_raw = self.controller.experiment.process.get('unmixing_weights')
+            unmixing_weights = np.array(unmixing_weights_raw) if unmixing_weights_raw is not None else None
+
             # For FACSDiscover: detect imaging channels and extend the transfer matrix.
             # These channels are excluded from unmixing (they are not spectral detectors)
             # but should be preserved in the exported FCS file because they carry
@@ -278,6 +282,8 @@ class UnmixedExporter(QObject):
                         version=__version__,
                         subsample=self.subsample,
                         extra_null_channels=extra_null,
+                        unmixing_method=unmixing_method,
+                        unmixing_weights=unmixing_weights,
                         extra_whitelist=imaging_carry_through_set,
                     )
 
