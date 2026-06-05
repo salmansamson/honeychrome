@@ -422,13 +422,21 @@ class Controller(QObject):
             self.raw_gating = from_gml(self.experiment.cytometry['raw_gating'])
             self.raw_transformations = generate_transformations(self.experiment.cytometry['raw_transforms'])
 
+            _raw = self.experiment.settings['raw']
+            _display_pnn = _raw.get('whitelisted_pnn') or _raw['event_channels_pnn']
+            _fl_ids_full = _raw['fluorescence_channel_ids']  # indices into full event_channels_pnn
+            _fluoro_indices_display = [
+                _display_pnn.index(_raw['event_channels_pnn'][i])
+                for i in _fl_ids_full
+                if _raw['event_channels_pnn'][i] in _display_pnn
+            ]
             self.data_for_cytometry_plots_raw.update(
                 {
-                    'pnn': self.experiment.settings['raw']['event_channels_pnn'],
-                    'fluoro_indices': self.experiment.settings['raw']['fluorescence_channel_ids'],
+                    'pnn': _display_pnn,
+                    'fluoro_indices': _fluoro_indices_display,
                     'transformations': self.raw_transformations, 'gating': self.raw_gating,
                     'lookup_tables': self.raw_lookup_tables, 'plots': self.experiment.cytometry['raw_plots'],
-                    'cytometer_db_col': self.experiment.settings['raw'].get('cytometer_db_col'),
+                    'cytometer_db_col': _raw.get('cytometer_db_col'),
                  }
             )
 
@@ -494,10 +502,19 @@ class Controller(QObject):
     def initialise_transfer_matrix(self):
         # run in intitialisation of ephemeral data or if spillover changed
         pnn_unmixed = self.experiment.settings['unmixed']['event_channels_pnn']
-        pnn_raw = self.experiment.settings['raw']['event_channels_pnn']
+        # Use whitelisted PNN as the raw dimension — raw_event_data is always
+        # loaded with col_order=whitelisted_pnn so its columns match this list.
+        _raw = self.experiment.settings['raw']
+        pnn_raw = _raw.get('whitelisted_pnn') or _raw['event_channels_pnn']
+        full_pnn_raw = _raw['event_channels_pnn']
 
-        fl_channel_ids_raw = np.array(self.filtered_raw_fluorescence_channel_ids)
-        sc_channel_ids_raw = np.array(self.experiment.settings['raw']['scatter_channel_ids'])
+        # Re-express stored raw channel indices against pnn_raw (whitelisted).
+        # Stored indices reference full_pnn_raw; map them to their position in pnn_raw.
+        def _remap(ids):
+            return np.array([pnn_raw.index(full_pnn_raw[i]) for i in ids])
+
+        fl_channel_ids_raw = _remap(self.filtered_raw_fluorescence_channel_ids)
+        sc_channel_ids_raw = _remap(_raw['scatter_channel_ids'])
         fl_channel_ids_unmixed = np.array(self.experiment.settings['unmixed']['fluorescence_channel_ids'])
         sc_channel_ids_unmixed = np.array(self.experiment.settings['unmixed']['scatter_channel_ids'])
         n_scatter_channels = self.experiment.settings['unmixed']['n_scatter_channels']
@@ -509,17 +526,19 @@ class Controller(QObject):
         transfer_matrix = np.zeros((len(pnn_unmixed), len(pnn_raw)))
         transfer_matrix[np.ix_(fl_channel_ids_unmixed, fl_channel_ids_raw)] = compensated_unmixing_matrix
         transfer_matrix[np.ix_(sc_channel_ids_unmixed, sc_channel_ids_raw)] = np.eye(n_scatter_channels)
-        transfer_matrix[self.experiment.settings['unmixed']['time_channel_id'], self.experiment.settings['raw']['time_channel_id']] = 1
+        raw_time_id = pnn_raw.index(full_pnn_raw[_raw['time_channel_id']])
+        transfer_matrix[self.experiment.settings['unmixed']['time_channel_id'], raw_time_id] = 1
 
-        if self.experiment.settings['raw']['event_id_channel_id'] is not None:
-            transfer_matrix[self.experiment.settings['unmixed']['event_id_channel_id'], self.experiment.settings['raw']['event_id_channel_id']] = 1
+        if _raw['event_id_channel_id'] is not None:
+            # event_id is not in whitelisted_pnn — omit silently (no event_id column in raw_event_data)
+            if full_pnn_raw[_raw['event_id_channel_id']] in pnn_raw:
+                raw_eid_id = pnn_raw.index(full_pnn_raw[_raw['event_id_channel_id']])
+                transfer_matrix[self.experiment.settings['unmixed']['event_id_channel_id'], raw_eid_id] = 1
+
         # note transfer_matrix is transposed - multiply raw event data @ transfer_matrix to get unmixed event data in same form as raw
         transfer_matrix = transfer_matrix.T
 
         self.transfer_matrix = transfer_matrix
-        # AF matrices are not initialised here. They will be populated
-        # lazily when load_sample() is next called, by which point the
-        # background cache_all_af_profiles() thread will have completed.
     
     def initialise_af_matrices(self):
         """
@@ -791,15 +810,30 @@ class Controller(QObject):
     @with_busy_cursor
     def load_sample(self, sample_path):
         logger.info(f'Controller: loading sample {sample_path}')
-        if check_fcs_matches_experiment(self.experiment_dir / sample_path, self.experiment.settings['raw']['event_channels_pnn'], self.experiment.settings['raw']['magnitude_ceiling']):
+        whitelisted_pnn = self.experiment.settings['raw'].get('whitelisted_pnn')
+        check_pnn = whitelisted_pnn or self.experiment.settings['raw']['event_channels_pnn']
+        if check_fcs_matches_experiment(self.experiment_dir / sample_path, check_pnn, self.experiment.settings['raw']['magnitude_ceiling']):
             self.current_sample_path = sample_path
             self.current_sample = sample_from_fcs(self.experiment_dir / self.current_sample_path, self.bus)
 
             if self.current_sample_path == self.live_sample_path:
                 self.raw_event_data, n_events = self.copy_live_data(extent='update')
             else:
-                self.raw_event_data = self.current_sample.get_events(source='raw')
+                try:
+                    self.raw_event_data = self.current_sample.get_events(
+                        source='raw', col_order=whitelisted_pnn
+                    )
+                except (KeyError, ValueError) as e:
+                    logger.warning(
+                        'load_sample: col_order get_events failed (%s) — reading all channels', e
+                    )
+                    self.raw_event_data = self.current_sample.get_events(source='raw')
                 n_events = self.current_sample.event_count
+                if np.any(np.isnan(self.raw_event_data)):
+                    n_nan = int(np.isnan(self.raw_event_data).sum())
+                    logger.warning('load_sample: %d NaN values in raw event data — replacing with 0', n_nan)
+                    self.raw_event_data = np.where(np.isnan(self.raw_event_data), 0.0, self.raw_event_data)
+                logger.debug('load_sample: raw_event_data shape %s', self.raw_event_data.shape)
 
                 # Display cap — applied before unmixing so both arrays are consistently capped.
                 _cap = settings.max_display_events

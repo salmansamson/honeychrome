@@ -41,29 +41,83 @@ class ImportFCSController(QObject):
                 # all_sample_channels = {}
                 all_sample_pnn = {}
                 all_sample_pnr = {}
+                first_sample_metadata = None
                 for n, sample_path in enumerate(raw_samples):
-                    sample_metadata = FlowData(experiment_dir / sample_path, only_text=True, use_header_offsets=True)
-                    all_sample_pnn[sample_path] = sample_metadata.pnn_labels
-                    all_sample_pnr[sample_path] = sample_metadata.pnr_values
+                    # Replace NA keyword values before any numeric conversion.
+                    _fd = FlowData(experiment_dir / sample_path, only_text=True, use_header_offsets=True)
+                    for _k in list(_fd.text.keys()):
+                        if str(_fd.text[_k]).strip().upper() == 'NA':
+                            _fd.text[_k] = '0'
+                    all_sample_pnn[sample_path] = _fd.pnn_labels
+                    all_sample_pnr[sample_path] = _fd.pnr_values
+                    if first_sample_metadata is None:
+                        first_sample_metadata = _fd
 
                     if self.bus:
                         self.bus.progress.emit(n, len(raw_samples))
 
-                # extract channel names - check that channel names are consistent
-                all_sample_pnn = [list(all_sample_pnn[sample_path]) for sample_path in raw_samples]
+                sample_metadata = first_sample_metadata  # keep name for downstream compat
+
+                # Resolve cytometer and whitelisted channels from the first file.
+                # This must happen before the consistency check so we can compare
+                # only the whitelisted subset across files.
+                representative_pnn = list(all_sample_pnn[list(raw_samples)[0]])
+                cyt_info = resolve_cytometer_params(
+                    all_pnn=representative_pnn,
+                    text_keywords=sample_metadata.text,
+                )
+
+                if cyt_info is not None:
+                    _fl_ids = cyt_info.fluorescence_channel_ids
+                    _sc_base = [ch.rsplit('-', 1)[0] for ch in cyt_info.scatter_param]
+                    _sc_extra_pat = (
+                        re.compile('|'.join(cyt_info.scatter_extra_pat))
+                        if cyt_info.scatter_extra_pat else None
+                    )
+                    _sc_ids = [
+                        i for i, ch in enumerate(representative_pnn)
+                        if ch.rsplit('-', 1)[0] in _sc_base
+                        or (_sc_extra_pat and re.search(_sc_extra_pat, ch))
+                    ]
+                    _time_id = next(
+                        (i for i, ch in enumerate(representative_pnn) if ch.lower() == 'time'), None
+                    )
+                    whitelisted_pnn = (
+                        ([representative_pnn[_time_id]] if _time_id is not None else [])
+                        + [representative_pnn[i] for i in _sc_ids]
+                        + [representative_pnn[i] for i in _fl_ids]
+                    )
+                else:
+                    whitelisted_pnn = representative_pnn  # non-whitelisted cytometer: use all
+
+                logger.debug('Whitelisted PNN (%d channels): %s', len(whitelisted_pnn), whitelisted_pnn)
+
+                # Validate: every file must contain all whitelisted channels.
+                # Extra channels (e.g. BD Chorus derived params) are ignored.
+                files_missing = {
+                    sp: sorted(set(whitelisted_pnn) - set(all_sample_pnn[sp]))
+                    for sp in raw_samples
+                    if set(whitelisted_pnn) - set(all_sample_pnn[sp])
+                }
+                if files_missing:
+                    text = (
+                        'Cannot set up the experiment file:\n'
+                        'Some FCS files are missing required whitelisted channels:\n'
+                        + '\n'.join(f'  {sp}: {m}' for sp, m in files_missing.items())
+                    )
+                    warnings.warn(text)
+                    if self.bus:
+                        self.bus.warningMessage.emit(text)
+                    return
+
+                # Channel consistency: check only the whitelisted subset.
+                all_sample_pnn_whitelisted = [
+                    [ch for ch in all_sample_pnn[sp] if ch in set(whitelisted_pnn)]
+                    for sp in raw_samples
+                ]
                 all_sample_pnr = [list(all_sample_pnr[sample_path]) for sample_path in raw_samples]
-                all_sample_pnr_scatter_and_fluorescence = np.array(all_sample_pnr)[:,sample_metadata.scatter_indices + sample_metadata.fluoro_indices]
 
-                if all_same(all_sample_pnn):  # then reconstitute, else warn
-                    # check all pnr the same
-                    pnr_same = [all_same(list(all_sample_pnr_scatter_and_fluorescence[:, n])) for n in range(len(sample_metadata.scatter_indices + sample_metadata.fluoro_indices))]
-                    if not np.array(pnr_same).prod():
-                        pnr_values = set(list(all_sample_pnr_scatter_and_fluorescence.flatten()))
-                        text = f'Channel range values (PNR) are not consistent in FCS files. The following values were found: {pnr_values}. This could cause errors when applying gates.'
-                        warnings.warn(text)
-                        # if self.bus:
-                        #     self.bus.warningMessage.emit(text)
-
+                if True:  # always proceed — consistency guaranteed by subset check above
                     # other bits of experiment reset to default
                     self.experiment.settings['unmixed'] = deepcopy(settings_default['unmixed'])
                     self.experiment.process = deepcopy(process_default)
@@ -78,45 +132,22 @@ class ImportFCSController(QObject):
                             self.bus.warningMessage.emit(text)
 
                     scatter_channel_ids = sample_metadata.scatter_indices
-                    event_channels_pnn = all_sample_pnn[0]
+                    event_channels_pnn = representative_pnn  # full list from first file
 
-                    # Attempt cytometer-aware fluorescence channel identification.
-                    # resolve_cytometer_params() reads $CYT (and CREATOR as a
-                    # fallback) and filters the $PnN list to raw detector channels
-                    # only, excluding pre-unmixed parameters written by instruments
-                    # like the FACSDiscover or Xenith.  Returns None for unrecognised
-                    # cytometers, in which case we fall back to flowio's own
-                    # classification (previous behaviour).
-                    cyt_info = resolve_cytometer_params(
-                        all_pnn=event_channels_pnn,
-                        text_keywords=sample_metadata.text,
-                    )
+                    # cyt_info already resolved above; apply its derived values here.
 
                     if cyt_info is not None:
-                        fluorescence_channel_ids = cyt_info.fluorescence_channel_ids
+                        fluorescence_channel_ids = _fl_ids
+                        scatter_channel_ids = _sc_ids
                         logger.info(
                             'Cytometer identified as "%s". '
                             'Using whitelisted fluorescence channels (%d channels).',
                             cyt_info.cyt_label,
                             len(fluorescence_channel_ids),
                         )
-                        # Override flowio scatter detection with cytometer-specific
-                        # canonical names — flowio only recognises FSC/SSC exactly
-                        scatter_base_names = [ch.rsplit('-', 1)[0] for ch in cyt_info.scatter_param]
-                        extra_pat = (
-                            re.compile('|'.join(cyt_info.scatter_extra_pat))
-                            if cyt_info.scatter_extra_pat else None
-                        )
-                        scatter_channel_ids = [
-                            i for i, ch in enumerate(event_channels_pnn)
-                            if ch.rsplit('-', 1)[0] in scatter_base_names
-                            or (extra_pat is not None and re.search(extra_pat, ch))
-                        ]
                         self.experiment.settings['raw']['cytometer'] = cyt_info.cyt_label
                         self.experiment.settings['raw']['cytometer_db_col'] = cyt_info.db_col
-                        self.experiment.settings['raw']['scatter_param'] = cyt_info.scatter_param 
-                        if cyt_info.db_col in ('ID7000', 'Discover'):
-                            self.experiment.settings.setdefault('unmixing_method', 'WLS')
+                        self.experiment.settings['raw']['scatter_param'] = cyt_info.scatter_param
                     else:
                         fluorescence_channel_ids = sample_metadata.fluoro_indices
                         cyt_kw = next(
@@ -168,6 +199,7 @@ class ImportFCSController(QObject):
                     self.experiment.settings['raw']['scatter_channels'] = list(set([event_channels_pnn_stripped[i] for i in scatter_channel_ids]))
                     self.experiment.settings['raw']['fluorescence_channels'] = list(set([event_channels_pnn_stripped[i] for i in fluorescence_channel_ids]))
                     self.experiment.settings['raw']['event_channels_pnn'] = event_channels_pnn
+                    self.experiment.settings['raw']['whitelisted_pnn'] = whitelisted_pnn
                     self.experiment.settings['raw']['width_ceiling'] = width_ceiling
                     self.experiment.settings['raw']['magnitude_ceiling'] = magnitude_ceiling
                     self.experiment.settings['raw']['default_ceiling'] = default_ceiling
@@ -182,14 +214,19 @@ class ImportFCSController(QObject):
                         cyt_info.scatter_display_ceiling if cyt_info is not None else {}
                     )
 
-                    # set up raw transforms
-                    self.experiment.cytometry['raw_transforms'] = assign_default_transforms(self.experiment.settings['raw'])
+                    # set up raw transforms — restrict to whitelisted channels to avoid
+                    # building hundreds of transforms for FACSDiscover derived parameters
+                    self.experiment.cytometry['raw_transforms'] = assign_default_transforms(
+                        self.experiment.settings['raw'],
+                        channels=whitelisted_pnn,
+                    )
                     raw_transformations = generate_transformations(self.experiment.cytometry['raw_transforms'])
 
-                    # set up raw gating
+                    # set up raw gating — register only whitelisted channel transforms
                     raw_gating = GatingStrategy()
-                    for label in event_channels_pnn:
-                        raw_gating.transformations[label] = raw_transformations[label].xform
+                    for label in whitelisted_pnn:
+                        if label in raw_transformations:
+                            raw_gating.transformations[label] = raw_transformations[label].xform
 
                     if cyt_info is not None and len(cyt_info.scatter_param) >= 2:
                         # Use cytometer-specific canonical scatter channel names

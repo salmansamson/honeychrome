@@ -79,14 +79,12 @@ def safe_save(content, filename):
             return
 
 def check_fcs_matches_experiment(sample_full_path, experiment_pnn_raw, magnitude_ceiling):
-    # sample_metadata = flowio_v14.FlowData(sample_full_path, only_text=True)
     sample_metadata = FlowData(sample_full_path, only_text=True, use_header_offsets=True)
     sample_pnn = sample_metadata.pnn_labels
-    sample_pnr = sample_metadata.pnr_values
-    channels_match = set(sample_pnn) == set(experiment_pnn_raw)
-    ranges_match = all(np.array(sample_pnr)[sample_metadata.scatter_indices + sample_metadata.fluoro_indices] == magnitude_ceiling)
+    # Subset check: file must contain all required channels; extra channels are allowed.
+    # This permits FACSDiscover files with different derived-parameter sets to coexist.
+    channels_match = set(experiment_pnn_raw).issubset(set(sample_pnn))
     return channels_match
-    # return channels_match and ranges_match # probably not necessary to restrict range inconsistencies
 
 class ExperimentModel:
     def __init__(self):

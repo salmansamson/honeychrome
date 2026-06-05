@@ -28,6 +28,15 @@ def sample_from_fcs(path, bus=None):
         logging.warning(f'Controller: FlowIO reports FCS file reports a data offset that is off by 1. {e}. Attempting to load with `ignore_offset_error=True` to force reading in this file')
         sample = Sample(path, use_header_offsets=True, ignore_offset_error=True)
 
+    # Replace literal 'NA' keyword values (some FACSDiscover files write these).
+    meta = sample.get_metadata().get('text', {})
+    if meta:
+        na_keys = [k for k, v in meta.items() if str(v).strip().upper() == 'NA']
+        for k in na_keys:
+            meta[k] = ''
+        if na_keys:
+            logger.debug('sample_from_fcs: NA keywords zeroed in %s: %s', path, na_keys)
+
     return sample
 
 def define_process_plots(fluorescence_channels_x, fluorescence_channels_y, source_gate):

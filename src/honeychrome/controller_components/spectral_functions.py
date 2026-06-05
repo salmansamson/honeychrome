@@ -387,6 +387,7 @@ def get_raw_events(
     gate_label: str | None = None,
     gating_strategy=None,
     extra_channel_ids: list | None = None,
+    col_order: list | None = None,
 ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """
     Return a (n_events, n_channels) float64 array of raw fluorescence values.
@@ -398,8 +399,20 @@ def get_raw_events(
     array of shape (n_events, len(extra_channel_ids)) is returned as a tuple:
         (fluorescence_array, extra_array)
     This is the foundation that every subsequent cleaning stage builds on.
+
+    col_order: if supplied, passed to get_events() to select/reorder columns by
+    PnN name (used for FACSDiscover files with inconsistent derived-parameter sets).
     """
-    all_events = sample.get_events('raw')
+    try:
+        all_events = sample.get_events('raw', col_order=col_order)
+    except (KeyError, ValueError) as e:
+        logger.warning('get_raw_events: col_order failed (%s) — reading all channels', e)
+        all_events = sample.get_events('raw')
+
+    if np.any(np.isnan(all_events)):
+        n_nan = int(np.isnan(all_events).sum())
+        logger.warning('get_raw_events: %d NaN values — replacing with 0', n_nan)
+        all_events = np.where(np.isnan(all_events), 0.0, all_events)
 
     if gate_label and gating_strategy:
         gate_paths = gating_strategy.find_matching_gate_paths(gate_label)

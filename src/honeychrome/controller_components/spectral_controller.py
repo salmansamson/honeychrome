@@ -205,7 +205,8 @@ class ProfileUpdater:
             sample = sample_from_fcs(full_path)
             gate_label = 'Neg Unstained' if self.raw_gating.find_matching_gate_paths('Neg Unstained') else None
             events = get_raw_events(sample, self.controller.filtered_raw_fluorescence_channel_ids,
-                                    gate_label=gate_label, gating_strategy=self.raw_gating)
+                                    gate_label=gate_label, gating_strategy=self.raw_gating,
+                                    col_order=self.controller.experiment.settings['raw'].get('whitelisted_pnn'))
             self._negative_events_cache[tube_name] = events
             return events
         except Exception as e:
