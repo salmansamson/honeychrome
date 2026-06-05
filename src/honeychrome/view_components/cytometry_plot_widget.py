@@ -322,9 +322,9 @@ class CytometryPlotWidget(QFrame):
             LABEL_DENSITY_TARGET = 80
             stride = max(1, round(n_detectors / LABEL_DENSITY_TARGET))
 
-            all_pairs = [(m, pnn[n]) for m, n in enumerate(fluoro_indices)]
+            all_pairs = [(m + 0.5, pnn[n].removesuffix('-A')) for m, n in enumerate(fluoro_indices)]
             ticks = [
-                [(m, label) for m, label in all_pairs if m % stride == 0],
+                [(m, label) for m, label in all_pairs if round(m - 0.5) % stride == 0],
                 [],
             ]
 
@@ -335,7 +335,7 @@ class CytometryPlotWidget(QFrame):
                 tick_colors = {
                     label: LASER_LABEL_COLORS[laser]
                     for _, label in all_pairs
-                    if (laser := detector_laser_map.get(label)) in LASER_LABEL_COLORS
+                    if (laser := detector_laser_map.get(label + '-A')) in LASER_LABEL_COLORS
                 }
             else:
                 tick_colors = {}
@@ -347,7 +347,7 @@ class CytometryPlotWidget(QFrame):
             self.vb.setMouseEnabled(x=False, y=False)
 
             # set limits
-            self.axis_bottom.limits = (0, len(self.fluoro_indices))
+            self.axis_bottom.limits = (-0.5, len(self.fluoro_indices) - 0.5)
             self.axis_left.limits = self.transformations['ribbon'].limits
             self.vb.setYRange(self.axis_left.limits[0], self.axis_left.limits[1], padding=0)
 

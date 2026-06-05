@@ -623,7 +623,7 @@ class ProfilesViewer(QFrame):
         LABEL_DENSITY_TARGET = 80
         stride = max(1, round(len(fluoro_ids) / LABEL_DENSITY_TARGET))
 
-        all_pairs = [(m, pnn[n]) for m, n in enumerate(fluoro_ids)]
+        all_pairs = [(m, pnn[n].removesuffix('-A')) for m, n in enumerate(fluoro_ids)]
         ticks = [
             [(m, label) for m, label in all_pairs if m % stride == 0],
             [],
@@ -635,7 +635,7 @@ class ProfilesViewer(QFrame):
             tick_colors = {
                 label: LASER_LABEL_COLORS[laser]
                 for _, label in all_pairs
-                if (laser := detector_laser_map.get(label)) in LASER_LABEL_COLORS
+                if (laser := detector_laser_map.get(label + '-A')) in LASER_LABEL_COLORS
             }
         else:
             tick_colors = {}
