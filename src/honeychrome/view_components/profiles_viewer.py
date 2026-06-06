@@ -147,11 +147,12 @@ class BottomAxisVerticalTickLabels(pg.AxisItem):
                     p.setPen(QPen(color) if color else default_pen)
 
                     if self.orientation == 'bottom' and self.angle == 90:
-                        tick_anchor = QPointF(rect.center())
+                        tick_anchor = QPointF(rect.center().x(), rect.top())
                         p.translate(tick_anchor)
                         p.rotate(-self.angle)
-                        text_rect = QRectF(0, -rect.height() / 2, rect.width(), rect.height())
-                        p.drawText(text_rect, int(Qt.AlignRight | Qt.AlignVCenter), text)
+                        label_padding = -15
+                        text_rect = QRectF(label_padding, -rect.height() / 2, rect.width(), rect.height())
+                        p.drawText(text_rect, int(Qt.AlignLeft | Qt.AlignVCenter), text)
                     else:
                         p.drawText(rect, int(flags), text)
                 finally:
