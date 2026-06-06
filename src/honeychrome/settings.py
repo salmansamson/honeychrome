@@ -213,7 +213,7 @@ process_default = {
     'fluorescence_channel_filter': 'area_only', # or all fluorescence
     'spectral_model': [],
     'profiles': {},
-    'negative_type': 'internal', # or unstained
+    'negative_type': 'unstained', # or internal
     'similarity_matrix': None,
     'hotspot_matrix': None,
     'unmixing_matrix': None,
