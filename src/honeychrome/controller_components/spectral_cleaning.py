@@ -3,6 +3,7 @@ spectral_cleaning.py
 
 Public API:
     exclude_saturated(events, ceiling, threshold_frac=0.99)
+    find_empirical_peak(spec_events, af_mean)
     select_positive_events(positive_events, negative_events, peak_ch_idx, ...)
     CleanResult
     clean_control(positive_events, negative_events, peak_ch_idx, ceiling, opts=None)
@@ -79,6 +80,21 @@ def exclude_saturated(
 # ---------------------------------------------------------------------------
 # select_positive_events
 # ---------------------------------------------------------------------------
+def find_empirical_peak(
+    spec_events: np.ndarray,
+    af_mean: np.ndarray,
+) -> int:
+    """
+    AF orthogonalisation -> empirical peak column index.
+
+    Projects events onto the unit AF vector, subtracts the projection,
+    returns the column with the highest mean in the orthogonalised space.
+    """
+    norm = np.sqrt(np.dot(af_mean, af_mean)) + 1e-9
+    v_unit = af_mean / norm
+    proj = spec_events @ v_unit
+    mat_orth = spec_events - np.outer(proj, v_unit)
+    return int(np.argmax(mat_orth.mean(axis=0)))
 
 def select_positive_events(
     positive_events: np.ndarray,

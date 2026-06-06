@@ -8,12 +8,15 @@ from PySide6.QtCore import QObject, Signal, QTimer
 from flowkit import Dimension, gates
 
 from honeychrome.controller_components.functions import timer, sample_from_fcs
-from honeychrome.controller_components.spectral_functions import get_best_channel, get_profile, get_profile_from_events
+from honeychrome.controller_components.spectral_functions import get_best_channel, get_profile, get_profile_from_events, get_raw_events
 from honeychrome.controller_components.label_matching import match_fluorophore, match_marker, get_fluorophore_db, get_marker_db
 from honeychrome.controller_components.spectral_librarian import SpectralLibrary
+from honeychrome.controller_components.spectral_cleaning import find_empirical_peak, clean_control, select_positive_events
+from honeychrome.controller_components.functions import sample_from_fcs
 from honeychrome.experiment_model import check_fcs_matches_experiment
 from honeychrome.view_components.busy_cursor import with_busy_cursor
-
+import honeychrome.settings as settings
+from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL        
 
 import logging
 logger = logging.getLogger(__name__)
@@ -23,7 +26,6 @@ spectral_library = SpectralLibrary()
 
 def _find_default_unstained_tube(all_samples: dict) -> str | None:
     """Return tube name of the first sample whose path or name contains 'unstained'."""
-    import re
     for path, name in all_samples.items():
         if re.search(r'unstained', path, re.IGNORECASE) or re.search(r'unstained', name, re.IGNORECASE):
             return name
@@ -173,10 +175,6 @@ class ProfileUpdater:
 
         Results are cached by tube name so each FCS file is loaded at most once.
         """
-        from honeychrome.controller_components.spectral_functions import get_raw_events
-        from honeychrome.controller_components.functions import sample_from_fcs
-        from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
-
         tube_name = control.get('universal_negative_name') or ''
 
         # Explicit per-control opt-out: use the internal (same-sample) negative
@@ -264,7 +262,6 @@ class ProfileUpdater:
 
                         positive_profile = get_profile(sample, positive_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
 
-                        from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
                         universal_neg_name = control.get('universal_negative_name') or ''
                         explicit_internal = (universal_neg_name == INTERNAL_NEGATIVE_SENTINEL)
                         use_unstained = (
@@ -410,6 +407,9 @@ class SpectralAutoGenerator(QObject):
         self.spectral_model.clear()
         self.profiles.clear()
         self.unstained_negative = None
+        self.unstained_negative_events = None          # cells unstained raw events
+        self.unstained_negative_events_beads = None    # beads unstained raw events
+
         self.progress_target = len(self.samples['single_stain_controls'])
         # self.progress_target = len(self.samples['single_stain_controls'][:5]) # quick test
 
@@ -423,23 +423,24 @@ class SpectralAutoGenerator(QObject):
 
     @with_busy_cursor
     def run(self):
-        if self.controller.experiment.process['negative_type'] == 'unstained':
-            success = self.get_unstained_negative()
-            if not success:
-                if self.bus:
-                    QTimer.singleShot(100, lambda: self.bus.statusMessage.emit(f'Failed to generate profile of unstained negative.'))
+        self.get_unstained_negative(particle_type='Cells')
+        self.get_unstained_negative(particle_type='Beads')
+        if self.unstained_negative is None:
+            if self.bus:
+                QTimer.singleShot(100, lambda: self.bus.statusMessage.emit(
+                    'No unstained sample found — using internal negatives for profile extraction.'))
         for n in range(self.progress_target):
             if self.bus:
                 self.bus.progress.emit(n, self.progress_target)
             success = self.generate_spectral_control(n)
             if not success:
                 if self.bus:
-                    QTimer.singleShot(100, lambda: self.bus.statusMessage.emit(f'Failed to generate profile of spectral control {n}.'))
+                    QTimer.singleShot(100, lambda: self.bus.statusMessage.emit(
+                        f'Failed to generate profile of spectral control {n}.'))
                 continue
             if self.bus:
                 self.bus.spectralControlAdded.emit()
 
-        # update all raw plots at end to avoid timing issues in main loop
         for index, plot in enumerate(self.raw_plots):
             if self.bus:
                 self.bus.updateRois.emit('raw', index)
@@ -448,85 +449,113 @@ class SpectralAutoGenerator(QObject):
         logger.info(self.raw_gating.get_gate_hierarchy(output='json'))
 
         if self.bus:
-            # self.bus.changedGatingHierarchy.emit('raw', 'root')
             self.bus.progress.emit(self.progress_target, self.progress_target)
             self.bus.spectralModelUpdated.emit()
-            self.bus.showSelectedProfiles.emit([]) # refresh everything
+            self.bus.showSelectedProfiles.emit([])
 
-    def get_unstained_negative(self):
+    def get_unstained_negative(self, particle_type: str = 'Cells') -> bool:
+        """
+        Locate the unstained sample for *particle_type*, create the 'Neg Unstained'
+        gate if absent, then cache the profile and raw events.
+
+        particle_type='Cells': prefer a sample whose name does NOT contain 'Beads'.
+        particle_type='Beads': prefer a sample whose name contains 'Beads'.
+
+        Stores results in:
+            self.unstained_negative          (profile vector, Cells only)
+            self.unstained_negative_events   (raw array, Cells)
+            self.unstained_negative_events_beads (raw array, Beads)
+
+        Returns True if an unstained was found and loaded, False otherwise.
+        Does NOT modify negative_type on failure.
+        """
         try:
+            manually_unstained = set(self.samples.get('unstained_samples', []))
+
+            def _is_unstained(path: str, name: str) -> bool:
+                return (path in manually_unstained
+                        or re.search(r'(unstained|negative)', path, re.IGNORECASE)
+                        or re.search(r'(unstained|negative)', name, re.IGNORECASE))
+
+            def _is_bead(path: str, name: str) -> bool:
+                return bool(re.search(r'bead', name, re.IGNORECASE)
+                            or re.search(r'bead', path, re.IGNORECASE))
+
             sample_path = None
-            # 1. Check manually designated unstained samples first
-            for path in self.samples.get('unstained_samples', []):
-                if path in self.samples['all_samples']:
-                    sample_path = path
-                    break
-            # 2. Fall back to filename/tubename regex
-            if sample_path is None:
-                for path in self.samples['all_samples']:
-                    if re.search(r'(unstained|negative)', path, re.IGNORECASE) or \
-                       re.search(r'(unstained|negative)', self.samples['all_samples'][path], re.IGNORECASE):
-                        sample_path = path
-                        break
-            if sample_path:
-                full_sample_path = str(self.experiment_dir / sample_path)
-                sample = sample_from_fcs(full_sample_path)
-
-                # Only Neg Unstained is needed
-                negative_gate_label = 'Neg Unstained'
-
-                # Resolve gate path: place under base gate (e.g. Singlets), not at root
-                if self.base_gate_label != 'root' and self.raw_gating.find_matching_gate_paths(self.base_gate_label):
-                    base_path = tuple(list(self.raw_gating.find_matching_gate_paths(self.base_gate_label)[0]) + [self.base_gate_label])
-                else:
-                    base_path = ('root',)
-
-                # Only create the gate if it does not already exist — avoids duplicate-gate
-                # errors if one gate exists but the other does not (Issue 5).
-                if not self.raw_gating.find_matching_gate_paths(negative_gate_label):
-                    # Use the first fluorescence channel as a broad 1D gate
-                    # covering all events — the gate exists only to anchor the profile extraction
-                    # in the gating hierarchy; its range covers the full transformed space.
-                    channel_x = self.fluorescence_channels_pnn[0]
-                    dim_x = Dimension(channel_x, range_min=0.0, range_max=1.0, transformation_ref=channel_x)
-                    neg_gate = gates.RectangleGate(negative_gate_label, dimensions=[dim_x])
-                    self.raw_gating.add_gate(neg_gate, gate_path=base_path)
-                    if self.bus:
-                        self.bus.changedGatingHierarchy.emit('raw', negative_gate_label)  # Issue 3
-
-                    # Add or update the plot for this gate
-                    # Look for an existing 1D hist on channel_x sourced from base gate.
-                    target_plot = None
-                    for plot in self.raw_plots:
-                        if (plot['type'] == 'hist1d'
-                                and plot['channel_x'] == channel_x
-                                and plot['source_gate'] == self.base_gate_label
-                                and not set(plot['child_gates']) - {negative_gate_label}):
-                            target_plot = plot
-                    if not target_plot:
-                        target_plot = {'type': 'hist1d', 'channel_x': channel_x,
-                                       'source_gate': self.base_gate_label, 'child_gates': []}
-                        self.raw_plots.append(target_plot)
-                        if self.bus:
-                            self.bus.showNewPlot.emit('raw')
-                    if negative_gate_label not in target_plot['child_gates']:
-                        target_plot['child_gates'].append(negative_gate_label)
-
-                # All events within the base gate of the unstained sample form the negative reference.
-                self.unstained_negative = get_profile(sample, self.base_gate_label, self.raw_gating,
-                                                      self.fluorescence_channel_ids)
-                return True
+            # Search: manually tagged first, then regex, filtered by particle type
+            candidates = [
+                path for path, name in self.samples['all_samples'].items()
+                if _is_unstained(path, name)
+            ]
+            if particle_type == 'Beads':
+                # prefer a bead unstained; fall back to any unstained
+                bead_candidates = [p for p in candidates if _is_bead(p, self.samples['all_samples'][p])]
+                sample_path = (bead_candidates or candidates or [None])[0]
             else:
-                raise Exception(
-                    'No unstained sample found. Name a control "Unstained", or right-click '
-                    'any sample in the sample panel and choose "Mark as Unstained".'
+                # prefer a non-bead unstained; fall back to any unstained
+                cell_candidates = [p for p in candidates if not _is_bead(p, self.samples['all_samples'][p])]
+                sample_path = (cell_candidates or candidates or [None])[0]
+
+            if not sample_path:
+                logger.info(f'get_unstained_negative: no unstained found for particle_type={particle_type!r}.')
+                return False
+
+            full_sample_path = str(self.experiment_dir / sample_path)
+            sample = sample_from_fcs(full_sample_path)
+
+            # Create 'Neg Unstained' gate anchored under base gate
+            negative_gate_label = 'Neg Unstained'
+            if self.base_gate_label != 'root' and self.raw_gating.find_matching_gate_paths(self.base_gate_label):
+                base_path = tuple(list(self.raw_gating.find_matching_gate_paths(self.base_gate_label)[0]) + [self.base_gate_label])
+            else:
+                base_path = ('root',)
+
+            if not self.raw_gating.find_matching_gate_paths(negative_gate_label):
+                channel_x = self.fluorescence_channels_pnn[0]
+                dim_x = Dimension(channel_x, range_min=0.0, range_max=1.0, transformation_ref=channel_x)
+                neg_gate = gates.RectangleGate(negative_gate_label, dimensions=[dim_x])
+                self.raw_gating.add_gate(neg_gate, gate_path=base_path)
+                if self.bus:
+                    self.bus.changedGatingHierarchy.emit('raw', negative_gate_label)
+                target_plot = None
+                for plot in self.raw_plots:
+                    if (plot['type'] == 'hist1d'
+                            and plot['channel_x'] == channel_x
+                            and plot['source_gate'] == self.base_gate_label
+                            and not set(plot['child_gates']) - {negative_gate_label}):
+                        target_plot = plot
+                if not target_plot:
+                    target_plot = {'type': 'hist1d', 'channel_x': channel_x,
+                                   'source_gate': self.base_gate_label, 'child_gates': []}
+                    self.raw_plots.append(target_plot)
+                    if self.bus:
+                        self.bus.showNewPlot.emit('raw')
+                if negative_gate_label not in target_plot['child_gates']:
+                    target_plot['child_gates'].append(negative_gate_label)
+
+            raw_events = get_raw_events(
+                sample, self.fluorescence_channel_ids,
+                gate_label=self.base_gate_label,
+                gating_strategy=self.raw_gating,
+            )
+
+            if particle_type == 'Beads':
+                self.unstained_negative_events_beads = raw_events
+            else:
+                self.unstained_negative = get_profile(
+                    sample, self.base_gate_label,
+                    self.raw_gating, self.fluorescence_channel_ids,
                 )
+                self.unstained_negative_events = raw_events
+
+            logger.info(
+                f'get_unstained_negative: {len(raw_events)} events '
+                f'from "{self.samples["all_samples"][sample_path]}" for particle_type={particle_type!r}.'
+            )
+            return True
+
         except Exception as e:
-            text = f'Failed to generate profile of unstained negative. {e} Setting negative type to "internal".'
-            warnings.warn(text)
-            if self.bus:
-                self.bus.warningMessage.emit(text)
-            self.controller.experiment.process['negative_type'] = 'internal'
+            logger.warning(f'get_unstained_negative: failed for particle_type={particle_type!r}: {e}')
             return False
 
     @timer
@@ -578,75 +607,99 @@ class SpectralAutoGenerator(QObject):
 
                     match = re.findall('([Uu]nstained)', label)
                     if match:
-                        target_plot = None
-                        gate_channel = None
-                        if self.controller.experiment.process['negative_type'] == 'internal': # using internal negatives, just use base gate for unstained
-                            positive_gate_label = self.base_gate_label
-                            negative_gate_label = self.base_gate_label
-                        else: # using unstained negative: all events in base gate are the positive,
-                              # Neg Unstained (created by get_unstained_negative) is the reference
-                            positive_gate_label = self.base_gate_label
-                            negative_gate_label = 'Neg Unstained'
-
+                        ...
                     else:
-                        # put a sample in, get a channel and brightest fluorescence values out
-                        best_channel_response = get_best_channel(sample, self.raw_gating,
-                                                                 self.base_gate_label,
-                                                                 self.fluorescence_channel_ids)
-                        if best_channel_response:
-                            channel_id_best_match, fl_top, fl_bottom, explained_variance = best_channel_response
+                        pos_events_all = get_raw_events(
+                            sample, self.fluorescence_channel_ids,
+                            gate_label=self.base_gate_label,
+                            gating_strategy=self.raw_gating,
+                        )
 
-                            channel_x = self.event_channels_pnn[channel_id_best_match]
-                            gate_channel = channel_x
-                            pos_range_min = self.raw_gating.transformations[channel_x].apply(np.array([fl_top[0]]))[0]
-                            pos_range_max = self.raw_gating.transformations[channel_x].apply(np.array([fl_top[1]]))[0]
-                            pos_dim_x = Dimension(channel_x, range_min=pos_range_min, range_max=pos_range_max, transformation_ref=channel_x)
-                            positive_gate_label = 'Pos ' + label
-                            positive_gate = gates.RectangleGate(positive_gate_label, dimensions=[pos_dim_x])
-
-                            neg_range_min = self.raw_gating.transformations[channel_x].apply(np.array([fl_bottom[0]]))[0]
-                            neg_range_max = self.raw_gating.transformations[channel_x].apply(np.array([fl_bottom[1]]))[0]
-                            neg_dim_x = Dimension(channel_x, range_min=neg_range_min, range_max=neg_range_max, transformation_ref=channel_x)
-                            negative_gate_label = 'Neg ' + label
-                            negative_gate = gates.RectangleGate(negative_gate_label, dimensions=[neg_dim_x])
-
-                            # add all positive gates to the same gating strategy: they are distinguished by their label and by the sample_id that they refer to
-                            # if gate already exists, remove it first
-                            if self.raw_gating.find_matching_gate_paths(positive_gate_label):
-                                self.raw_gating.remove_gate(positive_gate_label)
-                            if self.raw_gating.find_matching_gate_paths(negative_gate_label):
-                                self.raw_gating.remove_gate(negative_gate_label)
-                            # Note: adding a gate below takes an increasing amount of time, even though we are not actually applying it. Why?
-                            self.raw_gating.add_gate(positive_gate, gate_path=tuple(list(self.raw_gating.find_matching_gate_paths(self.base_gate_label)[0]) + [self.base_gate_label]))
-                            self.raw_gating.add_gate(negative_gate, gate_path=tuple(list(self.raw_gating.find_matching_gate_paths(self.base_gate_label)[0]) + [self.base_gate_label]))
-                            # gating_strategy.add_gate(positive_gate, gate_path=('root', base_gate_label), sample_id=sample_path) # needs to be done twice to be a custom sample gate
-                            #### if raw_plots contains a 1D hist on channel_x, add gate to it, otherwise create it
-                            target_plot = None
-                            for n, plot in enumerate(self.raw_plots):
-                                if plot['type'] == 'hist1d' and plot['channel_x'] == channel_x:
-                                    target_plot = plot
-                            if not target_plot:
-                                # append plot
-                                target_plot = {
-                                    'type': 'hist1d',
-                                    'channel_x': channel_x,
-                                    'source_gate': self.base_gate_label,
-                                    'child_gates': [positive_gate_label, negative_gate_label]
-                                }
-                                self.raw_plots.append(target_plot)
-                                if self.bus:
-                                    self.bus.showNewPlot.emit('raw')
-                            if positive_gate_label not in target_plot['child_gates']:
-                                target_plot['child_gates'].append(positive_gate_label)
-                                target_plot['child_gates'].append(negative_gate_label)
-                        else:
+                        if len(pos_events_all) < 2:
                             warnings.warn(f'Control sample has less than two events in base gate {self.base_gate_label}: cannot define spectral control')
                             if self.bus:
-                                self.bus.warningMessage.emit(f'{sample_path} has less than two events in "{self.base_gate_label}" gate: cannot define spectral control.\n\n'
-                                                         f'The spectral auto generator is using "{self.base_gate_label}" as a base gate '
-                                                         f'within your raw data. Adjust this gate to make sure the relevant events for '
-                                                         f'all your single stain control samples are within it.')
+                                self.bus.warningMessage.emit(
+                                    f'{sample_path} has less than two events in "{self.base_gate_label}" gate: cannot define spectral control.\n\n'
+                                    f'The spectral auto generator is using "{self.base_gate_label}" as a base gate '
+                                    f'within your raw data. Adjust this gate to make sure the relevant events for '
+                                    f'all your single stain control samples are within it.')
                             return False
+
+                        # Determine AF reference for orthogonalisation:
+                        # use particle-type-matched unstained events if available,
+                        # otherwise fall back to the bottom 25 % of this sample.
+                        unstained_ref = (
+                            self.unstained_negative_events_beads
+                            if particle_type == 'Beads'
+                            else self.unstained_negative_events
+                        )
+                        if unstained_ref is not None and len(unstained_ref) > 1:
+                            af_mean = unstained_ref.mean(axis=0)
+                            af_ref_source = f'unstained ({particle_type})'
+                        else:
+                            n_bottom = max(2, len(pos_events_all) // 4)
+                            order = np.argsort(pos_events_all.max(axis=1))
+                            af_mean = pos_events_all[order[:n_bottom]].mean(axis=0)
+                            af_ref_source = 'internal bottom-25%'
+
+                        # find_empirical_peak returns an index into fluorescence_channel_ids
+                        fluor_peak_idx = find_empirical_peak(pos_events_all, af_mean)
+                        channel_id_best_match = self.fluorescence_channel_ids[fluor_peak_idx]
+                        channel_x = self.event_channels_pnn[channel_id_best_match]
+                        gate_channel = channel_x
+
+                        logger.info(
+                            f'generate_spectral_control: "{label}" empirical peak = {channel_x} '
+                            f'(af_ref={af_ref_source}, fluor_peak_idx={fluor_peak_idx})'
+                        )
+
+                        # Derive gate ranges from the peak channel distribution.
+                        # fl_top / fl_bottom mirror the percentile approach in get_best_channel.
+                        peak_vals = pos_events_all[:, fluor_peak_idx]
+                        if len(peak_vals) > 100:
+                            pos_percentile = settings.spectral_positive_gate_percent_retrieved
+                            neg_percentile = settings.spectral_negative_gate_percent_retrieved
+                        else:
+                            pos_percentile = 50
+                            neg_percentile = 50
+                        fl_top    = np.percentile(peak_vals, [100 - pos_percentile, 100])
+                        fl_bottom = np.percentile(peak_vals, [0, neg_percentile])
+
+                        pos_range_min = self.raw_gating.transformations[channel_x].apply(np.array([fl_top[0]]))[0]
+                        pos_range_max = self.raw_gating.transformations[channel_x].apply(np.array([fl_top[1]]))[0]
+                        pos_dim_x = Dimension(channel_x, range_min=pos_range_min, range_max=pos_range_max, transformation_ref=channel_x)
+                        positive_gate_label = 'Pos ' + label
+                        positive_gate = gates.RectangleGate(positive_gate_label, dimensions=[pos_dim_x])
+
+                        neg_range_min = self.raw_gating.transformations[channel_x].apply(np.array([fl_bottom[0]]))[0]
+                        neg_range_max = self.raw_gating.transformations[channel_x].apply(np.array([fl_bottom[1]]))[0]
+                        neg_dim_x = Dimension(channel_x, range_min=neg_range_min, range_max=neg_range_max, transformation_ref=channel_x)
+                        negative_gate_label = 'Neg ' + label
+                        negative_gate = gates.RectangleGate(negative_gate_label, dimensions=[neg_dim_x])
+
+                        if self.raw_gating.find_matching_gate_paths(positive_gate_label):
+                            self.raw_gating.remove_gate(positive_gate_label)
+                        if self.raw_gating.find_matching_gate_paths(negative_gate_label):
+                            self.raw_gating.remove_gate(negative_gate_label)
+                        self.raw_gating.add_gate(positive_gate, gate_path=tuple(list(self.raw_gating.find_matching_gate_paths(self.base_gate_label)[0]) + [self.base_gate_label]))
+                        self.raw_gating.add_gate(negative_gate, gate_path=tuple(list(self.raw_gating.find_matching_gate_paths(self.base_gate_label)[0]) + [self.base_gate_label]))
+                        target_plot = None
+                        for n, plot in enumerate(self.raw_plots):
+                            if plot['type'] == 'hist1d' and plot['channel_x'] == channel_x:
+                                target_plot = plot
+                        if not target_plot:
+                            target_plot = {
+                                'type': 'hist1d',
+                                'channel_x': channel_x,
+                                'source_gate': self.base_gate_label,
+                                'child_gates': [positive_gate_label, negative_gate_label]
+                            }
+                            self.raw_plots.append(target_plot)
+                            if self.bus:
+                                self.bus.showNewPlot.emit('raw')
+                        if positive_gate_label not in target_plot['child_gates']:
+                            target_plot['child_gates'].append(positive_gate_label)
+                            target_plot['child_gates'].append(negative_gate_label)
 
                     if self.bus is not None:
                         self.bus.changedGatingHierarchy.emit('raw', negative_gate_label)
@@ -691,7 +744,8 @@ class SpectralAutoGenerator(QObject):
                     }
 
                     positive_profile = get_profile(sample, control['gate_label'], self.raw_gating, self.fluorescence_channel_ids)
-                    if self.controller.experiment.process['negative_type'] == 'unstained':
+                    if (self.controller.experiment.process['negative_type'] == 'unstained'
+                            and self.unstained_negative is not None):
                         negative_profile = self.unstained_negative
                     else:
                         negative_profile = get_profile(sample, negative_gate_label, self.raw_gating, self.fluorescence_channel_ids)
@@ -781,7 +835,6 @@ class SpectralCleaner(QObject):
 
     @with_busy_cursor
     def run(self):
-        from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
 
         eligible_external = [
             c for c in self.spectral_model
@@ -851,12 +904,6 @@ class SpectralCleaner(QObject):
         return stored_fp == self._cleaning_fingerprint(control)
     
     def _clean_one(self, control: dict):
-        from honeychrome.controller_components.spectral_functions import get_raw_events
-        from honeychrome.controller_components.spectral_cleaning import (
-            clean_control, select_positive_events
-        )
-        from honeychrome.controller_components.functions import sample_from_fcs
-
         label = control['label']
         try:
             # --- load positive fluorescence + scatter events ---
@@ -903,7 +950,6 @@ class SpectralCleaner(QObject):
             # sample's own peak-channel distribution as the negative.
             # No external file, no scatter matching (empty scatter arrays cause
             # scatter_match_negative to be skipped inside clean_control).
-            from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
             use_internal = (
                 control.get('particle_type') == 'Beads'
                 or control.get('universal_negative_name') == INTERNAL_NEGATIVE_SENTINEL
@@ -956,14 +1002,54 @@ class SpectralCleaner(QObject):
                     return
                 neg_scatter = _fsc_ssc_cols(neg_scatter_all) if neg_scatter_all.shape[1] > 2 else neg_scatter_all
 
-            # --- determine peak channel index ---
+            # Expected peak from spectral model table (fallback / QC only)
             peak_ch_name = control.get('gate_channel', '')
             try:
-                peak_ch_idx = self.fluor_ch_ids.index(
+                expected_peak_ch_idx = self.fluor_ch_ids.index(
                     self.event_channels_pnn.index(peak_ch_name)
                 )
             except (ValueError, IndexError):
-                peak_ch_idx = int(np.argmax(pos_events.mean(axis=0)))
+                expected_peak_ch_idx = int(np.argmax(pos_events.mean(axis=0)))
+
+            # AF mean for orthogonalisation
+            if use_internal:
+                order_peak = np.argsort(pos_events[:, expected_peak_ch_idx])
+                n_int_neg = max(2, len(pos_events) // 4)
+                af_mean_orth = pos_events[order_peak[:n_int_neg]].mean(axis=0)
+            else:
+                af_mean_orth = neg_events.mean(axis=0)
+
+            peak_ch_idx = find_empirical_peak(pos_events, af_mean_orth)
+
+            # --- DIAGNOSTIC: Stage 1 orthogonalisation ---
+            fluor_pnn = [self.event_channels_pnn[i] for i in self.fluor_ch_ids]
+            logger.info(
+                f'[DIAG Stage1] "{label}" use_internal={use_internal} '
+                f'n_pos={len(pos_events)} n_neg={len(neg_events)}'
+            )
+            logger.info(
+                f'[DIAG Stage1] "{label}" af_mean_orth min={af_mean_orth.min():.3f} '
+                f'max={af_mean_orth.max():.3f} norm={float(np.sqrt(np.dot(af_mean_orth, af_mean_orth))):.3f} '
+                f'argmax_ch={fluor_pnn[int(np.argmax(af_mean_orth))]}'
+            )
+            logger.info(
+                f'[DIAG Stage1] "{label}" expected_peak={fluor_pnn[expected_peak_ch_idx]} '
+                f'empirical_peak={fluor_pnn[peak_ch_idx]} '
+                f'(expected_idx={expected_peak_ch_idx} empirical_idx={peak_ch_idx})'
+            )
+            # Top-5 channels by orthogonalised mean
+            mat_orth_mean = (pos_events - np.outer(pos_events @ (af_mean_orth / (np.sqrt(np.dot(af_mean_orth, af_mean_orth)) + 1e-9)), (af_mean_orth / (np.sqrt(np.dot(af_mean_orth, af_mean_orth)) + 1e-9)))).mean(axis=0)
+            top5_orth = np.argsort(mat_orth_mean)[::-1][:5]
+            logger.info(
+                f'[DIAG Stage1] "{label}" top-5 orthogonalised channels: '
+                + ', '.join(f'{fluor_pnn[i]}={mat_orth_mean[i]:.2f}' for i in top5_orth)
+            )
+            top5_raw = np.argsort(pos_events.mean(axis=0))[::-1][:5]
+            logger.info(
+                f'[DIAG Stage1] "{label}" top-5 raw mean channels: '
+                + ', '.join(f'{fluor_pnn[i]}={pos_events.mean(axis=0)[i]:.2f}' for i in top5_raw)
+            )
+            # --- END DIAGNOSTIC ---
 
             # --- adaptive top-up loop ---
             quantile  = 0.995
@@ -1031,6 +1117,8 @@ class SpectralCleaner(QObject):
                 'af_boundary_pos': result.af_boundary_pos,
                 'af_ch_idx': result.af_ch_idx,
                 'af_peak_ch_idx': result.af_peak_ch_idx,
+                'empirical_peak_ch_idx': peak_ch_idx,
+                'expected_peak_ch_idx': expected_peak_ch_idx,
                 'warnings': result.warnings,
                 '_fingerprint': self._cleaning_fingerprint(control),
             }
