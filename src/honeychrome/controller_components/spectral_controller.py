@@ -148,8 +148,20 @@ class ProfileUpdater:
                         if self.bus:
                             self.bus.changedGatingHierarchy.emit('raw', target_gate_label)
 
-                self.unstained_negative = get_profile(sample, negative_gate_label, self.raw_gating,
-                                                    self.controller.filtered_raw_fluorescence_channel_ids)
+                _col_order = self.controller.experiment.settings['raw'].get('whitelisted_pnn')
+                _ecpnn = self.controller.experiment.settings['raw']['event_channels_pnn']
+                try:
+                    _all_events = sample.get_events('raw', col_order=_col_order)
+                except (KeyError, ValueError):
+                    _all_events = sample.get_events('raw')
+                    _col_order = None
+                _pnn = _col_order if _col_order is not None else sample.pnn_labels
+                self.unstained_negative = get_profile(
+                    sample, negative_gate_label, self.raw_gating,
+                    self.controller.filtered_raw_fluorescence_channel_ids,
+                    preloaded_events=_all_events, preloaded_pnn=_pnn,
+                    event_channels_pnn=_ecpnn,
+                )
                 return True
             else:
                 raise Exception(
@@ -259,8 +271,21 @@ class ProfileUpdater:
                         if not self.raw_gating.find_matching_gate_paths(positive_gate_label):
                             raise Exception(f'Positive gate label {positive_gate_label} not present in Raw Data. ')
                         sample = sample_from_fcs(full_sample_path)
+                        _col_order = self.controller.experiment.settings['raw'].get('whitelisted_pnn')
+                        _ecpnn = self.controller.experiment.settings['raw']['event_channels_pnn']
+                        try:
+                            _all_events = sample.get_events('raw', col_order=_col_order)
+                        except (KeyError, ValueError):
+                            _all_events = sample.get_events('raw')
+                            _col_order = None
+                        _pnn = _col_order if _col_order is not None else sample.pnn_labels
 
-                        positive_profile = get_profile(sample, positive_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
+                        positive_profile = get_profile(
+                            sample, positive_gate_label, self.raw_gating,
+                            self.controller.filtered_raw_fluorescence_channel_ids,
+                            preloaded_events=_all_events, preloaded_pnn=_pnn,
+                            event_channels_pnn=_ecpnn,
+                        )
 
                         universal_neg_name = control.get('universal_negative_name') or ''
                         explicit_internal = (universal_neg_name == INTERNAL_NEGATIVE_SENTINEL)
@@ -288,7 +313,18 @@ class ProfileUpdater:
                                     neg_sample = sample_from_fcs(neg_full_path)
                                     neg_gate_label = 'Neg Unstained'
                                     if self.raw_gating.find_matching_gate_paths(neg_gate_label):
-                                        resolved_unstained = get_profile(neg_sample, neg_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
+                                        # neg_sample is a different file — load its own event block.
+                                        try:
+                                            _neg_events = neg_sample.get_events('raw', col_order=_col_order)
+                                        except (KeyError, ValueError):
+                                            _neg_events = neg_sample.get_events('raw')
+                                        _neg_pnn = _col_order if _col_order is not None else neg_sample.pnn_labels
+                                        resolved_unstained = get_profile(
+                                            neg_sample, neg_gate_label, self.raw_gating,
+                                            self.controller.filtered_raw_fluorescence_channel_ids,
+                                            preloaded_events=_neg_events, preloaded_pnn=_neg_pnn,
+                                            event_channels_pnn=_ecpnn,
+                                        )
                                     else:
                                         warnings.warn(f'{control["label"]}: unstained negative "{universal_neg_name}" has no "Neg Unstained" gate — using internal negative.')
                                 else:
@@ -325,7 +361,12 @@ class ProfileUpdater:
                                                 f'Please run Auto-Generate to recreate spectral gates, '
                                                 f'or select the correct Negative Gate in the Spectral Model Editor.')
 
-                            negative_profile = get_profile(sample, negative_gate_label, self.raw_gating, self.controller.filtered_raw_fluorescence_channel_ids)
+                            negative_profile = get_profile(
+                                sample, negative_gate_label, self.raw_gating,
+                                self.controller.filtered_raw_fluorescence_channel_ids,
+                                preloaded_events=_all_events, preloaded_pnn=_pnn,
+                                event_channels_pnn=_ecpnn,
+                            )
 
                         profile = positive_profile - negative_profile
                         if profile.sum() == 0:
@@ -542,9 +583,19 @@ class SpectralAutoGenerator(QObject):
             if particle_type == 'Beads':
                 self.unstained_negative_events_beads = raw_events
             else:
+                _col_order = self.controller.experiment.settings['raw'].get('whitelisted_pnn')
+                _ecpnn = self.controller.experiment.settings['raw']['event_channels_pnn']
+                try:
+                    _all_events = sample.get_events('raw', col_order=_col_order)
+                except (KeyError, ValueError):
+                    _all_events = sample.get_events('raw')
+                    _col_order = None
+                _pnn = _col_order if _col_order is not None else sample.pnn_labels
                 self.unstained_negative = get_profile(
                     sample, self.base_gate_label,
                     self.raw_gating, self.fluorescence_channel_ids,
+                    preloaded_events=_all_events, preloaded_pnn=_pnn,
+                    event_channels_pnn=_ecpnn,
                 )
                 self.unstained_negative_events = raw_events
 
@@ -743,12 +794,31 @@ class SpectralAutoGenerator(QObject):
                         'universal_negative_name': assigned_negative,
                     }
 
-                    positive_profile = get_profile(sample, control['gate_label'], self.raw_gating, self.fluorescence_channel_ids)
+                    _col_order = self.controller.experiment.settings['raw'].get('whitelisted_pnn')
+                    _ecpnn = self.controller.experiment.settings['raw']['event_channels_pnn']
+                    try:
+                        _all_events = sample.get_events('raw', col_order=_col_order)
+                    except (KeyError, ValueError):
+                        _all_events = sample.get_events('raw')
+                        _col_order = None
+                    _pnn = _col_order if _col_order is not None else sample.pnn_labels
+
+                    positive_profile = get_profile(
+                        sample, control['gate_label'], self.raw_gating,
+                        self.fluorescence_channel_ids,
+                        preloaded_events=_all_events, preloaded_pnn=_pnn,
+                        event_channels_pnn=_ecpnn,
+                    )
                     if (self.controller.experiment.process['negative_type'] == 'unstained'
                             and self.unstained_negative is not None):
                         negative_profile = self.unstained_negative
                     else:
-                        negative_profile = get_profile(sample, negative_gate_label, self.raw_gating, self.fluorescence_channel_ids)
+                        negative_profile = get_profile(
+                            sample, negative_gate_label, self.raw_gating,
+                            self.fluorescence_channel_ids,
+                            preloaded_events=_all_events, preloaded_pnn=_pnn,
+                            event_channels_pnn=_ecpnn,
+                        )
                     profile = positive_profile - negative_profile
                     if profile.sum() == 0:
                         profile = positive_profile

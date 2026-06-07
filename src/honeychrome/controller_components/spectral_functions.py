@@ -69,24 +69,159 @@ def get_best_channel(sample, gating_strategy, base_gate_label, fluorescence_chan
         # print([len(fluorescence_on_best_channel), pos_percentile, neg_percentile, fl_top, fl_bottom])
         return channel_id_best_match, fl_top, fl_bottom, explained_variance
 
-def get_profile(sample, gate_label, raw_gating, fluorescence_channel_ids):
-    gate_ids = list(raw_gating.find_matching_gate_paths(gate_label)[0]) + [gate_label]
-    temp_gating_strategy = GatingStrategy()
-    for n, gate_id in enumerate(gate_ids):
-        if gate_id != 'root':
-            gate = raw_gating.get_gate(gate_id)
-            temp_gating_strategy.add_gate(gate, gate_path=tuple(gate_ids[:n]))
-            for channel in gate.dimensions:
-                temp_gating_strategy.transformations[channel.id] = raw_gating.transformations[channel.id]
+def _gate_events_via_lookup(
+    all_events: np.ndarray,
+    pnn: list,
+    gate_label: str,
+    gating_strategy,
+) -> np.ndarray:
+    """
+    Return a boolean mask (n_events,) for events inside gate_label and all its
+    ancestors, without calling gate_sample() on the full event array.
+
+    Uses the lookup-table pattern from apply_gates_in_place() / controller.py:
+    gate a small coordinate grid (transform bin edges), then map events via
+    np.searchsorted.  Handles RectangleGate, PolygonGate, and EllipsoidGate
+    uniformly — no per-gate-type special-casing required.
+
+    Parameters
+    ----------
+    all_events : (n_events, n_channels) float64 — columns in pnn order.
+    pnn        : channel name list matching all_events column order.
+                 For whitelisted cytometers this is whitelisted_pnn (e.g. 78
+                 channels); for others it is sample.pnn_labels (full list).
+    gate_label : name of the target gate; ancestors are resolved automatically.
+    gating_strategy : GatingStrategy with transforms already attached.
+    """
+    from flowkit import Sample as FKSample, GatingStrategy as FKGatingStrategy
+
+    gate_ids = list(gating_strategy.find_matching_gate_paths(gate_label)[0]) + [gate_label]
+    gate_ids = [g for g in gate_ids if g != 'root']
+
+    mask = np.ones(len(all_events), dtype=np.bool_)
+
+    for gate_id in gate_ids:
+        gate = gating_strategy.get_gate(gate_id)
+        channels = gate.get_dimension_ids()
+
+        xforms = {ch: gating_strategy.transformations[ch] for ch in channels
+                  if ch in gating_strategy.transformations}
+
+        if len(channels) == 1:
+            ch = channels[0]
+            col_idx = pnn.index(ch)
+            col = all_events[:, col_idx]
+            xform = xforms.get(ch)
+
+            if xform is not None and hasattr(xform, 'scale'):
+                scale = xform.scale
+            else:
+                lo, hi = float(col.min()), float(col.max())
+                scale = np.linspace(lo, hi, 512)
+
+            grid = scale[1:].reshape(-1, 1)
+            grid_sample = FKSample(grid, channel_labels=[ch], sample_id='_lut_1d')
+            temp_gs = FKGatingStrategy()
+            temp_gs.add_gate(gate, gate_path=('root',))
+            if ch in xforms:
+                temp_gs.transformations[ch] = xforms[ch]
+            lut = temp_gs.gate_sample(grid_sample).get_gate_membership(gate_id)
+
+            indices = np.searchsorted(scale, col) - 2
+            indices = np.clip(indices, 0, len(lut) - 1)
+            mask &= lut[indices]
+
+        else:  # 2D gate (scatter, singlets, etc.)
+            ch_x, ch_y = channels[0], channels[1]
+            ix = pnn.index(ch_x)
+            iy = pnn.index(ch_y)
+
+            xform_x = xforms.get(ch_x)
+            xform_y = xforms.get(ch_y)
+
+            if xform_x is not None and hasattr(xform_x, 'scale'):
+                scale_x = xform_x.scale
+            else:
+                lo, hi = float(all_events[:, ix].min()), float(all_events[:, ix].max())
+                scale_x = np.linspace(lo, hi, 256)
+            if xform_y is not None and hasattr(xform_y, 'scale'):
+                scale_y = xform_y.scale
+            else:
+                lo, hi = float(all_events[:, iy].min()), float(all_events[:, iy].max())
+                scale_y = np.linspace(lo, hi, 256)
+
+            sx = scale_x[1:]
+            sy = scale_y[1:]
+            grid_x, grid_y = np.meshgrid(sx, sy, indexing='ij')
+            coords = np.column_stack((grid_x.ravel(), grid_y.ravel()))
+
+            grid_sample = FKSample(coords, channel_labels=[ch_x, ch_y], sample_id='_lut_2d')
+            temp_gs = FKGatingStrategy()
+            temp_gs.add_gate(gate, gate_path=('root',))
+            for ch in [ch_x, ch_y]:
+                if ch in xforms:
+                    temp_gs.transformations[ch] = xforms[ch]
+            lut_flat = temp_gs.gate_sample(grid_sample).get_gate_membership(gate_id)
+            lut = lut_flat.reshape(len(sx), len(sy))
+
+            ix_ev = np.searchsorted(scale_x, all_events[:, ix]) - 2
+            iy_ev = np.searchsorted(scale_y, all_events[:, iy]) - 2
+            ix_ev = np.clip(ix_ev, 0, lut.shape[0] - 1)
+            iy_ev = np.clip(iy_ev, 0, lut.shape[1] - 1)
+            mask &= lut[ix_ev, iy_ev]
+
+    return mask
+
+def get_profile(
+    sample,
+    gate_label: str,
+    raw_gating,
+    fluorescence_channel_ids: list,
+    preloaded_events: np.ndarray | None = None,
+    preloaded_pnn: list | None = None,
+    event_channels_pnn: list | None = None,
+):
+    """
+    Return mean fluorescence profile for events within gate_label.
+
+    preloaded_events    : (n_events, n_channels) float64, already loaded by the
+                          caller.  If None, loaded here from sample.
+    preloaded_pnn       : channel name list matching preloaded_events column
+                          order.  For whitelisted cytometers this is
+                          whitelisted_pnn; for others, sample.pnn_labels.
+                          Must be supplied when preloaded_events is supplied.
+    event_channels_pnn  : the full settings['raw']['event_channels_pnn'] list.
+                          Required when preloaded_pnn is supplied, so that
+                          fluorescence_channel_ids (which index into this full
+                          list) can be translated to positions in the
+                          preloaded subset.
+    """
+    if preloaded_events is not None:
+        all_events = preloaded_events
+        pnn = preloaded_pnn
+    else:
+        all_events = sample.get_events('raw')
+        pnn = sample.pnn_labels
 
     if gate_label != 'root':
-        event_mask = temp_gating_strategy.gate_sample(sample).get_gate_membership(gate_label)
+        event_mask = _gate_events_via_lookup(all_events, pnn, gate_label, raw_gating)
     else:
-        event_mask = np.ones(sample.event_count, dtype=bool)
+        event_mask = np.ones(len(all_events), dtype=np.bool_)
 
     if event_mask.sum() > 0:
-        profile = sample.get_events('raw')[event_mask].mean(axis=0)
-        profile = profile[fluorescence_channel_ids]
+        profile = all_events[event_mask].mean(axis=0)
+        if preloaded_pnn is not None and event_channels_pnn is not None:
+            # fluorescence_channel_ids index into event_channels_pnn (full list).
+            # Translate to column positions within the preloaded subset by name.
+            # Mirrors the pattern in controller.py:initialise_ephemeral_data().
+            fl_cols = [
+                preloaded_pnn.index(event_channels_pnn[i])
+                for i in fluorescence_channel_ids
+                if event_channels_pnn[i] in preloaded_pnn
+            ]
+        else:
+            fl_cols = fluorescence_channel_ids
+        profile = profile[fl_cols]
     else:
         profile = np.zeros(len(fluorescence_channel_ids))
         warnings.warn('No events in gate')
@@ -417,12 +552,16 @@ def get_raw_events(
     if gate_label and gating_strategy:
         gate_paths = gating_strategy.find_matching_gate_paths(gate_label)
         if gate_paths:
-            event_mask = gating_strategy.gate_sample(sample).get_gate_membership(gate_label)
+            # col_order is the whitelisted_pnn list when set, otherwise None.
+            # all_events was loaded with col_order, so its columns match
+            # col_order (or sample.pnn_labels when col_order is None).
+            pnn = col_order if col_order is not None else sample.pnn_labels
+            event_mask = _gate_events_via_lookup(all_events, pnn, gate_label, gating_strategy)
         else:
             warnings.warn(f'get_raw_events: gate "{gate_label}" not found — returning all events.')
-            event_mask = np.ones(sample.event_count, dtype=bool)
+            event_mask = np.ones(len(all_events), dtype=np.bool_)
     else:
-        event_mask = np.ones(sample.event_count, dtype=bool)
+        event_mask = np.ones(len(all_events), dtype=np.bool_)
 
     gated = all_events[event_mask]
     fluor = gated[:, fluorescence_channel_ids].astype(np.float64)
