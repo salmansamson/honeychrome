@@ -1298,9 +1298,12 @@ class Controller(QObject):
             if indices_plots_to_calculate is None:
                 indices_plots_to_calculate = list(range(len(self.data_for_cytometry_plots['plots'])))
 
-            for m, n in enumerate(indices_plots_to_calculate):
-                if self.data_for_cytometry_plots['histograms'][n].shape == hists[m].shape:
-                    self.data_for_cytometry_plots['histograms'][n] += hists[m]
+            # calc_hists skips plots whose source_gate is missing from
+            # gate_membership, so hists may be shorter than indices_plots_to_calculate.
+            # Zip stops at the shorter sequence, preventing an IndexError.
+            for n, hist in zip(indices_plots_to_calculate, hists):
+                if self.data_for_cytometry_plots['histograms'][n].shape == hist.shape:
+                    self.data_for_cytometry_plots['histograms'][n] += hist
                 else:
                     logger.warning(f'Controller: calc_hists_and_stats: histogram shape mismatch for plot {n} — discarding stale result')
 
@@ -1515,7 +1518,9 @@ class Controller(QObject):
         self.cache_all_af_profiles()
         # then reinitialise ephemeral data for process and unmixed tabs
         self.initialise_ephemeral_data(scope=['unmixed'])
-        self.initialise_data_for_cytometry_plots(force_recalc_histograms=True)
+        # Do not recalculate histograms here: the unmixing matrix has changed so
+        # any result would be immediately stale. Histograms are cleared below and
+        # will be regenerated correctly on the next sample load or tab change.
         self.data_for_cytometry_plots_unmixed['histograms'].clear()
         self.data_for_cytometry_plots_unmixed['statistics'].clear()
         if self.bus is not None:

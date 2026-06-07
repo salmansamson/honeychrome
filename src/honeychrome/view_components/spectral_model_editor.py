@@ -1081,7 +1081,12 @@ class SpectralControlsEditor(QFrame):
         self.setEnabled(True)  # re-enable after generate completes
         if control_valid:
             self.bus.showSelectedProfiles.emit([control['label']])
-            self.bus.spectralModelUpdated.emit()
+            if changed_col == 'gate_channel':
+                # Gates were moved to a new channel — update raw gating lookup
+                # tables and histograms for just the affected gates, then emit
+                # spectralModelUpdated once to recalculate the unmixing matrix.
+                pos_gate_label = control.get('gate_label') or f'Pos {control["label"]}'
+                self.bus.changedGatingHierarchy.emit('raw', pos_gate_label)
             self.bus.spectralModelUpdated.emit()
         logger.info(f'SpectralModelEditor: updated {"valid" if control_valid else "invalid"} control {control}')
 
