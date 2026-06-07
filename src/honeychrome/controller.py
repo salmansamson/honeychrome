@@ -492,7 +492,11 @@ class Controller(QObject):
 
         # extra lines here for debugging that horrible error caused by raw_transformations not being updated
         try:
-            self.calculate_lookup_tables() # (re)create all lookup tables
+            if scope is None:
+                self.calculate_lookup_tables()           # full rebuild: raw + unmixed
+            else:
+                for s in scope:
+                    self.calculate_lookup_tables(mode=s) # only the requested scope(s)
         except Exception:
             logger.warning(self.raw_transformations)
             logger.warning(self.raw_gating)
