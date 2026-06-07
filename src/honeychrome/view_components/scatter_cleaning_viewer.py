@@ -1,7 +1,7 @@
 """
 scatter_cleaning_viewer.py
 ---------------------------
-Diagnostic widget for Stage 3 scatter matching.
+Diagnostic widget for scatter matching.
 """
 
 from __future__ import annotations
@@ -157,7 +157,6 @@ class ScatterCleaningViewer(QFrame):
     _COL_ALL_POS   = (180, 180, 180,  50)   # dim grey       — all positive events
     _COL_GATED_POS = (255, 120,  50, 170)   # orange         — gated positive
     _COL_CLEAN_POS = (160,  50, 220, 230)   # purple         — cleaned & selected positive
-    _COL_HULL      = 'y'                    # yellow dashed  — convex hull
 
     _LEGEND = [
         (_COL_ALL_NEG,   'All negative events'),
@@ -217,10 +216,6 @@ class ScatterCleaningViewer(QFrame):
             legend_row.addWidget(swatch)
             legend_row.addWidget(QLabel(text))
             legend_row.addSpacing(10)
-        hull_swatch = QLabel('—')
-        hull_swatch.setStyleSheet('color: yellow;')
-        legend_row.addWidget(hull_swatch)
-        legend_row.addWidget(QLabel('Match boundary (exact hull)'))
         legend_row.addStretch()
         content_layout.addLayout(legend_row)
 
@@ -305,10 +300,14 @@ class ScatterCleaningViewer(QFrame):
         # whatever n_scatter_matched is stored in cleaned_events (which may be stale
         # if the user changed a control to [Internal Negative] without re-running cleaning).
         control_by_label = {c['label']: c for c in spectral_model if 'label' in c}
+        def _has_matched_neg(entry: dict) -> bool:
+            v = entry.get('scatter_neg_matched')
+            return v is not None and hasattr(v, '__len__') and len(v) > 0
+
         labels = [
             label for label in model_order
             if label in cleaned
-            and cleaned[label].get('n_scatter_matched', 0) > 0
+            and _has_matched_neg(cleaned[label])
             and control_by_label.get(label, {}).get('particle_type') != 'Beads'
             and control_by_label.get(label, {}).get('universal_negative_name') != INTERNAL_NEGATIVE_SENTINEL
         ]
@@ -358,58 +357,6 @@ class ScatterCleaningViewer(QFrame):
     # ------------------------------------------------------------------
     # Drawing
     # ------------------------------------------------------------------
-
-    @staticmethod
-    def _smooth_hull(pts: np.ndarray, density_percentile: float = 0.20, grid_n: int = 50, bw_factor: float = 1.0) -> np.ndarray | None:
-        """
-        Return convex hull vertices of the dense core of pts (n, 2).
-        Mirrors the scatter_match_negative KDE approach in spectral_cleaning.py.
-        """
-        try:
-            from scipy.stats import gaussian_kde
-            from scipy.spatial import ConvexHull
-            import matplotlib.figure
-            import matplotlib.contour  # noqa
-
-            if len(pts) < 4:
-                return None
-
-            std_x = np.std(pts[:, 0])
-            std_y = np.std(pts[:, 1])
-            n = len(pts)
-            bw_x = 1.06 * std_x * n ** (-1 / 5) * bw_factor
-            bw_y = 1.06 * std_y * n ** (-1 / 5) * bw_factor
-            scale = np.array([bw_x, bw_y])
-            if scale[0] == 0 or scale[1] == 0:
-                return None
-
-            whitened = pts / scale
-            kde = gaussian_kde(whitened.T, bw_method=1.0)
-
-            xi = np.linspace(pts[:, 0].min(), pts[:, 0].max(), grid_n)
-            yi = np.linspace(pts[:, 1].min(), pts[:, 1].max(), grid_n)
-            xx, yy = np.meshgrid(xi, yi)
-            grid_w = np.vstack([xx.ravel() / scale[0], yy.ravel() / scale[1]])
-            zz = kde(grid_w).reshape(grid_n, grid_n)
-
-            z_sort = np.sort(zz.ravel())[::-1]
-            cumdens = np.cumsum(z_sort) / z_sort.sum()
-            threshold = z_sort[np.argmin(np.abs(cumdens - density_percentile))]
-
-            fig = matplotlib.figure.Figure()
-            ax = fig.add_subplot(111)
-            cs = ax.contour(xi, yi, zz, levels=[threshold])
-            paths = [p for col in cs.collections for p in col.get_paths()]
-            if not paths:
-                return None
-            contour_pts = max(paths, key=lambda p: len(p.vertices)).vertices
-            if len(contour_pts) < 3:
-                return None
-
-            hull = ConvexHull(contour_pts)
-            return contour_pts[hull.vertices]
-        except Exception:
-            return None
 
     @staticmethod
     def _pts(x, y, rgba, size=2) -> pg.ScatterPlotItem:
@@ -493,6 +440,9 @@ class ScatterCleaningViewer(QFrame):
         pos_rel = all_samples_rev.get(control.get('sample_name', ''))
         if pos_rel:
             try:
+                from PySide6.QtWidgets import QApplication
+                from PySide6.QtCore import Qt
+                QApplication.setOverrideCursor(Qt.WaitCursor)
                 pos_sample = sample_from_fcs(str(experiment_dir / pos_rel))
                 all_ev = pos_sample.get_events('raw')
                 pos_scatter_all = all_ev[:, [abs_x, abs_y]].astype(float)
@@ -519,8 +469,8 @@ class ScatterCleaningViewer(QFrame):
         neg_scatter_all = None
         neg_scatter_matched = None
 
-        # Stored scatter_neg (already scatter-matched subset)
-        stored_scatter_neg = cleaned.get('scatter_neg')
+        # Stored kNN-matched negative scatter (mean of k neighbours per positive event)
+        stored_scatter_neg = cleaned.get('scatter_neg_matched')
         if (stored_scatter_neg is not None
                 and hasattr(stored_scatter_neg, 'ndim')
                 and stored_scatter_neg.ndim == 2
@@ -528,21 +478,19 @@ class ScatterCleaningViewer(QFrame):
                 and stored_scatter_neg.shape[0] > 0):
             neg_scatter_matched = stored_scatter_neg[:, :2].astype(float)
 
-        # Only load and display the external negative background if scatter matching
-        # actually took place (i.e. n_scatter_matched > 0). For internal-negative
-        # and bead controls the universal_negative_name may still be populated but
-        # is irrelevant — do not display it.
-        if neg_name and cleaned.get('n_scatter_matched', 0) > 0:
+        matched = cleaned.get('scatter_neg_matched')
+        if neg_name and matched is not None and len(matched) > 0:
             neg_rel = all_samples_rev.get(neg_name)
             if neg_rel:
                 try:
                     neg_sample = sample_from_fcs(str(experiment_dir / neg_rel))
-                    # ALL events — no gate — so there's no artificial y-axis cutoff
                     all_neg_ev = neg_sample.get_events('raw')
                     neg_scatter_all = all_neg_ev[:, [abs_x, abs_y]].astype(float)
                 except Exception as exc:
                     logger.warning(
                         f'ScatterCleaningViewer: neg load failed for "{label}": {exc}')
+                finally:
+                    QApplication.restoreOverrideCursor()
 
         # ---- Apply transforms to all arrays ----
         neg_scatter_all_t    = _txform(neg_scatter_all)
@@ -561,32 +509,6 @@ class ScatterCleaningViewer(QFrame):
             self._neg_plot.add_item(self._pts(
                 neg_scatter_matched_t[:, 0], neg_scatter_matched_t[:, 1],
                 self._COL_MATCHED, size=3))
-
-        # Hull on negative plot: use the stored hull_vertices (exact boundary used
-        # by scatter_match_negative). Fall back to recomputing a smooth hull if no
-        # stored hull exists (e.g. data cleaned before hull storage was added).
-        stored_hull = cleaned.get('hull_vertices')
-        if stored_hull is not None and len(stored_hull) >= 3:
-            closed = np.vstack([_txform(stored_hull), _txform(stored_hull[:1])])
-            self._neg_plot.add_item(pg.PlotCurveItem(
-                closed[:, 0], closed[:, 1],
-                pen=pg.mkPen(self._COL_HULL, width=2),
-            ))
-        else:
-            hull_src = (pos_scatter_clean if (pos_scatter_clean is not None and len(pos_scatter_clean) >= 4)
-                        else (pos_scatter_gated if (pos_scatter_gated is not None and len(pos_scatter_gated) >= 4)
-                              else None))
-            if hull_src is not None:
-                try:
-                    hull_pts = self._smooth_hull(hull_src)
-                    if hull_pts is not None and len(hull_pts) >= 3:
-                        closed = np.vstack([_txform(hull_pts), _txform(hull_pts[:1])])
-                        self._neg_plot.add_item(pg.PlotCurveItem(
-                            closed[:, 0], closed[:, 1],
-                            pen=pg.mkPen(self._COL_HULL, width=2, style=Qt.DashLine),
-                        ))
-                except AttributeError:
-                    pass
 
         # ---- Draw positive plot ----
         if pos_scatter_all_t is not None and len(pos_scatter_all_t):
@@ -612,11 +534,9 @@ class ScatterCleaningViewer(QFrame):
             self._neg_plot.auto_range()
             self._pos_plot.auto_range()
 
-        n_matched  = cleaned.get('n_scatter_matched', '?')
-        n_pos      = cleaned.get('n_surviving_positive', '?')
-        n_gated    = len(pos_scatter_gated) if pos_scatter_gated is not None else '?'
+        n_pos   = cleaned.get('n_surviving_positive', '?')
+        n_gated = len(pos_scatter_gated) if pos_scatter_gated is not None else '?'
         self._status.setText(
             f'Axes: {ch_x} / {ch_y}  ·  '
-            f'{n_pos} brightest-selected positive (of {n_gated} gated)  ·  '
-            f'{n_matched} scatter-matched negative'
+            f'{n_pos} cosine-filtered positive events (of {n_gated} gated)'
         )

@@ -411,31 +411,25 @@ class ProfilesViewer(QFrame):
             _COL_MATCHED   = ( 80, 160, 255, 200)   # bright blue — scatter-matched negative
 
             if cleaned is not None:
-                pos_events = cleaned.get('positive')
-                neg_events = cleaned.get('negative')
+                pos_events = cleaned.get('spectral_sub')
                 if pos_events is None or len(pos_events) == 0:
                     continue
                 pos_peak_raw = pos_events[:, peak_local_idx]
 
-                if use_internal and (neg_events is None or len(neg_events) == 0):
-                    # cleaned['negative'] is empty for internal-negative controls
-                    # (pre-fix controller). Load the Neg gate from the FCS file directly.
-                    neg_peak_raw = None
-                    if rel_path and raw_gating:
-                        try:
-                            sample = sample_from_fcs(str(experiment_dir / rel_path))
-                            all_ev = get_raw_events(sample, fluor_ch_ids)
-                            neg_gate_lbl = control.get('neg_gate_label') or f'Neg {label}'
-                            if raw_gating.find_matching_gate_paths(neg_gate_lbl):
-                                neg_mask = raw_gating.gate_sample(sample).get_gate_membership(neg_gate_lbl)
-                                neg_ev = all_ev[neg_mask]
-                                neg_peak_raw = neg_ev[:, peak_local_idx] if len(neg_ev) > 0 else None
-                        except Exception:
-                            pass
-                else:
-                    neg_peak_raw = (neg_events[:, peak_local_idx]
-                                    if (neg_events is not None and len(neg_events) > 0)
-                                    else None)
+                # New pipeline stores no separate negative array — always load
+                # the neg gate from the FCS file directly for the overlay.
+                neg_peak_raw = None
+                if rel_path and raw_gating:
+                    try:
+                        sample = sample_from_fcs(str(experiment_dir / rel_path))
+                        all_ev = get_raw_events(sample, fluor_ch_ids)
+                        neg_gate_lbl = control.get('neg_gate_label') or f'Neg {label}'
+                        if raw_gating.find_matching_gate_paths(neg_gate_lbl):
+                            neg_mask = raw_gating.gate_sample(sample).get_gate_membership(neg_gate_lbl)
+                            neg_ev = all_ev[neg_mask]
+                            neg_peak_raw = neg_ev[:, peak_local_idx] if len(neg_ev) > 0 else None
+                    except Exception:
+                        pass
 
                 # All-events background
                 if rel_path:

@@ -127,7 +127,7 @@ class ListTableModel(QtCore.QAbstractTableModel):
         key = COLUMNS[col]
         val = self._data[row].get(key, None)
         if role in (Qt.DisplayRole, Qt.EditRole):
-            if key in ("use_cleaned", "af_remove"):
+            if key == "use_cleaned":
                 return None   # checkbox widget handles display; suppress cell text
             return "" if val is None else str(val)
         return None
@@ -283,7 +283,6 @@ class SpectralControlsEditor(QFrame):
         header.setSectionResizeMode(7, QHeaderView.Fixed)  # universal_negative_name
         header.resizeSection(7, 200)
         header.setSectionResizeMode(8, QHeaderView.ResizeToContents)  # use_cleaned
-        header.setSectionResizeMode(9, QHeaderView.ResizeToContents)  # af_remove
 
         self.label_delegate = LabelDelegate()
         self.view.setItemDelegateForColumn(COLUMNS.index("label"), self.label_delegate)
@@ -334,11 +333,10 @@ class SpectralControlsEditor(QFrame):
         self.clean_controls_btn.setToolTip(
             'Run the cleaning pipeline for all cell controls that have an Unstained Negative assigned:\n'
             '  • Saturation exclusion\n'
-            '  • Brightest-event selection\n'
-            '  • Scatter matching\n'
-            '  • Noise exclusion (per-control, if "Exclude noise" is ticked)\n'
+            '  • Cosine-similarity event selection (least AF-like events)\n'
+            '  • kNN scatter-matched AF subtraction\n'
             'Once complete, each control will have a "Use Cleaned" checkbox.\n'
-            'Cleaned controls use RLM profile extraction by default.'
+            'Cleaned controls use the kNN-subtracted spectrum directly.'
         )
         self.clean_controls_btn.clicked.connect(self._on_clean_controls)
 
@@ -432,7 +430,7 @@ class SpectralControlsEditor(QFrame):
 
     def _set_cleaning_columns_visible(self, visible: bool):
         """Show or hide the cleaning-only table columns."""
-        for col_name in ("use_cleaned", "af_remove"):
+        for col_name in ("use_cleaned",):
             col_idx = COLUMNS.index(col_name)
             header = self.view.horizontalHeader()
             if visible:
@@ -819,45 +817,6 @@ class SpectralControlsEditor(QFrame):
 
             cb.toggled.connect(_on_toggle)
             self.view.setIndexWidget(proxy_uc_idx, cb)
-
-        # "Remove AF" checkbox — visible for all eligible cell controls that have a
-        # universal negative assigned (af_remove controls what Clean Controls does,
-        # so it must be settable before the user clicks Clean Controls, unlike
-        # use_cleaned which is only meaningful after cleaning has run).
-        af_remove_eligible = (
-            is_cell_single_stain
-            and bool(self.model._data[row].get('universal_negative_name'))
-            and self.model._data[row].get('universal_negative_name') != INTERNAL_NEGATIVE_SENTINEL
-        )
-        af_col = COLUMNS.index("af_remove")
-        af_idx = self.model.index(row, af_col)
-        proxy_af_idx = self.proxy.mapFromSource(af_idx)
-
-        old_af = self.view.indexWidget(proxy_af_idx)
-        if old_af is not None:
-            self.view.setIndexWidget(proxy_af_idx, None)
-            old_af.hide()
-            old_af.setParent(None)
-
-        if af_remove_eligible:
-            af_cb = QCheckBox()
-            af_cb.installEventFilter(WheelBlocker(af_cb))
-            current_af = self.model._data[row].get('af_remove')
-            af_cb.setChecked(bool(current_af))   # None / False → unchecked; True → checked
-            af_cb.setToolTip(
-                'Enable noise exclusion for this control.\n'
-                'Uses PCA on the matched unstained to identify the noise signature,\n'
-                'fits an exclusion boundary in (noise channel, peak channel) space,\n'
-                'and removes positive events above that boundary before RLM fitting.\n'
-                'Tick this BEFORE running "Clean Controls".\n'
-                'Re-run "Clean Controls" after changing this setting.'
-            )
-
-            def _on_af_toggle(checked, row=row):
-                self.model._data[row]['af_remove'] = checked
-
-            af_cb.toggled.connect(_on_af_toggle)
-            self.view.setIndexWidget(proxy_af_idx, af_cb)
                 
 
     def add_row(self):

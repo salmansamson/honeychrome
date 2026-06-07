@@ -8,10 +8,10 @@ from PySide6.QtCore import QObject, Signal, QTimer
 from flowkit import Dimension, gates
 
 from honeychrome.controller_components.functions import timer, sample_from_fcs
-from honeychrome.controller_components.spectral_functions import get_best_channel, get_profile, get_profile_from_events, get_raw_events
+from honeychrome.controller_components.spectral_functions import get_profile, get_raw_events
 from honeychrome.controller_components.label_matching import match_fluorophore, match_marker, get_fluorophore_db, get_marker_db
 from honeychrome.controller_components.spectral_librarian import SpectralLibrary
-from honeychrome.controller_components.spectral_cleaning import find_empirical_peak, clean_control, select_positive_events
+from honeychrome.controller_components.spectral_cleaning import find_empirical_peak, cosine_filter, knn_scatter_match, exclude_saturated, CleanResult
 from honeychrome.controller_components.functions import sample_from_fcs
 from honeychrome.experiment_model import check_fcs_matches_experiment
 from honeychrome.view_components.busy_cursor import with_busy_cursor
@@ -241,30 +241,17 @@ class ProfileUpdater:
                         # use cleaned event pool when available and opted in
                         cleaned_store = self.controller.cleaned_events
                         cleaned = cleaned_store.get(control['label']) if control.get('use_cleaned') is not False else None
-                        if cleaned is not None and len(cleaned.get('positive', [])) > 0:
-                            pos_events = cleaned['positive']
-                            neg_events = cleaned['negative']
-
-                            # RLM profile extraction
-                            peak_ch_name = control.get('gate_channel', '')
-                            cleaned_fluor_ch_ids = cleaned.get('fluor_ch_ids') or self.controller.filtered_raw_fluorescence_channel_ids
-                            try:
-                                peak_ch_idx = cleaned_fluor_ch_ids.index(
-                                    self.event_channels_pnn.index(peak_ch_name)
-                                ) if peak_ch_name else int(np.argmax(pos_events.mean(axis=0)))
-                            except (ValueError, IndexError):
-                                peak_ch_idx = int(np.argmax(pos_events.mean(axis=0)))
-
-                            profile = get_profile_from_events(pos_events, neg_events, peak_ch_idx, label=control.get('label', ''))
-
-                            if profile.sum() == 0:
-                                raise Exception(f'RLM profile for "{control["label"]}" is zero — check event pool.')
+                        if cleaned is not None and cleaned.get('spectrum'):
+                            profile = np.array(cleaned['spectrum'], dtype=float)
+                            if profile.max() <= 0:
+                                raise Exception(f'Cleaned spectrum for "{control["label"]}" is zero — re-run Clean Controls.')
+                            profile = profile / profile.max()
                             if not control.get('gate_channel_locked'):
-                                control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
-                            profile = profile.tolist()
-                            self.profiles[control['label']] = profile
-                            profile_dict = dict(zip(self.fluorescence_channels_pnn, profile))
-                            spectral_library.deposit_control_with_profile_and_experiment_dir(control, profile_dict, str(self.experiment_dir))
+                                control['gate_channel'] = self.fluorescence_channels_pnn[int(np.argmax(profile))]
+                            self.profiles[control['label']] = profile.tolist()
+                            profile_dict = dict(zip(self.fluorescence_channels_pnn, profile.tolist()))
+                            spectral_library.deposit_control_with_profile_and_experiment_dir(
+                                control, profile_dict, str(self.experiment_dir))
                             return True
 
                         # FCS load only needed for non-cleaned path
@@ -872,8 +859,6 @@ class SpectralAutoGenerator(QObject):
 # ---------------------------------------------------------------------------
 
 TARGET_N  = 50   # minimum events needed for a reliable profile
-INITIAL_N = 250   # starting cushion
-
 
 class SpectralCleaner(QObject):
     """
@@ -899,9 +884,7 @@ class SpectralCleaner(QObject):
         controller.filter_raw_fluorescence_channels()
         self.fluor_ch_ids    = controller.filtered_raw_fluorescence_channel_ids
         self.ceiling         = controller.experiment.settings['raw']['magnitude_ceiling']
-
-        # Build a ProfileUpdater instance solely to reuse _get_negative_events()
-        self._profile_updater = ProfileUpdater(controller, bus)
+        self._cytometer_key: str | None = controller.experiment.settings['raw'].get('cytometer_db_col')
 
     @with_busy_cursor
     def run(self):
@@ -956,7 +939,6 @@ class SpectralCleaner(QObject):
             'sample_name': control.get('sample_name'),
             'gate_label': control.get('gate_label'),
             'universal_negative_name': control.get('universal_negative_name'),
-            'af_remove': bool(control.get('af_remove', False)),
             'particle_type': control.get('particle_type'),
             'fluor_ch_ids': list(self.fluor_ch_ids),
         }
@@ -996,7 +978,6 @@ class SpectralCleaner(QObject):
             )
 
             # Reduce scatter to the canonical morphology pair (scatter_param[0], scatter_param[1]).
-            # scatter_match_negative expects shape (n, 2); scatter_ch_ids may include -H and -W variants.
             scatter_param = self.controller.experiment.settings['raw'].get('scatter_param', ['FSC-A', 'SSC-A'])
             morph_x_name, morph_y_name = scatter_param[0], scatter_param[1]
 
@@ -1019,7 +1000,6 @@ class SpectralCleaner(QObject):
             # Beads and [Internal Negative] controls: use the bottom of the positive
             # sample's own peak-channel distribution as the negative.
             # No external file, no scatter matching (empty scatter arrays cause
-            # scatter_match_negative to be skipped inside clean_control).
             use_internal = (
                 control.get('particle_type') == 'Beads'
                 or control.get('universal_negative_name') == INTERNAL_NEGATIVE_SENTINEL
@@ -1046,7 +1026,7 @@ class SpectralCleaner(QObject):
                         neg_events_internal = np.empty((0, pos_events.shape[1]))
                 except Exception:
                     neg_events_internal = np.empty((0, pos_events.shape[1]))
-                neg_events = neg_events_internal   # used by select_positive_events
+                neg_events = neg_events_internal
                 neg_scatter = np.empty((0, 2))     # no scatter matching for internal
             else:
                 neg_events_internal = None
@@ -1081,124 +1061,91 @@ class SpectralCleaner(QObject):
             except (ValueError, IndexError):
                 expected_peak_ch_idx = int(np.argmax(pos_events.mean(axis=0)))
 
-            # AF mean for orthogonalisation
-            if use_internal:
-                order_peak = np.argsort(pos_events[:, expected_peak_ch_idx])
-                n_int_neg = max(2, len(pos_events) // 4)
-                af_mean_orth = pos_events[order_peak[:n_int_neg]].mean(axis=0)
+            # --- Saturation exclusion ---
+            pos_events, n_sat_pos = exclude_saturated(pos_events, self.ceiling)
+            if not use_internal:
+                neg_events, n_sat_neg = exclude_saturated(neg_events, self.ceiling)
             else:
-                af_mean_orth = neg_events.mean(axis=0)
+                n_sat_neg = 0
 
-            peak_ch_idx = find_empirical_peak(pos_events, af_mean_orth)
-
-            # --- DIAGNOSTIC: Stage 1 orthogonalisation ---
-            fluor_pnn = [self.event_channels_pnn[i] for i in self.fluor_ch_ids]
-            logger.info(
-                f'[DIAG Stage1] "{label}" use_internal={use_internal} '
-                f'n_pos={len(pos_events)} n_neg={len(neg_events)}'
-            )
-            logger.info(
-                f'[DIAG Stage1] "{label}" af_mean_orth min={af_mean_orth.min():.3f} '
-                f'max={af_mean_orth.max():.3f} norm={float(np.sqrt(np.dot(af_mean_orth, af_mean_orth))):.3f} '
-                f'argmax_ch={fluor_pnn[int(np.argmax(af_mean_orth))]}'
-            )
-            logger.info(
-                f'[DIAG Stage1] "{label}" expected_peak={fluor_pnn[expected_peak_ch_idx]} '
-                f'empirical_peak={fluor_pnn[peak_ch_idx]} '
-                f'(expected_idx={expected_peak_ch_idx} empirical_idx={peak_ch_idx})'
-            )
-            # Top-5 channels by orthogonalised mean
-            mat_orth_mean = (pos_events - np.outer(pos_events @ (af_mean_orth / (np.sqrt(np.dot(af_mean_orth, af_mean_orth)) + 1e-9)), (af_mean_orth / (np.sqrt(np.dot(af_mean_orth, af_mean_orth)) + 1e-9)))).mean(axis=0)
-            top5_orth = np.argsort(mat_orth_mean)[::-1][:5]
-            logger.info(
-                f'[DIAG Stage1] "{label}" top-5 orthogonalised channels: '
-                + ', '.join(f'{fluor_pnn[i]}={mat_orth_mean[i]:.2f}' for i in top5_orth)
-            )
-            top5_raw = np.argsort(pos_events.mean(axis=0))[::-1][:5]
-            logger.info(
-                f'[DIAG Stage1] "{label}" top-5 raw mean channels: '
-                + ', '.join(f'{fluor_pnn[i]}={pos_events.mean(axis=0)[i]:.2f}' for i in top5_raw)
-            )
-            # --- END DIAGNOSTIC ---
-
-            # --- adaptive top-up loop ---
-            quantile  = 0.995
-            initial_n = INITIAL_N
-
-            for attempt in range(10):
-                pos_sel, sel_idx, threshold = select_positive_events(
-                    pos_events, neg_events, peak_ch_idx,
-                    initial_n=initial_n,
-                    positivity_quantile=quantile,
-                )
-                # Keep pos_scatter aligned with the selected positive rows
-                pos_scatter_sel = pos_scatter[sel_idx] if len(pos_scatter) == len(pos_events) else np.empty((0, 2))
-
-                af_remove = bool(control.get('af_remove', False))
-                result = clean_control(
-                    pos_sel,
-                    neg_events,
-                    peak_ch_idx,
-                    ceiling=self.ceiling,
-                    positivity_quantile=quantile,
-                    scatter_pos=pos_scatter_sel,
-                    scatter_neg=neg_scatter,
-                    opts={'af_remove': af_remove},
-                )
-
-                if len(result.positive) >= TARGET_N or quantile <= 0.95:
-                    break
-
-                # Too few survived — widen threshold and take more forward
-                quantile  = max(0.95, quantile - 0.01)
-                initial_n = min(500, int(initial_n * 1.5))
-
-            if len(result.positive) < TARGET_N:
-                    msg = (f'SpectralCleaner: only {len(result.positive)} events '
-                        f'available for "{label}" after cleaning; '
-                        f'profile may be unreliable.')
-                    logger.warning(msg)
-                    if self.bus:
-                        self.bus.warningMessage.emit(msg)
-
-            # For internal-negative controls, clear scatter arrays so the viewer
-            # does not display them as if scatter matching against an external
-            # negative had occurred.
+            # --- AF reference vectors ---
             if use_internal:
-                result.scatter_pos = np.empty((0, 2))
-                result.scatter_neg = np.empty((0, 2))
-                result.hull_vertices = None
-                result.n_scatter_matched = 0    
+                order_peak      = np.argsort(pos_events[:, expected_peak_ch_idx])
+                n_int_neg       = max(2, len(pos_events) // 4)
+                int_neg_idx     = order_peak[:n_int_neg]
+                neg_events      = pos_events[int_neg_idx]
+                scatter_neg_for_knn = (pos_scatter[int_neg_idx]
+                                       if len(pos_scatter) == len(pos_events)
+                                       else np.empty((0, 2)))
+                af_median       = np.median(neg_events, axis=0)
+            else:
+                scatter_neg_for_knn = neg_scatter
+                af_median           = np.median(neg_events, axis=0)
 
-            # --- store result (runtime only — not serialised) ---
+            # --- Re-derive empirical peak after saturation removal ---
+            peak_ch_idx = find_empirical_peak(pos_events, af_median)
+
+            # --- Cosine filter -> selected positive indices ---
+            sel_idx, cs_vals = cosine_filter(
+                pos_events, af_median, peak_ch_idx=peak_ch_idx
+            )
+            pos_sel         = pos_events[sel_idx]
+            pos_scatter_sel = (pos_scatter[sel_idx]
+                               if len(pos_scatter) == len(pos_events)
+                               else np.empty((0, 2)))
+
+            # --- kNN scatter-matched AF subtraction ---
+            spectral_sub, matched_neg_scatter = knn_scatter_match(
+                pos_sel, pos_scatter_sel, neg_events, scatter_neg_for_knn
+            )
+
+            # --- Column median -> clip negatives -> normalise [0, 1] ---
+            raw_spectrum = np.median(spectral_sub, axis=0).clip(0, None)
+            max_val      = raw_spectrum.max()
+            spectrum     = (raw_spectrum / max_val) if max_val > 0 else raw_spectrum
+
+            n_surviving = len(pos_sel)
+            if n_surviving < TARGET_N:
+                msg = (f'SpectralCleaner: only {n_surviving} events for "{label}" '
+                       f'after cleaning; profile may be unreliable.')
+                logger.warning(msg)
+                if self.bus:
+                    self.bus.warningMessage.emit(msg)
+
+            result = CleanResult(
+                spectral_sub          = spectral_sub,
+                scatter_pos           = pos_scatter_sel,
+                scatter_neg_matched   = matched_neg_scatter,
+                n_removed_saturation  = n_sat_pos + n_sat_neg,
+                n_surviving_positive  = n_surviving,
+                empirical_peak_ch_idx = peak_ch_idx,
+                expected_peak_ch_idx  = expected_peak_ch_idx,
+                cs_vals               = cs_vals,
+                cosine_selected_idx   = sel_idx,
+            )
+
+            # --- store result ---
             self.cleaned_events[label] = {
-                'positive': result.positive,
-                'negative': result.negative,
-                'fluor_ch_ids': list(self.fluor_ch_ids),
-                'scatter_pos': result.scatter_pos,
-                'scatter_neg': result.scatter_neg,
-                'hull_vertices': result.hull_vertices,
-                'n_removed_saturation': result.n_removed_saturation,
-                'n_removed_af': result.n_removed_af,
-                'n_scatter_matched': result.n_scatter_matched,
-                'n_surviving_positive': result.n_surviving_positive,
-                'positivity_quantile_used': result.positivity_quantile_used,
-                'af_boundary_neg': result.af_boundary_neg,
-                'af_boundary_pos': result.af_boundary_pos,
-                'af_ch_idx': result.af_ch_idx,
-                'af_peak_ch_idx': result.af_peak_ch_idx,
-                'empirical_peak_ch_idx': peak_ch_idx,
-                'expected_peak_ch_idx': expected_peak_ch_idx,
-                'warnings': result.warnings,
-                '_fingerprint': self._cleaning_fingerprint(control),
+                'spectrum':              spectrum.tolist(),
+                'n_removed_saturation':  result.n_removed_saturation,
+                'n_surviving_positive':  result.n_surviving_positive,
+                'empirical_peak_ch_idx': result.empirical_peak_ch_idx,
+                'expected_peak_ch_idx':  result.expected_peak_ch_idx,
+                'fluor_ch_ids':          list(self.fluor_ch_ids),
+                'cytometer_key':         self._cytometer_key,
+                'warnings':              result.warnings,
+                '_fingerprint':          self._cleaning_fingerprint(control),
+                'spectral_sub':          result.spectral_sub,
+                'scatter_pos':           result.scatter_pos,
+                'scatter_neg_matched':   result.scatter_neg_matched,
+                'cs_vals':               result.cs_vals,
+                'cosine_selected_idx':   result.cosine_selected_idx,
             }
 
             logger.info(
                 f'SpectralCleaner: "{label}" — '
-                f'{result.n_surviving_positive} positive events selected, '
-                f'{result.n_removed_saturation} removed for saturation, '
-                f'{result.n_scatter_matched} scatter-matched negatives, '
-                f'quantile={result.positivity_quantile_used:.3f}.'
+                f'{result.n_surviving_positive} cosine-selected events, '
+                f'{result.n_removed_saturation} removed for saturation.'
             )
 
         except Exception as e:
