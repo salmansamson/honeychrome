@@ -997,13 +997,11 @@ class SpectralCleaner(QObject):
             pos_scatter = _fsc_ssc_cols(pos_scatter_all) if pos_scatter_all.shape[1] > 2 else pos_scatter_all
 
             # --- load negative events ---
-            # Beads and [Internal Negative] controls: use the bottom of the positive
-            # sample's own peak-channel distribution as the negative.
-            # No external file, no scatter matching (empty scatter arrays cause
-            use_internal = (
-                control.get('particle_type') == 'Beads'
-                or control.get('universal_negative_name') == INTERNAL_NEGATIVE_SENTINEL
+            has_external_neg = (
+                control.get('universal_negative_name')
+                and control.get('universal_negative_name') != INTERNAL_NEGATIVE_SENTINEL
             )
+            use_internal = not has_external_neg
 
             logger.info(
                 f'_clean_one: "{label}" particle_type={control.get("particle_type")!r} '
