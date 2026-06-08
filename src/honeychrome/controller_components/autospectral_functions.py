@@ -425,6 +425,41 @@ def _qc_af_spectra(
         )
     return af_spectra[~contaminated]
 
+def _filter_contaminant_events(
+    event_mat: np.ndarray,
+    spectra_mat: np.ndarray,
+    threshold: float = 0.99,
+) -> np.ndarray:
+    """
+    Return a boolean mask (True = keep) for events whose cosine similarity
+    to every fluorophore spectrum is below threshold.
+
+    More sensitive than post-clustering centroid QC: a small number of
+    contaminating events will not dominate an entire cluster node.
+
+    Parameters
+    ----------
+    event_mat   : ndarray (n_events, n_channels)
+    spectra_mat : ndarray (n_fluors, n_channels)
+    threshold   : float
+
+    Returns
+    -------
+    ndarray, bool, shape (n_events,)
+    """
+    event_norms = np.sqrt(np.sum(event_mat ** 2, axis=1)) + 1e-9  # (n_events,)
+    keep = np.ones(len(event_mat), dtype=bool)
+
+    for spec in spectra_mat:
+        spec_norm = np.sqrt(np.dot(spec, spec)) + 1e-9
+        dots = event_mat @ spec          # (n_events,)
+        cs = dots / (event_norms * spec_norm)
+        keep &= cs < threshold
+        if not keep.any():
+            break
+
+    return keep
+
 
 def get_af_spectra(
     unstained_raw: np.ndarray,
@@ -449,7 +484,7 @@ def get_af_spectra(
     filter then removes any spectrum resembling a fluorophore.  The population
     mean is prepended as row 0.
 
-    Stage 2 — Refine (optional, refine=True)
+    Stage 2 — Refine
     -----------------------------------------
     Runs a first-pass AF unmixing on the unstained sample using the base
     spectra.  Cells whose post-correction fluorophore L2 norm exceeds
@@ -517,7 +552,18 @@ def get_af_spectra(
     P = np.linalg.solve(fluor_spectra @ fluor_spectra.T, fluor_spectra)
     unmixed_no_af = unstained_raw @ P.T   # (n_cells, n_fluors)
 
-    cluster_input = np.concatenate([unstained_raw, unmixed_no_af], axis=1)
+    # Per-event contaminant filter before clustering
+    keep = _filter_contaminant_events(unstained_raw, fluor_spectra, contaminant_threshold)
+    n_removed = int((~keep).sum())
+    if n_removed > 0:
+        logger.info(
+            f'get_af_spectra: removed {n_removed} event(s) prior to clustering '
+            f'(cosine similarity >= {contaminant_threshold} to a fluorophore spectrum)'
+        )
+    unstained_raw_cl = unstained_raw[keep]
+    unmixed_no_af_cl = unmixed_no_af[keep]
+
+    cluster_input = np.concatenate([unstained_raw_cl, unmixed_no_af_cl], axis=1)
 
     if n_cells > 200_000:
         km = MiniBatchKMeans(n_clusters=n_clusters, random_state=random_state, n_init='auto')
