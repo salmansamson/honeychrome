@@ -359,18 +359,22 @@ class ProfileUpdater:
                         if profile.sum() == 0:
                             profile = positive_profile
 
+                        profile_warning = None
                         if profile.sum() > 0:
                             profile = profile / profile.max()  # max normalisation
                         else:
-                            if profile.sum() == 0:
-                                raise Exception(f'Failed to create label: {control['label']}. '
-                                    f'{sample_path} has no events within the positive gate. '
-                                    f'Go back to the raw data and adjust your gates. ')
-                            else:
-                                raise Exception(f'Profile {control['label']} is negative: this will yield nonsense results. '
-                                    f'Make sure the unstained negative has lower fluorescence than the positive. '
-                                    f'Go back to the raw data and adjust your gates (or use internal negatives).')
+                            profile_warning = (
+                                f'"{control["label"]}" has a negative profile — the negative '
+                                f'gate has higher mean fluorescence than the positive. '
+                                f'Run Control Cleaning to fix this.'
+                            )
+                            warnings.warn(profile_warning)
+                            if self.bus:
+                                self.bus.warningMessage.emit(profile_warning)
+                            abs_max = np.abs(profile).max()
+                            profile = np.abs(profile) / abs_max if abs_max > 0 else positive_profile
 
+                        control['profile_warning'] = profile_warning
                         if not control.get('gate_channel_locked'):
                             control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
                         profile = profile.tolist()
@@ -703,6 +707,12 @@ class SpectralAutoGenerator(QObject):
                         fl_top    = np.percentile(peak_vals, [100 - pos_percentile, 100])
                         fl_bottom = np.percentile(peak_vals, [0, neg_percentile])
 
+                        # Clamp positive gate upper edge to on-scale.
+                        sat_value = self.controller.experiment.settings['raw']['magnitude_ceiling']
+                        sat_threshold = sat_value * 0.99
+                        fl_top[1] = min(fl_top[1], sat_threshold)
+                        fl_top[0] = min(fl_top[0], fl_top[1] * 0.95)  # keep lower edge below upper
+
                         pos_range_min = self.raw_gating.transformations[channel_x].apply(np.array([fl_top[0]]))[0]
                         pos_range_max = self.raw_gating.transformations[channel_x].apply(np.array([fl_top[1]]))[0]
                         pos_dim_x = Dimension(channel_x, range_min=pos_range_min, range_max=pos_range_max, transformation_ref=channel_x)
@@ -810,23 +820,25 @@ class SpectralAutoGenerator(QObject):
                     if profile.sum() == 0:
                         profile = positive_profile
 
+                    profile_warning = None
                     if profile.sum() > 0:
                         profile = profile / profile.max()  # max normalisation
                     else:
-                        if profile.sum() == 0:
-                            text = (f'Failed to create label: {control['label']}. '
-                                    f'{sample_path} has no events within the positive gate. '
-                                    f'Go back to the raw data and adjust your gates.')
-                        else:
-                            text = (f'Profile {control['label']} is negative: this will yield nonsense results. '
-                                    f'Make sure the unstained negative has lower fluorescence than tha positive. '
-                                    f'Go back to the raw data and adjust your gates (or use internal negatives).')
-                        warnings.warn(text)
+                        # Negative profile: recover shape via abs() so the control
+                        # still appears in the Profiles Viewer and can be cleaned.
+                        profile_warning = (
+                            f'"{control["label"]}" has a negative profile — the negative '
+                            f'gate has higher mean fluorescence than the positive. '
+                            f'The control has been added but will not unmix correctly. '
+                            f'Run Control Cleaning to fix this.'
+                        )
+                        warnings.warn(profile_warning)
                         if self.bus:
-                            self.bus.warningMessage.emit(text)
-                        return False
+                            self.bus.warningMessage.emit(profile_warning)
+                        abs_max = np.abs(profile).max()
+                        profile = np.abs(profile) / abs_max if abs_max > 0 else positive_profile
 
-                    # add control and profile if there wasn't a warning / exception above
+                    control['profile_warning'] = profile_warning  # None if clean
                     self.spectral_model.append(control)
 
                     profile = profile.tolist()
@@ -958,7 +970,9 @@ class SpectralCleaner(QObject):
     def _clean_one(self, control: dict):
         label = control['label']
         try:
-            # --- load positive fluorescence + scatter events ---
+            # --- load base-gate fluorescence + scatter events ---
+            # Use the base gate (same pool as the autogenerator), not the narrow per-control positive gate.
+            # The cleaner selects its own positives via  cosine filter.
             all_samples_rev = {v: k for k, v in self.samples['all_samples'].items()}
             rel_path = all_samples_rev.get(control['sample_name'])
             if rel_path is None:
@@ -966,13 +980,19 @@ class SpectralCleaner(QObject):
             full_path = str(self.experiment_dir / rel_path)
             sample = sample_from_fcs(full_path)
 
-            positive_gate_label = control.get('gate_label')
+            base_gate_label = 'root'
+            raw_gate_names = [g[0].lower() for g in self.raw_gating.get_gate_ids()]
+            for gate in self.controller.experiment.process.get('base_gate_priority_order', []):
+                if gate.lower() in raw_gate_names:
+                    base_gate_label = gate
+                    break
+
             scatter_ch_ids = self.controller.experiment.settings['raw']['scatter_channel_ids']
             scatter_ch_pnn = self.controller.experiment.settings['raw']['event_channels_pnn']
 
             pos_events, pos_scatter_all = get_raw_events(
                 sample, self.fluor_ch_ids,
-                gate_label=positive_gate_label,
+                gate_label=base_gate_label,
                 gating_strategy=self.raw_gating,
                 extra_channel_ids=scatter_ch_ids,
             )
@@ -1070,6 +1090,15 @@ class SpectralCleaner(QObject):
             else:
                 n_sat_neg = 0
 
+            if len(pos_events) == 0:
+                msg = (f'SpectralCleaner: no positive events for "{label}" after saturation '
+                       f'exclusion — skipping cleaning. Use the existing profile or adjust '
+                       f'the positive gate.')
+                logger.warning(msg)
+                if self.bus:
+                    self.bus.statusMessage.emit(msg)
+                return  # leave cleaned_events untouched; profiles[label] is the fallback
+
             if use_internal:
                 # --- Internal-negative path: top-100 minus bottom-10% mean ---
                 n_pos       = len(pos_events)
@@ -1120,7 +1149,7 @@ class SpectralCleaner(QObject):
                        f'after cleaning; profile may be unreliable.')
                 logger.warning(msg)
                 if self.bus:
-                    self.bus.warningMessage.emit(msg)
+                    self.bus.statusMessage.emit(msg)
 
             result = CleanResult(
                 spectral_sub          = spectral_sub,
