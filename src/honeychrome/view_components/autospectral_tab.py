@@ -795,8 +795,8 @@ class AutoSpectralTab(QWidget):
             self.bus.spectralProcessRefreshed.connect(self._on_process_refreshed)
             self.bus.sampleTreeUpdated.connect(self._populate_sample_combo)
 
-    def save_visibility(self, checked):
-        self.settings.setValue("show_autospectral_af", checked)
+    def save_visibility(self, checked: bool):
+        self.settings.setValue("show_autospectral_af", "true" if checked else "false")
 
     # ======================================================================
     # Section builders
@@ -1282,7 +1282,7 @@ class AutoSpectralTab(QWidget):
         for i, row in enumerate(af_spectra):
             pen = (pg.mkPen(color=(0, 0, 0), width=2) if i == 0
                 else pg.mkPen(color=colours[i], width=1))
-            self._profile_plot.plot(x, row, pen=pen)
+            self._profile_plot.plot(x, np.maximum(row, 0), pen=pen)
 
     def _save_selected_profile_csv(self):
         item = self._profile_list.currentItem()
