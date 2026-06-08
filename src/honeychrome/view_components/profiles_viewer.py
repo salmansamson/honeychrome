@@ -132,6 +132,24 @@ class BottomAxisVerticalTickLabels(pg.AxisItem):
         self.updateGeometry()
         self.update()
 
+    def generateDrawSpecs(self, p):
+        # Temporarily expand boundingRect so pyqtgraph's edge-cull check
+        # (br & rect != rect) never drops labels at the first/last detectors.
+        # After rotation in drawPicture, labels extend upward into the axis
+        # area, not sideways, so no horizontal clipping actually occurs.
+        orig_boundingRect = self.boundingRect
+
+        def _expanded_boundingRect():
+            br = orig_boundingRect()
+            return br.adjusted(-500, 0, 500, 0)
+
+        self.boundingRect = _expanded_boundingRect
+        try:
+            result = super().generateDrawSpecs(p)
+        finally:
+            self.boundingRect = orig_boundingRect
+        return result
+    
     def drawPicture(self, p, axisSpec, tickSpecs, textSpecs):
         super().drawPicture(p, axisSpec, tickSpecs, [])
 
@@ -618,9 +636,9 @@ class ProfilesViewer(QFrame):
         LABEL_DENSITY_TARGET = 80
         stride = max(1, round(len(fluoro_ids) / LABEL_DENSITY_TARGET))
 
-        all_pairs = [(m, pnn[n].removesuffix('-A')) for m, n in enumerate(fluoro_ids)]
+        all_pairs = [(m + 0.5, pnn[n].removesuffix('-A')) for m, n in enumerate(fluoro_ids)]
         ticks = [
-            [(m, label) for m, label in all_pairs if m % stride == 0],
+            [(m, label) for m, label in all_pairs if round(m - 0.5) % stride == 0],
             [],
         ]
 
@@ -657,14 +675,15 @@ class ProfilesViewer(QFrame):
             if profile_name in profiles:
                 color = line_colors[i % len(line_colors)]
                 pen = pg.mkPen(color=color, width=self.pen_width)
-                plot_item = self.plot_widget.plot(x, profiles[profile_name], pen=pen)
+                plot_item = self.plot_widget.plot(
+                    [m for m, _ in all_pairs], profiles[profile_name], pen=pen)
                 self.plot_items[profile_name] = plot_item
                 if show_legend:
                     entry = LegendEntry(color, profile_name)
                     self.legendLayout.addWidget(entry)
 
-        # self.plot_widget.autoRange()
-        self.plot_widget.setXRange(0, len(self.controller.filtered_raw_fluorescence_channel_ids))  # Set custom x-axis range
+        n = len(fluoro_ids)
+        self.plot_widget.setXRange(-0.5, n - 0.5, padding=0.02)
         self.plot_widget.setYRange(0, 1)  # Set custom y-axis range
 
         # Refresh histogram if it's visible

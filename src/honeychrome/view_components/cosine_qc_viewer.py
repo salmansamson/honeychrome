@@ -208,7 +208,7 @@ class CosineQCViewer(QFrame):
             logger.debug(f'CosineQCViewer: channel name resolution failed: {exc}')
             fluor_pnn = [str(i) for i in range(len(spectrum))]
 
-        x = np.arange(len(spectrum))
+        x = np.arange(len(spectrum)) + 0.5
 
         # Calculated spectrum
         self._plot_widget.plot(
@@ -246,9 +246,9 @@ class CosineQCViewer(QFrame):
         # X-axis: vertical tick labels with per-laser colour coding
         LABEL_DENSITY_TARGET = 80
         stride    = max(1, round(len(fluor_pnn) / LABEL_DENSITY_TARGET))
-        all_pairs = [(i, fluor_pnn[i].removesuffix('-A')) for i in range(len(fluor_pnn))]
+        all_pairs = [(i + 0.5, fluor_pnn[i].removesuffix('-A')) for i in range(len(fluor_pnn))]
         ticks     = [
-            [(i, label_) for i, label_ in all_pairs if i % stride == 0],
+            [(m, label_) for m, label_ in all_pairs if round(m - 0.5) % stride == 0],
             [],
         ]
         db_col = cleaned.get('cytometer_key')
@@ -264,7 +264,8 @@ class CosineQCViewer(QFrame):
         self._axis_bottom.tick_colors = tick_colors
         self._axis_bottom.setTicks(ticks)
 
-        self._plot_widget.setXRange(0, len(fluor_pnn), padding=0)
+        n = len(fluor_pnn)
+        self._plot_widget.setXRange(-0.5, n - 0.5, padding=0.02)
 
         # Status bar
         cs_txt  = f'{cs:.4f}' if cs is not None else 'N/A'
