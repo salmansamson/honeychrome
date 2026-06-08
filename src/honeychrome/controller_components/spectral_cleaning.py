@@ -41,29 +41,19 @@ def exclude_saturated(
     events: np.ndarray,
     ceiling: float,
     threshold_frac: float = 0.999,
-) -> tuple[np.ndarray, int]:
+) -> tuple[np.ndarray, int, np.ndarray]:
     """
-    Remove rows where any fluorescence channel >= ceiling * threshold_frac.
-
-    Parameters
-    ----------
-    events : (n, n_fluor_ch) — may also have scatter columns appended; only
-             the first n_fluor_ch columns are checked against the ceiling.
-             Pass n_fluor_ch via the caller if the array is a combined
-             [fluor | scatter] matrix, or pass the fluorescence-only slice here.
-    ceiling : raw_settings["magnitude_ceiling"]
-    threshold_frac : fraction of ceiling above which an event is considered
-                     saturated (default 0.999)
-
+    ...
     Returns
     -------
     filtered_events : rows surviving the filter
     n_removed : number of rows removed
+    saturated_mask : boolean mask (True = saturated, length = input row count)
     """
     sat_threshold = ceiling * threshold_frac
     saturated_mask = np.any(events >= sat_threshold, axis=1)
     n_removed = int(saturated_mask.sum())
-    return events[~saturated_mask], n_removed
+    return events[~saturated_mask], n_removed, saturated_mask
 
 
 # ---------------------------------------------------------------------------

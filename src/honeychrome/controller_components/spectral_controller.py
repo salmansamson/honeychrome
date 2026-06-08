@@ -1060,9 +1060,11 @@ class SpectralCleaner(QObject):
                 expected_peak_ch_idx = int(np.argmax(pos_events.mean(axis=0)))
 
             # --- Saturation exclusion ---
-            pos_events, n_sat_pos = exclude_saturated(pos_events, self.ceiling)
+            pos_events, n_sat_pos, sat_mask_pos = exclude_saturated(pos_events, self.ceiling)
+            pos_scatter = pos_scatter[~sat_mask_pos]
             if not use_internal:
-                neg_events, n_sat_neg = exclude_saturated(neg_events, self.ceiling)
+                neg_events, n_sat_neg, sat_mask_neg = exclude_saturated(neg_events, self.ceiling)
+                neg_scatter = neg_scatter[~sat_mask_neg]
             else:
                 n_sat_neg = 0
 
