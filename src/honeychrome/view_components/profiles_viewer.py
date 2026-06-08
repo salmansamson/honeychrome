@@ -434,20 +434,47 @@ class ProfilesViewer(QFrame):
                     continue
                 pos_peak_raw = pos_events[:, peak_local_idx]
 
-                # New pipeline stores no separate negative array — always load
-                # the neg gate from the FCS file directly for the overlay.
+                # Negative overlay: for external-negative controls load from the
+                # unstained file; for internal/beads load the Neg gate from the
+                # positive sample.
                 neg_peak_raw = None
-                if rel_path and raw_gating:
-                    try:
-                        sample = sample_from_fcs(str(experiment_dir / rel_path))
-                        all_ev = get_raw_events(sample, fluor_ch_ids)
-                        neg_gate_lbl = control.get('neg_gate_label') or f'Neg {label}'
-                        if raw_gating.find_matching_gate_paths(neg_gate_lbl):
-                            neg_mask = raw_gating.gate_sample(sample).get_gate_membership(neg_gate_lbl)
-                            neg_ev = all_ev[neg_mask]
-                            neg_peak_raw = neg_ev[:, peak_local_idx] if len(neg_ev) > 0 else None
-                    except Exception:
-                        pass
+                if use_internal:
+                    # Internal: load Neg gate from positive sample
+                    if rel_path and raw_gating:
+                        try:
+                            sample = sample_from_fcs(str(experiment_dir / rel_path))
+                            all_ev = get_raw_events(sample, fluor_ch_ids)
+                            neg_gate_lbl = control.get('neg_gate_label') or f'Neg {label}'
+                            if raw_gating.find_matching_gate_paths(neg_gate_lbl):
+                                neg_mask = raw_gating.gate_sample(sample).get_gate_membership(neg_gate_lbl)
+                                neg_ev = all_ev[neg_mask]
+                                neg_peak_raw = neg_ev[:, peak_local_idx] if len(neg_ev) > 0 else None
+                                logger.info(
+                                    f'_plot_peak_histograms: "{label}" internal neg — '
+                                    f'{len(neg_ev) if len(neg_ev) > 0 else 0} events from Neg gate'
+                                )
+                        except Exception as exc:
+                            logger.warning(f'_plot_peak_histograms: internal neg load failed for "{label}": {exc}')
+                else:
+                    # External: load from the assigned unstained file
+                    neg_name = control.get('universal_negative_name', '')
+                    all_samples_rev_local = all_samples_rev  # already built above
+                    neg_rel_path = all_samples_rev_local.get(neg_name)
+                    if neg_rel_path:
+                        try:
+                            neg_sample = sample_from_fcs(str(experiment_dir / neg_rel_path))
+                            neg_ev_all = get_raw_events(neg_sample, fluor_ch_ids)
+                            neg_peak_raw = neg_ev_all[:, peak_local_idx] if len(neg_ev_all) > 0 else None
+                            logger.info(
+                                f'_plot_peak_histograms: "{label}" external neg "{neg_name}" — '
+                                f'{len(neg_ev_all) if neg_ev_all is not None else 0} events'
+                            )
+                        except Exception as exc:
+                            logger.warning(f'_plot_peak_histograms: external neg load failed for "{label}" ("{neg_name}"): {exc}')
+                    else:
+                        logger.warning(
+                            f'_plot_peak_histograms: "{label}" external neg "{neg_name}" not found in all_samples'
+                        )
 
                 # All-events background
                 if rel_path:
