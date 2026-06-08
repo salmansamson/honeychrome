@@ -417,9 +417,9 @@ class ProfilesViewer(QFrame):
             cleaned     = cleaned_store.get(label) if use_cleaned else None
 
             from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
-            use_internal = (
-                control.get('particle_type') == 'Beads'
-                or control.get('universal_negative_name') == INTERNAL_NEGATIVE_SENTINEL
+            _neg_name = control.get('universal_negative_name')
+            use_internal = not (
+                _neg_name and _neg_name != INTERNAL_NEGATIVE_SENTINEL
             )
 
             rel_path = all_samples_rev.get(control.get('sample_name', ''))

@@ -308,7 +308,7 @@ class ScatterCleaningViewer(QFrame):
             label for label in model_order
             if label in cleaned
             and _has_matched_neg(cleaned[label])
-            and control_by_label.get(label, {}).get('particle_type') != 'Beads'
+            and bool(control_by_label.get(label, {}).get('universal_negative_name'))
             and control_by_label.get(label, {}).get('universal_negative_name') != INTERNAL_NEGATIVE_SENTINEL
         ]
         current = self._combo.currentText()
@@ -386,10 +386,8 @@ class ScatterCleaningViewer(QFrame):
             return
 
         from honeychrome.settings import INTERNAL_NEGATIVE_SENTINEL
-        _use_internal = (
-            control.get('particle_type') == 'Beads'
-            or control.get('universal_negative_name') == INTERNAL_NEGATIVE_SENTINEL
-        )
+        _neg_name = control.get('universal_negative_name')
+        _use_internal = not (_neg_name and _neg_name != INTERNAL_NEGATIVE_SENTINEL)
         if _use_internal:
             self._neg_title.setText('No scatter-matching — internal negative')
             self._pos_title.setText(f'{label} — {control.get("sample_name", "—")}')
