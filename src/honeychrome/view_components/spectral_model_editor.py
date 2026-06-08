@@ -649,9 +649,19 @@ class SpectralControlsEditor(QFrame):
                 continue
             options.append(tube_name)
 
+        prev = self.bulk_negative_combo.currentText()
         self.bulk_negative_combo.blockSignals(True)
         self.bulk_negative_combo.clear()
         self.bulk_negative_combo.addItems([INTERNAL_NEGATIVE_SENTINEL] + options)
+        # Restore previous selection if still available.
+        # On first population (or if prev was the sentinel), default to the
+        # first available unstained sample instead of Internal Negative.
+        idx = self.bulk_negative_combo.findText(prev) if prev and prev != INTERNAL_NEGATIVE_SENTINEL else -1
+        if idx >= 0:
+            self.bulk_negative_combo.setCurrentIndex(idx)
+        elif options:
+            self.bulk_negative_combo.setCurrentIndex(1)   # first unstained entry
+        # else: leave at 0 (sentinel) — no unstained samples available
         self.bulk_negative_combo.blockSignals(False)
 
     def _on_bulk_apply_negative(self):
