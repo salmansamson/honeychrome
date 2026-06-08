@@ -997,9 +997,11 @@ class SpectralCleaner(QObject):
             pos_scatter = _fsc_ssc_cols(pos_scatter_all) if pos_scatter_all.shape[1] > 2 else pos_scatter_all
 
             # --- load negative events ---
+            neg_name = control.get('universal_negative_name')
             has_external_neg = (
-                control.get('universal_negative_name')
-                and control.get('universal_negative_name') != INTERNAL_NEGATIVE_SENTINEL
+                neg_name
+                and neg_name != INTERNAL_NEGATIVE_SENTINEL
+                and self.controller.experiment.process.get('negative_type') != 'internal'
             )
             use_internal = not has_external_neg
 
@@ -1068,39 +1070,47 @@ class SpectralCleaner(QObject):
             else:
                 n_sat_neg = 0
 
-            # --- AF reference vectors ---
             if use_internal:
-                order_peak      = np.argsort(pos_events[:, expected_peak_ch_idx])
-                n_int_neg       = max(2, len(pos_events) // 4)
-                int_neg_idx     = order_peak[:n_int_neg]
-                neg_events      = pos_events[int_neg_idx]
-                scatter_neg_for_knn = (pos_scatter[int_neg_idx]
+                # --- Internal-negative path: top-100 minus bottom-10% mean ---
+                n_pos       = len(pos_events)
+                n_int_neg   = max(2, n_pos // 10)
+                order_peak  = np.argsort(pos_events[:, expected_peak_ch_idx])
+                int_neg_idx = order_peak[:n_int_neg]
+                top_idx     = order_peak[-min(100, n_pos):]
+
+                neg_mean     = pos_events[int_neg_idx].mean(axis=0)
+                spectral_sub = pos_events[top_idx] - neg_mean
+
+                pos_sel             = pos_events[top_idx]
+                pos_scatter_sel     = (pos_scatter[top_idx]
                                        if len(pos_scatter) == len(pos_events)
                                        else np.empty((0, 2)))
-                af_median       = np.median(neg_events, axis=0)
+                matched_neg_scatter = np.empty((0, 2))
+                sel_idx             = top_idx
+                cs_vals             = None
+                peak_ch_idx         = expected_peak_ch_idx
+
+                # --- Mean -> clip negatives -> normalise [0, 1] ---
+                raw_spectrum = spectral_sub.mean(axis=0).clip(0, None)
             else:
-                scatter_neg_for_knn = neg_scatter
-                af_median           = np.median(neg_events, axis=0)
+                # --- External-negative path: cosine filter + kNN scatter subtraction ---
+                af_median   = np.median(neg_events, axis=0)
+                peak_ch_idx = find_empirical_peak(pos_events, af_median)
 
-            # --- Re-derive empirical peak after saturation removal ---
-            peak_ch_idx = find_empirical_peak(pos_events, af_median)
+                sel_idx, cs_vals = cosine_filter(
+                    pos_events, af_median, peak_ch_idx=peak_ch_idx
+                )
+                pos_sel         = pos_events[sel_idx]
+                pos_scatter_sel = (pos_scatter[sel_idx]
+                                   if len(pos_scatter) == len(pos_events)
+                                   else np.empty((0, 2)))
 
-            # --- Cosine filter -> selected positive indices ---
-            sel_idx, cs_vals = cosine_filter(
-                pos_events, af_median, peak_ch_idx=peak_ch_idx
-            )
-            pos_sel         = pos_events[sel_idx]
-            pos_scatter_sel = (pos_scatter[sel_idx]
-                               if len(pos_scatter) == len(pos_events)
-                               else np.empty((0, 2)))
+                spectral_sub, matched_neg_scatter = knn_scatter_match(
+                    pos_sel, pos_scatter_sel, neg_events, neg_scatter
+                )
 
-            # --- kNN scatter-matched AF subtraction ---
-            spectral_sub, matched_neg_scatter = knn_scatter_match(
-                pos_sel, pos_scatter_sel, neg_events, scatter_neg_for_knn
-            )
-
-            # --- Column median -> clip negatives -> normalise [0, 1] ---
-            raw_spectrum = np.median(spectral_sub, axis=0).clip(0, None)
+                # --- Column median -> clip negatives -> normalise [0, 1] ---
+                raw_spectrum = np.median(spectral_sub, axis=0).clip(0, None)
             max_val      = raw_spectrum.max()
             spectrum     = (raw_spectrum / max_val) if max_val > 0 else raw_spectrum
 
