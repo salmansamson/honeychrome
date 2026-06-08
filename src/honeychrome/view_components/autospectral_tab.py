@@ -52,6 +52,9 @@ from honeychrome.view_components.cytometry_plot_components import (
 )
 from honeychrome.view_components.profiles_viewer import BottomAxisVerticalTickLabels
 from honeychrome.view_components.help_toggle_widget import WheelBlocker
+from honeychrome.controller_components.cytometer_whitelist import (
+    get_detector_laser_map, LASER_LABEL_COLORS,
+)
 import honeychrome.settings as settings
 
 import logging
@@ -1253,13 +1256,28 @@ class AutoSpectralTab(QWidget):
         )
         x = np.arange(n_ch)
 
-        # Set detector labels on x-axis
+        # Set detector labels on x-axis with per-laser colour coding
         channel_names = entry.get('channel_names', [])
         if channel_names and len(channel_names) == n_ch:
-            ticks = [[(i, name) for i, name in enumerate(channel_names)], []]
+            # channel_names carry the '-A' suffix; strip for display
+            display_names = [n.removesuffix('-A') for n in channel_names]
+            ticks = [[(i, dn) for i, dn in enumerate(display_names)], []]
             self._profile_plot_axis.setTicks(ticks)
+
+            db_col = self.controller.experiment.settings['raw'].get('cytometer_db_col')
+            if db_col:
+                detector_laser_map = get_detector_laser_map(db_col)
+                tick_colors = {
+                    dn: LASER_LABEL_COLORS[laser]
+                    for dn, name in zip(display_names, channel_names)
+                    if (laser := detector_laser_map.get(name)) in LASER_LABEL_COLORS
+                }
+            else:
+                tick_colors = {}
+            self._profile_plot_axis.tick_colors = tick_colors
         else:
             self._profile_plot_axis.setTicks(None)
+            self._profile_plot_axis.tick_colors = {}
 
         for i, row in enumerate(af_spectra):
             pen = (pg.mkPen(color=(0, 0, 0), width=2) if i == 0
