@@ -723,7 +723,7 @@ class Controller(QObject):
 
 
     def _apply_unmixing(self, raw_event_data):
-        """Apply unmixing — AF-corrected if matrices are set, otherwise plain OLS.
+        """Apply unmixing — AF-corrected if matrices are set, otherwise plain OLS/WLS.
 
         Always returns the unmixed event array (same shape contract as before).
         As a side-effect, populates self.af_sidecar_data with a (n_cells, 2)
@@ -732,13 +732,21 @@ class Controller(QObject):
         until after this method returns.
         """
         if self.af_precomputed is not None and self.af_spectra is not None:
+            # Remap full-PNN fluorescence indices to whitelisted-PNN column positions.
+            # raw_event_data is loaded with col_order=whitelisted_pnn, so stored
+            # fluorescence_channel_ids (full-PNN) must be translated first.
+            _raw = self.experiment.settings['raw']
+            pnn_raw = _raw.get('whitelisted_pnn') or _raw['event_channels_pnn']
+            full_pnn_raw = _raw['event_channels_pnn']
+            fl_ids_remapped = [pnn_raw.index(full_pnn_raw[i])
+                               for i in self.filtered_raw_fluorescence_channel_ids]
             result = apply_af_transfer(
                 raw_event_data,
                 self.transfer_matrix,
                 self.af_precomputed,
                 self.af_spectra,
                 self.experiment.settings,
-                filtered_fl_ids_raw=self.filtered_raw_fluorescence_channel_ids,
+                filtered_fl_ids_raw=fl_ids_remapped,
                 spillover=self.experiment.process.get('spillover'),
             )
             # result is now a dict; store the sidecar columns

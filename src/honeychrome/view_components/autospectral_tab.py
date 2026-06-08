@@ -1686,13 +1686,18 @@ class AutoSpectralTab(QWidget):
         self._pending_cmp_state = state_key
         self._cmp_running = True
         self._cmp_thread = QThread()
+        _raw = self.controller.experiment.settings['raw']
+        _pnn_raw = _raw.get('whitelisted_pnn') or _raw['event_channels_pnn']
+        _full_pnn_raw = _raw['event_channels_pnn']
+        _fl_ids_remapped = [_pnn_raw.index(_full_pnn_raw[i])
+                            for i in self.controller.filtered_raw_fluorescence_channel_ids]
         self._cmp_worker = ComparisonWorker(
             self.controller.raw_event_data,
             self.controller.transfer_matrix,
             af_precomputed,
             af_spectra,
             self.controller.experiment.settings,
-            self.controller.filtered_raw_fluorescence_channel_ids,
+            _fl_ids_remapped,
             spillover=self.controller.experiment.process.get('spillover'),
         )
         self._cmp_worker.moveToThread(self._cmp_thread)

@@ -232,6 +232,7 @@ def compute_sample_means_for_wls(
     experiment_dir,
     experiment_samples: dict,
     fluorescence_channel_ids: list,
+    raw_settings: dict | None = None,
 ) -> 'np.ndarray | None':
     """
     Compute per-detector mean raw fluorescence across real experimental samples,
@@ -266,12 +267,29 @@ def compute_sample_means_for_wls(
     if not candidates:
         return None
 
+    whitelisted_pnn = raw_settings.get('whitelisted_pnn') if raw_settings else None
+    # For whitelisted cytometers (e.g. FACSDiscover) the full FCS array has
+    # heterogeneous channel counts across files; load via col_order so that
+    # fluorescence_channel_ids (full-PNN indices) map consistently.
+    whitelisted_pnn = (raw_settings or {}).get('whitelisted_pnn')
+    full_pnn = (raw_settings or {}).get('event_channels_pnn')
+    if whitelisted_pnn and full_pnn:
+        fl_ids_local = [whitelisted_pnn.index(full_pnn[i]) for i in fluorescence_channel_ids]
+        col_order = whitelisted_pnn
+    else:
+        fl_ids_local = fluorescence_channel_ids
+        col_order = None
+
     channel_sums = None
     n_events_total = 0
     for path in candidates:
         try:
             sample = sample_from_fcs(Path(experiment_dir) / path)
-            fl = sample.get_events('raw')[:, fluorescence_channel_ids].astype(np.float64)
+            try:
+                all_events = sample.get_events('raw', col_order=col_order)
+            except (KeyError, ValueError):
+                all_events = sample.get_events('raw')
+            fl = all_events[:, fl_ids_local].astype(np.float64)
             channel_sums = fl.sum(axis=0) if channel_sums is None else channel_sums + fl.sum(axis=0)
             n_events_total += fl.shape[0]
         except Exception:
@@ -331,7 +349,7 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles,
     sample_means = None
     if unmixing_method == 'WLS' and experiment_dir is not None and experiment_samples is not None:
         fl_ids = raw_settings.get('fluorescence_channel_ids', [])
-        sample_means = compute_sample_means_for_wls(experiment_dir, experiment_samples, fl_ids)
+        sample_means = compute_sample_means_for_wls(experiment_dir, experiment_samples, fl_ids, raw_settings)
     Omega_inv = _build_omega_inv(M, method=unmixing_method, sample_means=sample_means)
     unmixing_matrix = np.linalg.inv(M @ Omega_inv @ M.T) @ M @ Omega_inv  # "W" matrix in Novo paper
 
