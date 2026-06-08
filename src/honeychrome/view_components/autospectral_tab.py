@@ -1255,14 +1255,10 @@ class AutoSpectralTab(QWidget):
 
         # Set detector labels on x-axis
         channel_names = entry.get('channel_names', [])
-        print(f'[AF plot] n_ch={n_ch}, channel_names count={len(channel_names)}, '
-              f'first 3: {channel_names[:3]}')
         if channel_names and len(channel_names) == n_ch:
             ticks = [[(i, name) for i, name in enumerate(channel_names)], []]
-            print(f'[AF plot] setting ticks, first tick: {ticks[0][0]}')
             self._profile_plot_axis.setTicks(ticks)
         else:
-            print(f'[AF plot] WARNING: channel_names length mismatch or empty — no ticks set')
             self._profile_plot_axis.setTicks(None)
 
         for i, row in enumerate(af_spectra):
