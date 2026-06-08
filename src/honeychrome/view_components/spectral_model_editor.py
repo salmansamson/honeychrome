@@ -347,6 +347,35 @@ class SpectralControlsEditor(QFrame):
         btn_top_layout.addWidget(self.force_recalc_btn)
         btn_top_layout.addStretch()
 
+        # ---- Bulk unstained-negative row ----
+        bulk_neg_layout = QHBoxLayout()
+        bulk_neg_layout.addWidget(QLabel("Set negative for all:"))
+
+        self.bulk_particle_type_combo = QComboBox()
+        self.bulk_particle_type_combo.addItems(["Cells", "Beads"])
+        self.bulk_particle_type_combo.installEventFilter(WheelBlocker(self.bulk_particle_type_combo))
+        self.bulk_particle_type_combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        bulk_neg_layout.addWidget(self.bulk_particle_type_combo)
+
+        self.bulk_negative_combo = QComboBox()
+        self.bulk_negative_combo.installEventFilter(WheelBlocker(self.bulk_negative_combo))
+        self.bulk_negative_combo.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        bulk_neg_layout.addWidget(self.bulk_negative_combo)
+
+        self.bulk_apply_btn = QPushButton("Apply to all")
+        self.bulk_apply_btn.setToolTip(
+            'Set the Unstained Negative for every control whose particle type\n'
+            'matches the selection on the left.'
+        )
+        self.bulk_apply_btn.clicked.connect(self._on_bulk_apply_negative)
+        bulk_neg_layout.addWidget(self.bulk_apply_btn)
+        bulk_neg_layout.addStretch()
+
+        # Wrap in a widget so it can be shown/hidden as a unit
+        self._bulk_neg_widget = QWidget()
+        self._bulk_neg_widget.setLayout(bulk_neg_layout)
+        self.bulk_particle_type_combo.currentTextChanged.connect(self._refresh_bulk_negative_combo)
+
         self.add_row_btn = QPushButton(icon('plus'), "Add Control")
         self.select_all_btn = QPushButton("Select All")
         self.select_none_btn = QPushButton("Select None")
@@ -414,6 +443,7 @@ class SpectralControlsEditor(QFrame):
         layout.addWidget(self.activate_cleaning_checkbox)
         layout.addWidget(self.cleaning_help_widget)
         layout.addLayout(btn_top_layout)
+        layout.addWidget(self._bulk_neg_widget)
         layout.addWidget(self.filter_edit)
         layout.addWidget(self.view)
         layout.addLayout(btn_layout)
@@ -427,6 +457,8 @@ class SpectralControlsEditor(QFrame):
         self.spectral_auto_generator = None
         self.profile_updater = ProfileUpdater(self.controller, self.bus)
         self.spectral_library_search_results = None
+        # Populate bulk-negative combo now that all widgets exist
+        self._refresh_bulk_negative_combo()
 
     def _set_cleaning_columns_visible(self, visible: bool):
         """Show or hide the cleaning-only table columns."""
@@ -589,7 +621,65 @@ class SpectralControlsEditor(QFrame):
             header.hideSection(col_neg)
         else:
             header.showSection(col_neg)
+        # Bulk-negative row follows the same visibility as the column
+        if hasattr(self, '_bulk_neg_widget'):
+            self._bulk_neg_widget.setVisible(using_unstained)
+            if using_unstained:
+                self._refresh_bulk_negative_combo()
 
+    def _refresh_bulk_negative_combo(self):
+        """Populate bulk_negative_combo with options appropriate for the selected particle type."""
+        particle_type = self.bulk_particle_type_combo.currentText()  # "Cells" or "Beads"
+        all_samples = self.samples.get('all_samples', {})
+        manually_tagged = set(self.samples.get('unstained_samples', []))
+
+        options = []
+        for p, tube_name in all_samples.items():
+            is_unstained = (
+                p in manually_tagged
+                or bool(re.search(r'unstained', tube_name, re.IGNORECASE))
+                or bool(re.search(r'unstained', p, re.IGNORECASE))
+            )
+            if not is_unstained:
+                continue
+            is_bead = bool(re.search(r'[Bb]eads', tube_name))
+            if particle_type == 'Beads' and not is_bead:
+                continue
+            if particle_type == 'Cells' and is_bead:
+                continue
+            options.append(tube_name)
+
+        self.bulk_negative_combo.blockSignals(True)
+        self.bulk_negative_combo.clear()
+        self.bulk_negative_combo.addItems([INTERNAL_NEGATIVE_SENTINEL] + options)
+        self.bulk_negative_combo.blockSignals(False)
+
+    def _on_bulk_apply_negative(self):
+        """Set universal_negative_name for all controls matching the selected particle type."""
+        particle_type = self.bulk_particle_type_combo.currentText()
+        new_negative = self.bulk_negative_combo.currentText()
+        if not new_negative:
+            return
+
+        changed = False
+        for row, control in enumerate(self.model._data):
+            if control.get('particle_type') != particle_type:
+                continue
+            if control.get('control_type') != 'Single Stained Spectral Control':
+                continue
+            control['universal_negative_name'] = new_negative
+            changed = True
+
+        if changed:
+            # Rebuild per-row comboboxes so they reflect the new value
+            self.refresh_comboboxes()
+            # Clear cached profiles — they are now stale
+            self.profile_updater.profiles.clear()
+            if self.bus:
+                self.bus.statusMessage.emit(
+                    f'Unstained negative set to "{new_negative}" for all {particle_type} controls'
+                    ' — press Recalculate to update spectral profiles.'
+                )
 
     def refresh_comboboxes(self):
         if getattr(self, '_refreshing_comboboxes', False):
@@ -880,7 +970,14 @@ class SpectralControlsEditor(QFrame):
         # if user gets through all above, run spectral auto generator
         self.setEnabled(False)
         self.thread = QThread()
-        self.spectral_auto_generator = SpectralAutoGenerator(self.bus, self.controller)
+        # Read bulk_negative_combo directly
+        if self.bulk_particle_type_combo.currentText() != 'Cells':
+            self.bulk_particle_type_combo.setCurrentText('Cells')
+        preferred = self.bulk_negative_combo.currentText()
+        if not preferred or preferred == INTERNAL_NEGATIVE_SENTINEL:
+            preferred = None
+        self.spectral_auto_generator = SpectralAutoGenerator(self.bus, self.controller,
+                                                             preferred_unstained=preferred)
 
         self.spectral_auto_generator.moveToThread(self.thread)
         self.bus.spectralControlAdded.connect(self._on_spectral_control_added_by_autogenerator)

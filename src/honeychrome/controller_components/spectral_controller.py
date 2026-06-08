@@ -215,8 +215,7 @@ class ProfileUpdater:
             sample = sample_from_fcs(full_path)
             gate_label = 'Neg Unstained' if self.raw_gating.find_matching_gate_paths('Neg Unstained') else None
             events = get_raw_events(sample, self.controller.filtered_raw_fluorescence_channel_ids,
-                                    gate_label=gate_label, gating_strategy=self.raw_gating,
-                                    col_order=self.controller.experiment.settings['raw'].get('whitelisted_pnn'))
+                                    gate_label=gate_label, gating_strategy=self.raw_gating)
             self._negative_events_cache[tube_name] = events
             return events
         except Exception as e:
@@ -376,7 +375,19 @@ class ProfileUpdater:
 
                         control['profile_warning'] = profile_warning
                         if not control.get('gate_channel_locked'):
-                            control['gate_channel'] = self.fluorescence_channels_pnn[np.argmax(profile)]
+                            # Orthogonalised peak search — no col_order so indices into full channel list are valid.
+                            pos_events_raw = get_raw_events(
+                                sample, self.controller.filtered_raw_fluorescence_channel_ids,
+                                gate_label=positive_gate_label, gating_strategy=self.raw_gating,
+                            )
+                            neg_events_raw = self._get_negative_events(control)
+                            if (pos_events_raw is not None and len(pos_events_raw) > 1
+                                    and neg_events_raw is not None and len(neg_events_raw) > 1):
+                                af_mean = neg_events_raw.mean(axis=0)
+                                peak_idx = find_empirical_peak(pos_events_raw, af_mean)
+                            else:
+                                peak_idx = int(np.argmax(profile))
+                            control['gate_channel'] = self.fluorescence_channels_pnn[peak_idx]
                         profile = profile.tolist()
                         self.profiles[control['label']] = profile
                         profile_dict = dict(zip(self.fluorescence_channels_pnn, profile))
@@ -416,7 +427,7 @@ class ProfileUpdater:
         self.profiles.pop(label)
 
 class SpectralAutoGenerator(QObject):
-    def __init__(self, bus, controller):
+    def __init__(self, bus, controller, preferred_unstained: str | None = None):
         super().__init__()
 
         # connect
@@ -435,6 +446,7 @@ class SpectralAutoGenerator(QObject):
         self.profiles = self.controller.experiment.process['profiles']
         self.samples = self.controller.experiment.samples
         self.experiment_dir = self.controller.experiment_dir
+        self.preferred_unstained = preferred_unstained  # tube name hint from editor
 
         self.spectral_model.clear()
         self.profiles.clear()
@@ -520,13 +532,16 @@ class SpectralAutoGenerator(QObject):
                 if _is_unstained(path, name)
             ]
             if particle_type == 'Beads':
-                # prefer a bead unstained; fall back to any unstained
                 bead_candidates = [p for p in candidates if _is_bead(p, self.samples['all_samples'][p])]
                 sample_path = (bead_candidates or candidates or [None])[0]
             else:
-                # prefer a non-bead unstained; fall back to any unstained
-                cell_candidates = [p for p in candidates if not _is_bead(p, self.samples['all_samples'][p])]
-                sample_path = (cell_candidates or candidates or [None])[0]
+                # Honour editor hint for Cells unstained when available.
+                if self.preferred_unstained:
+                    all_samples_rev = {v: k for k, v in self.samples['all_samples'].items()}
+                    sample_path = all_samples_rev.get(self.preferred_unstained)
+                if not sample_path:
+                    cell_candidates = [p for p in candidates if not _is_bead(p, self.samples['all_samples'][p])]
+                    sample_path = (cell_candidates or candidates or [None])[0]
 
             if not sample_path:
                 logger.info(f'get_unstained_negative: no unstained found for particle_type={particle_type!r}.')
@@ -757,7 +772,10 @@ class SpectralAutoGenerator(QObject):
                     # report = self.raw_gating.gate_sample(sample).report.set_index('gate_name')  # Note this is slow
                     # print(f'{label}: explained variance {int(explained_variance * 100)}, best channel {self.event_channels_pnn[channel_id_best_match]}, brightest events {int(best_match)}/100, gate {report.loc[positive_gate_label]['count']}/100')
 
-                    default_unstained = _find_default_unstained_tube(self.samples['all_samples'])
+                    default_unstained = (
+                        self.preferred_unstained
+                        or _find_default_unstained_tube(self.samples['all_samples'])
+                    )
                     assigned_negative = default_unstained or ''  # default; overridden for Beads below
                     # For bead controls, only use an unstained negative if available
                     if particle_type == 'Beads':
