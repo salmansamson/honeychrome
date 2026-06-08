@@ -1439,6 +1439,17 @@ class Controller(QObject):
         spectral_model = self.experiment.process['spectral_model']
         profiles = self.experiment.process['profiles']
 
+        # Sort spectral model by major-channel position so fluorescence_channels
+        # and all downstream structures (NxN grid, heatmaps) use the correct order.
+        if spectral_model:
+            event_channels_pnn = raw_settings['event_channels_pnn']
+            self.filter_raw_fluorescence_channels()
+            fluor_pnn = [event_channels_pnn[i] for i in self.filtered_raw_fluorescence_channel_ids]
+            channel_order = {ch: i for i, ch in enumerate(fluor_pnn)}
+            spectral_model.sort(
+                key=lambda c: channel_order.get(c.get('gate_channel') or '', len(channel_order))
+            )
+
         spectral_model_valid = (
                 set(profiles.keys()) == set([control['label'] for control in spectral_model])
                 and len(profiles.keys()) == len(spectral_model)
