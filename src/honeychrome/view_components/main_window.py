@@ -15,7 +15,7 @@ from honeychrome.view_components.statistical_plotter import StatisticalCompariso
 os.environ["QT_LOGGING_RULES"] = "qt.core.qobject.connect=false" #suppress pyqtgraph graphicslayoutwidget warning
 
 from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QMainWindow, QFileDialog, QWidget, QHBoxLayout, QSplitter, QTabWidget, QStatusBar, QVBoxLayout, QLabel, QProgressBar, QScrollArea, QPushButton, QMenu, QGroupBox
+from PySide6.QtWidgets import QMainWindow, QFileDialog, QWidget, QHBoxLayout, QSplitter, QTabWidget, QStatusBar, QVBoxLayout, QLabel, QProgressBar, QScrollArea, QPushButton, QMenu, QGroupBox, QSpinBox
 from PySide6.QtCore import Qt, QSettings, QByteArray, Slot, QTimer, QThread, Signal as QtSignal
 
 from honeychrome.view_components.gating_hierarchy_widget import GatingHierarchyWidget
@@ -288,6 +288,25 @@ class MainWindow(QMainWindow):
         self.cleaning_section.setVisible(False)
         self.process_layout.addWidget(self.cleaning_section)
         # ---- end cleaning section ----
+
+        # --- Heatmap zoom control ---
+        zoom_row = QHBoxLayout()
+        zoom_label = QLabel("Heatmap cell size:")
+        self._heatmap_cell_size = 60
+        self._heatmap_zoom_minus = QPushButton("−")
+        self._heatmap_zoom_plus = QPushButton("+")
+        self._heatmap_zoom_minus.setFixedWidth(30)
+        self._heatmap_zoom_plus.setFixedWidth(30)
+        self._heatmap_zoom_minus.setToolTip("Decrease heatmap cell size")
+        self._heatmap_zoom_plus.setToolTip("Increase heatmap cell size")
+        self._heatmap_zoom_minus.clicked.connect(self._heatmap_zoom_out)
+        self._heatmap_zoom_plus.clicked.connect(self._heatmap_zoom_in)
+        zoom_row.addWidget(zoom_label)
+        zoom_row.addWidget(self._heatmap_zoom_minus)
+        zoom_row.addWidget(self._heatmap_zoom_plus)
+        zoom_row.addStretch()
+        self.process_layout.addLayout(zoom_row)
+        # --- end zoom control ---
 
         self.process_layout.addWidget(self.similarity_viewer)
         self.process_layout.addWidget(self.hotspot_viewer)
@@ -563,6 +582,25 @@ class MainWindow(QMainWindow):
             self.showMaximized()
         else:
             self.showNormal()
+
+    _HEATMAP_CELL_SIZES = [30, 40, 50, 60, 70, 80, 100, 120]
+
+    def _heatmap_zoom_in(self):
+        sizes = MainWindow._HEATMAP_CELL_SIZES
+        idx = min(sizes.index(self._heatmap_cell_size) + 1, len(sizes) - 1) if self._heatmap_cell_size in sizes else 0
+        self._heatmap_cell_size = sizes[idx]
+        self._apply_heatmap_cell_size()
+
+    def _heatmap_zoom_out(self):
+        sizes = MainWindow._HEATMAP_CELL_SIZES
+        idx = max(sizes.index(self._heatmap_cell_size) - 1, 0) if self._heatmap_cell_size in sizes else 0
+        self._heatmap_cell_size = sizes[idx]
+        self._apply_heatmap_cell_size()
+
+    def _apply_heatmap_cell_size(self):
+        for viewer in (self.similarity_viewer, self.hotspot_viewer,
+                       self.unmixing_viewer, self.compensation_editor):
+            viewer.view.set_cell_size(self._heatmap_cell_size)
 
     def _save_visibility_state(self):
         for name, widget in {"gains": self.gains_widget, "acquisition": self.acquisition_widget}.items():

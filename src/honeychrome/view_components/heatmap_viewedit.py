@@ -1,14 +1,14 @@
 import sys
 import numpy as np
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QObject, QEvent, Slot, QSize, QTimer, QItemSelectionModel, QSignalBlocker
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QObject, QEvent, Slot, QSize, QTimer, QItemSelectionModel, QSignalBlocker, QSettings
 from PySide6.QtWidgets import QApplication, QTableView, QStyledItemDelegate, QLineEdit, QFrame, QVBoxLayout, QLabel, QHeaderView, QStyle, QAbstractItemView
 from PySide6.QtGui import QColor, QPen
 
 import pyqtgraph as pg
 import colorcet as cc
 
-from honeychrome.settings import heading_style, wheel_speed
+from honeychrome.settings import heading_style, wheel_speed, heatmap_colourmap_name
 
 # ---------------------------
 # Model
@@ -21,13 +21,10 @@ class HeatmapModel(QAbstractTableModel):
         self.vertical_headers = None
         self.heatmap_range = heatmap_range
 
-        if is_dark:
-            heatmap_colormap_name = 'bkr'
-        else:
-            heatmap_colormap_name = 'coolwarm'
-
-        colors = cc.palette[heatmap_colormap_name]  # Get the colormap from Colorcet
-        self.cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, len(colors)), color=colors)  # Convert Colorcet colormap to PyQtGraph's format
+        q = QSettings("honeychrome", "app_configuration")
+        palette = str(q.value("heatmap_colourmap", heatmap_colourmap_name))
+        colors = cc.palette[palette]
+        self.cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, len(colors)), color=colors)
 
     def value_to_cet_color(self, value):
         vmin, vmax = self.heatmap_range
@@ -208,11 +205,14 @@ class ResizingTable(QTableView):
         # No scrollbars
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        # fixed row height
-        # Equal column widths
         self.horizontalHeader().setDefaultSectionSize(60)
         self.verticalHeader().setDefaultSectionSize(60)
         self.setWordWrap(True)
+
+    def set_cell_size(self, size):
+        self.horizontalHeader().setDefaultSectionSize(size)
+        self.verticalHeader().setDefaultSectionSize(size)
+        self.updateGeometry()
 
         #single selection
         # 1. Allow only one item to be selected at a time

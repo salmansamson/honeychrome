@@ -11,7 +11,8 @@ from PySide6.QtCore import Qt, QSettings
 from honeychrome.settings import (colourmap_choice, graphics_export_formats, hist2dtype, colormap_name, graphics_export_format, cytometry_plot_width_target,
                       tile_size_nxn_grid, subsample, max_display_events, hist_bins, density_cutoff, trigger_channel, adc_channels, width_channels, height_channels,
                       use_dummy_instrument, magnitude_ceilings, magnitude_ceiling, raw_settings, unmixed_settings, experiments_folder,
-                      magnitude_ceilings_int, spectral_positive_gate_percent, spectral_negative_gate_percent, report_include_raw, report_include_unmixed, report_include_process, send_debug_data)
+                      magnitude_ceilings_int, spectral_positive_gate_percent, spectral_negative_gate_percent, report_include_raw, report_include_unmixed, report_include_process, send_debug_data,
+                      heatmap_colourmap_name, heatmap_colourmap_choice)
 import honeychrome.settings as settings
 
 
@@ -148,6 +149,13 @@ class AppConfigDialog(QDialog):
         form.addWidget(self.swatch)
         self.colourmap_combo.currentTextChanged.connect(self.set_swatch)
 
+        self.heatmap_colourmap_combo = QComboBox()
+        self.heatmap_colourmap_combo.addItems(heatmap_colourmap_choice)
+        form.addRow("Heatmap colour palette (colorcet.com):", self.heatmap_colourmap_combo)
+        self.heatmap_swatch = QLabel()
+        form.addWidget(self.heatmap_swatch)
+        self.heatmap_colourmap_combo.currentTextChanged.connect(self.set_heatmap_swatch)
+
         self.graphics_export_format_combo = QComboBox()
         self.graphics_export_format_combo.addItems(graphics_export_formats)
         form.addRow("Graphics Export Format:", self.graphics_export_format_combo)
@@ -255,6 +263,11 @@ class AppConfigDialog(QDialog):
         qpixmap = QPixmap.fromImage(qimage)
         self.swatch.setPixmap(qpixmap)
 
+    def set_heatmap_swatch(self, cmap_name):
+        qimage = colormap_to_qimage(cmap_name)
+        qpixmap = QPixmap.fromImage(qimage)
+        self.heatmap_swatch.setPixmap(qpixmap)
+    
     def load_settings(self):
         hist2dtype_retrieved = str(self.settings.value("hist2dtype", hist2dtype))
         index = self.hist2dtype_combo.findText(hist2dtype_retrieved)
@@ -265,6 +278,12 @@ class AppConfigDialog(QDialog):
         index = self.colourmap_combo.findText(colourmap_retrieved)
         if index >= 0:
             self.colourmap_combo.setCurrentIndex(index)
+
+        heatmap_colourmap_retrieved = str(self.settings.value("heatmap_colourmap", heatmap_colourmap_name))
+        index = self.heatmap_colourmap_combo.findText(heatmap_colourmap_retrieved)
+        if index >= 0:
+            self.heatmap_colourmap_combo.setCurrentIndex(index)
+        self.set_heatmap_swatch(self.heatmap_colourmap_combo.currentText())
 
         graphics_export_format_retrieved = str(self.settings.value("graphics_export_format", graphics_export_format))
         index = self.graphics_export_format_combo.findText(graphics_export_format_retrieved)
@@ -293,6 +312,7 @@ class AppConfigDialog(QDialog):
     def save_settings(self):
         self.settings.setValue("hist2dtype", self.hist2dtype_combo.currentText())
         self.settings.setValue("colourmap", self.colourmap_combo.currentText())
+        self.settings.setValue("heatmap_colourmap", self.heatmap_colourmap_combo.currentText())
         self.settings.setValue("graphics_export_format", self.graphics_export_format_combo.currentText())
         self.settings.setValue("cytometry_plot_size", self.cytometry_plot_size_spin.value())
         self.settings.setValue("nxn_tile_size", self.nxn_tile_size_spin.value())
@@ -324,6 +344,9 @@ class AppConfigDialog(QDialog):
         index = self.colourmap_combo.findText(colormap_name)
         if index >= 0:
             self.colourmap_combo.setCurrentIndex(index)
+        index = self.heatmap_colourmap_combo.findText(heatmap_colourmap_name)
+        if index >= 0:
+            self.heatmap_colourmap_combo.setCurrentIndex(index)
         index = self.graphics_export_format_combo.findText(graphics_export_format)
         if index >= 0:
             self.graphics_export_format_combo.setCurrentIndex(index)
