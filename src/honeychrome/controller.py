@@ -168,6 +168,33 @@ class Controller(QObject):
         self.initialise_ephemeral_data()
         logger.info(f'Controller: new experiment created {self.experiment_dir}')
 
+    def _load_cleaned_events(self):
+        """Restore cleaned_events from .kit cleaned_meta and .cleaned.npz sidecar."""
+        _ARRAY_KEYS = {
+            'spectral_sub', 'scatter_pos', 'scatter_neg_matched',
+            'cs_vals', 'cosine_selected_idx',
+        }
+        meta = self.experiment.process.get('cleaned_meta', {})
+        arrays = {}
+        if self.cleaned_npz_path.exists():
+            try:
+                npz = np.load(str(self.cleaned_npz_path), allow_pickle=False)
+                arrays = dict(npz)
+            except Exception as e:
+                logger.warning(f'Controller: failed to load cleaned.npz: {e}')
+
+        self.cleaned_events.clear()
+        for label, json_fields in meta.items():
+            entry = dict(json_fields)
+            safe = label.replace('/', '_').replace(' ', '_')
+            for k in _ARRAY_KEYS:
+                key = f'{safe}__{k}'
+                if key in arrays:
+                    entry[k] = arrays[key]
+            self.cleaned_events[label] = entry
+        if meta:
+            logger.info(f'Controller: loaded cleaned_events for {len(meta)} controls.')
+
     @with_busy_cursor
     def load_experiment(self, experiment_path):
         self.experiment.load(experiment_path)
@@ -176,6 +203,7 @@ class Controller(QObject):
 
         self.current_mode = 'raw'
         self.initialise_ephemeral_data()
+        self._load_cleaned_events()
         self.cache_all_af_profiles()
         self.initialise_af_matrices()
 
@@ -190,6 +218,37 @@ class Controller(QObject):
         # else:
         #     self.current_sample_path = None
 
+    def _save_cleaned_events(self):
+        """Write cleaned_events to JSON meta (.kit) and numpy sidecar (.cleaned.npz)."""
+        _JSON_KEYS = {
+            'spectrum', 'n_removed_saturation', 'n_surviving_positive',
+            'empirical_peak_ch_idx', 'expected_peak_ch_idx',
+            'fluor_ch_ids', 'cytometer_key', 'warnings', '_fingerprint',
+        }
+        _ARRAY_KEYS = {
+            'spectral_sub', 'scatter_pos', 'scatter_neg_matched',
+            'cs_vals', 'cosine_selected_idx',
+        }
+        meta = {}
+        arrays = {}
+        for label, entry in self.cleaned_events.items():
+            safe = label.replace('/', '_').replace(' ', '_')
+            meta[label] = {k: v for k, v in entry.items() if k in _JSON_KEYS}
+            for k in _ARRAY_KEYS:
+                arr = entry.get(k)
+                if arr is not None and isinstance(arr, np.ndarray) and arr.size:
+                    arrays[f'{safe}__{k}'] = arr
+
+        self.experiment.process['cleaned_meta'] = meta
+        if arrays:
+            np.savez_compressed(str(self.cleaned_npz_path), **arrays)
+        elif self.cleaned_npz_path.exists():
+            self.cleaned_npz_path.unlink()
+
+    @property
+    def cleaned_npz_path(self) -> Path:
+        return Path(self.experiment.experiment_path).with_suffix('.cleaned.npz')
+    
     @Slot(str)
     def save_experiment(self, experiment_path=None):
         if self.raw_transformations is None:
@@ -203,6 +262,7 @@ class Controller(QObject):
             update_transforms(self.experiment.cytometry['transforms'], self.unmixed_transformations)
 
         if not experiment_path:
+            self._save_cleaned_events()
             self.experiment.save()
             logger.info(f'Controller: experiment saved {self.experiment_dir}')
             if self.bus:
@@ -389,7 +449,7 @@ class Controller(QObject):
         self.unmixed_transformations = None
         self.raw_gating = GatingStrategy()
         self.unmixed_gating = GatingStrategy()
-        self.cleaned_events: dict = {}   # runtime-only; numpy arrays; not serialised
+        self.cleaned_events: dict = {}
         self.data_for_cytometry_plots = {'pnn': None, 'fluoro_indices': None, 'lookup_tables': None, 'event_data': None, 'transformations': None, 'statistics': {}, 'gating': GatingStrategy(), 'plots': [], 'histograms': [], 'gate_membership': {}}
         self.data_for_cytometry_plots_raw = deepcopy(self.data_for_cytometry_plots)
         self.data_for_cytometry_plots_process = deepcopy(self.data_for_cytometry_plots)

@@ -220,6 +220,7 @@ process_default = {
     'unmixing_matrix': None,
     'spillover': None,
     'af_profiles': {},
+    'cleaned_meta': {},
 }
 
 cytometry_default = {

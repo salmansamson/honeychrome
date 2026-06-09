@@ -209,6 +209,8 @@ class View(QObject):
 
             self.main_window = MainWindow(bus=self.bus, controller=self.controller, is_dark=self.is_dark)
             self.main_window.restore_state()
+            if self.controller.cleaned_events:
+                QTimer.singleShot(0, self.bus.cleaningResultsReady.emit)
             self.current_window.close() #used to crash on this line complaining Internal C++ object (MainWindow) already deleted, cytometry_grid_widget.py line 245, in init_grid, 'NoneType' object is not subscriptable
 
             self.init_plot_grids_and_gating_trees()

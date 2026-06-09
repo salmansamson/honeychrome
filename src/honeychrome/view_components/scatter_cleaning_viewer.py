@@ -173,6 +173,7 @@ class ScatterCleaningViewer(QFrame):
 
         if self.bus:
             self.bus.spectralModelUpdated.connect(self._on_model_updated)
+            self.bus.cleaningResultsReady.connect(self._on_model_updated)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)

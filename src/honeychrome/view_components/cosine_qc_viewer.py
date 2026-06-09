@@ -142,7 +142,7 @@ class CosineQCViewer(QFrame):
         model_order    = [c['label'] for c in spectral_model if 'label' in c]
         labels         = [lbl for lbl in model_order
                           if lbl in cleaned and cleaned[lbl].get('spectrum')]
-
+        
         current = self._combo.currentText()
         self._combo.blockSignals(True)
         self._combo.clear()
