@@ -1,4 +1,5 @@
 import numpy as np
+import struct
 from flowio.exceptions import FCSParsingError
 from flowkit import Sample, QuadrantDivider, Dimension, gates
 from PySide6.QtCore import QSettings
@@ -14,19 +15,114 @@ q_settings = QSettings("honeychrome", "ExperimentSelector")
 import logging
 logger = logging.getLogger(__name__)
 
+def _parse_fcs_keywords(txt, delim):
+    """Split FCS TEXT segment on delim, return keyword dict."""
+    kv = txt.split(delim)
+    if kv and kv[0] == '':
+        kv = kv[1:]
+    if len(kv) % 2 != 0:
+        kv.append('')
+    return dict(zip(kv[0::2], kv[1::2]))
+
+
+def _detect_fcs_inner_delim(txt):
+    """Return the most-frequent punctuation char in the first 500 chars of txt."""
+    probe = txt[:500]
+    counts = {}
+    for ch in probe:
+        if not (ch.isalnum() or ch in ' $.,;:_\\-+()[]'):
+            counts[ch] = counts.get(ch, 0) + 1
+    return max(counts, key=counts.get) if counts else None
+
+
+def _load_fcs_with_repaired_delimiter(path):
+    """
+    Last-resort loader for FCS files whose TEXT delimiter byte is wrong
+    (e.g. FACSDiscover files that write space 0x20 but use pipe | internally).
+    Reads the TEXT segment, detects the true delimiter, parses keywords,
+    then reads the data segment manually and wraps it as an fk.Sample.
+    Returns an fk.Sample or raises ValueError if repair fails.
+    """
+    path = str(path)
+    with open(path, 'rb') as f:
+        header = f.read(58).decode('latin-1')
+        txt_st = int(header[10:18].strip())
+        txt_en = int(header[18:26].strip())
+
+        f.seek(txt_st)
+        raw = f.read(txt_en - txt_st + 1)
+        txt = raw.replace(b'\x00', b'').decode('latin-1')
+
+        stated_delim = txt[0]
+        keywords = _parse_fcs_keywords(txt, stated_delim)
+
+        # If critical keys missing, try detected inner delimiter
+        if '$TOT' not in keywords or '$PAR' not in keywords:
+            inner = _detect_fcs_inner_delim(txt)
+            if inner and inner != stated_delim:
+                keywords = _parse_fcs_keywords(txt, inner)
+
+        if '$TOT' not in keywords or '$PAR' not in keywords:
+            raise ValueError(f'Cannot repair FCS TEXT segment in {path}: '
+                             f'$TOT/$PAR missing after delimiter detection')
+
+        total_events = int(keywords['$TOT'])
+        n_par        = int(keywords['$PAR'])
+        data_st      = int(keywords['$BEGINDATA'])
+        byteord      = keywords.get('$BYTEORD', '1,2,3,4')
+        endian       = '<' if byteord == '1,2,3,4' else '>'
+
+        f.seek(data_st)
+        n_vals = total_events * n_par
+        raw_data = f.read(n_vals * 4)
+
+    fmt = f'{endian}{n_vals}f'
+    flat = struct.unpack(fmt, raw_data)
+    # FCS data is row-major (event, channel)
+    arr = np.array(flat, dtype=np.float64).reshape(total_events, n_par)
+
+    col_names = []
+    for i in range(1, n_par + 1):
+        col_names.append(keywords.get(f'$P{i}N', f'Channel_{i}'))
+
+    sample = Sample(arr, channel_labels=col_names, sample_id=str(Path(path).name))
+    # Attach keywords so get_metadata() callers see them
+    sample._flowdata_object.text.update(keywords)
+    return sample
+
+
 def sample_from_fcs(path, bus=None):
     try:
         if bus:
             bus.statusMessage.emit(f'Loading sample {path}...')
-
         sample = Sample(path)
+
     except KeyError as e:
-        logging.warning(f'Controller: FlowIO reports FCS file does not conform to standards. Missing {e}. Attempting to load with use_header_offsets and ignore_offset_error set')
-        sample = Sample(path, use_header_offsets=True, ignore_offset_error=True)
+        logging.warning(
+            f'Controller: FlowIO reports FCS file does not conform to standards. '
+            f'Missing {e}. Attempting to load with use_header_offsets and ignore_offset_error set')
+        try:
+            sample = Sample(path, use_header_offsets=True, ignore_offset_error=True)
+        except Exception:
+            logging.warning(f'Controller: use_header_offsets fallback also failed for {path}. '
+                            f'Attempting delimiter repair.')
+            sample = _load_fcs_with_repaired_delimiter(path)
 
     except FCSParsingError as e:
-        logging.warning(f'Controller: FlowIO reports FCS file reports a data offset that is off by 1. {e}. Attempting to load with `ignore_offset_error=True` to force reading in this file')
-        sample = Sample(path, use_header_offsets=True, ignore_offset_error=True)
+        logging.warning(
+            f'Controller: FlowIO reports a data offset that is off by 1. '
+            f'{e}. Attempting to load with ignore_offset_error=True')
+        try:
+            sample = Sample(path, use_header_offsets=True, ignore_offset_error=True)
+        except Exception:
+            logging.warning(f'Controller: use_header_offsets fallback also failed for {path}. '
+                            f'Attempting delimiter repair.')
+            sample = _load_fcs_with_repaired_delimiter(path)
+
+    except Exception as e:
+        logging.warning(f'Controller: Unexpected error loading {path}: {e}. '
+                        f'Attempting delimiter repair.')
+        sample = _load_fcs_with_repaired_delimiter(path)
 
     # Replace literal 'NA' keyword values (some FACSDiscover files write these).
     meta = sample.get_metadata().get('text', {})
@@ -192,9 +288,16 @@ def define_fcs_keywords(
     from datetime import datetime, timezone
 
     # ---- 1. Carry-through non-parameter keywords from raw file ----
+    # Guard against malformed keyword dicts produced by FlowIO when the FCS
+    # TEXT delimiter byte is wrong (FACSDiscover export bug): corrupt entries
+    # have pipe-delimited blobs as keys. Skip any key that contains '|', is
+    # empty, or is implausibly long (>64 chars) for a real FCS keyword.
     non_param_keys = {
         k: v for k, v in raw_keywords.items()
-        if not re.match(r'^\$?P\d+', k, re.IGNORECASE)
+        if k
+        and '|' not in k
+        and len(k) <= 64
+        and not re.match(r'^\$?P\d+', k, re.IGNORECASE)
         and not re.match(r'^\$?CH\d+', k, re.IGNORECASE)
         and k.upper() not in ('BDCHORUSDATARECORD',)
     }
@@ -420,8 +523,9 @@ def write_fcs(
     TEXT_END = TEXT_START + len(text_bytes) - 1
     data_bytes = event_data.shape[0] * event_data.shape[1] * 4  # float32
 
-    # Iterative layout to handle offset-length growth (mirrors writeFCS.R)
-    kw_len_old = 2
+    # Iterative layout: grow TEXT_END until $BEGINDATA/$ENDDATA digit-lengths stabilise.
+    # Seed with the actual encoded lengths of the placeholder values already in kw.
+    kw_len_old = len(kw['$BEGINDATA']) + len(kw['$ENDDATA'])
     while True:
         DATA_START = TEXT_END + 1
         DATA_END   = DATA_START + data_bytes - 1
@@ -432,19 +536,35 @@ def write_fcs(
         else:
             break
 
-    # Patch the placeholder offsets in the text string
-    kw['$BEGINDATA'] = str(DATA_START)
-    kw['$ENDDATA']   = str(DATA_END)
-    text = _build_text(kw)
-    text_bytes = text.encode('utf-8')
+    # Patch offsets and iterate until the encoded text length stops changing.
+    # Each rebuild may change $BEGINDATA/$ENDDATA digit counts, which shifts
+    # DATA_START and therefore DATA_END, which may change digit counts again.
+    for _ in range(8):  # converges in ≤3 iterations in practice
+        kw['$BEGINDATA'] = str(DATA_START)
+        kw['$ENDDATA']   = str(DATA_END)
+        text = _build_text(kw)
+        text_bytes = text.encode('latin-1')
+        new_TEXT_END = TEXT_START + len(text_bytes) - 1
+        new_DATA_START = new_TEXT_END + 1
+        new_DATA_END   = new_DATA_START + data_bytes - 1
+        if new_DATA_START == DATA_START and new_DATA_END == DATA_END:
+            TEXT_END = new_TEXT_END
+            break
+        TEXT_END = new_TEXT_END
+        DATA_START = new_DATA_START
+        DATA_END   = new_DATA_END
+    else:
+        raise RuntimeError(f'write_fcs: offset layout did not converge for {file_path}')
 
-    # HEADER (58 bytes):  "FCS3.1    " + 4×8-char right-justified offsets + 2×8 zeros
-    def _h(n): return f'{n:>8d}'
+    # FCS 3.1 §3.1: header offset fields are 8 chars each.
+    # If DATA_START or DATA_END exceed 8 digits, write 0 in the header —
+    # compliant readers must use $BEGINDATA/$ENDDATA from TEXT in that case.
+    def _h(n): return f'{n:>8d}' if n < 100_000_000 else '       0'
     header = (
         f'{"FCS3.1":<10}'
-        + _h(TEXT_START) + _h(TEXT_START + len(text_bytes) - 1)
+        + _h(TEXT_START) + _h(TEXT_END)
         + _h(DATA_START)  + _h(DATA_END)
-        + _h(0)           + _h(0)
+        + '       0'      + '       0'   # STEXT always 0
     )
 
     with open(file_path, 'wb') as fh:
@@ -460,6 +580,7 @@ def write_fcs(
             offset         += rows
             rows_remaining -= rows
         fh.write(b'00000000')  # CRC placeholder
+        
 
 # All subfolders recursively
 def get_all_subfolders_recursive(path, experiment_dir):
