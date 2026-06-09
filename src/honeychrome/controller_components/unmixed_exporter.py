@@ -212,7 +212,17 @@ class UnmixedExporter(QObject):
                 full_unmixed_sample_path = self.controller.experiment_dir / unmixed_rel_path
                 full_unmixed_sample_path.parent.mkdir(parents=True, exist_ok=True)
                 sample = sample_from_fcs(full_sample_path, self.bus)
-                raw_event_data = sample.get_events(source='raw')
+                _all_events = sample.get_events(source='raw')
+                _sample_ch_idx = {ch: i for i, ch in enumerate(sample.pnn_labels)}
+                if set(pnn_raw) <= set(sample.pnn_labels):
+                    # Fast path: all pnn_raw channels present — slice in order
+                    raw_event_data = _all_events[:, [_sample_ch_idx[ch] for ch in pnn_raw]]
+                else:
+                    # Some pnn_raw channels absent in this file — build aligned array with zeros
+                    raw_event_data = np.zeros((_all_events.shape[0], len(pnn_raw)), dtype=_all_events.dtype)
+                    for dst, ch in enumerate(pnn_raw):
+                        if ch in _sample_ch_idx:
+                            raw_event_data[:, dst] = _all_events[:, _sample_ch_idx[ch]]
                 raw_keywords: dict[str, str] = cast(dict[str, str], sample.get_metadata().get('text', {}))
                 n_events = sample.event_count
 
