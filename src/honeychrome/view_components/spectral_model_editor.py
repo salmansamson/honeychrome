@@ -9,6 +9,8 @@ from PySide6.QtWidgets import (QApplication, QFrame, QVBoxLayout, QHBoxLayout, Q
 
 from honeychrome.controller_components.functions import raw_gates_list
 from honeychrome.controller_components.spectral_controller import SpectralAutoGenerator, ProfileUpdater, SpectralCleaner, spectral_library
+from honeychrome.controller_components.spectral_reference_library import cosine_similarity_to_reference
+from honeychrome.view_components.cosine_qc_viewer import COSINE_QC_WARNING_THRESHOLD
 from honeychrome.controller_components.spectral_functions import sanitise_control_in_place, _find_default_unstained
 from honeychrome.view_components.icon_loader import icon
 from honeychrome.settings import spectral_model_column_labels, heading_style, INTERNAL_NEGATIVE_SENTINEL
@@ -1504,6 +1506,55 @@ class SpectralControlsEditor(QFrame):
         if self.bus:
             self.bus.cleaningResultsReady.emit()
         logger.info('SpectralControlsEditor: Clean Controls run complete.')
+        self._warn_low_cosine_controls()
+
+    def _warn_low_cosine_controls(self):
+        """Show a single warning popup listing controls with cosine similarity
+        below COSINE_QC_WARNING_THRESHOLD.  Controls without a reference entry
+        are silently skipped."""
+        cleaned = self.controller.cleaned_events
+        pnn     = self.controller.experiment.settings['raw']['event_channels_pnn']
+
+        low: list[tuple[str, float]] = []
+        for label, entry in cleaned.items():
+            if not entry.get('spectrum'):
+                continue
+            cytometer_key = entry.get('cytometer_key')
+            if not cytometer_key:
+                continue
+            fluor_ch_ids = (entry.get('fluor_ch_ids')
+                            or self.controller.filtered_raw_fluorescence_channel_ids)
+            try:
+                fluor_pnn = [pnn[i] for i in fluor_ch_ids]
+            except (IndexError, KeyError):
+                continue
+            import numpy as np
+            spectrum = np.array(entry['spectrum'], dtype=float)
+            cs = cosine_similarity_to_reference(spectrum, fluor_pnn, label, cytometer_key)
+            if cs is None:
+                continue  # no reference available — skip
+            if cs < COSINE_QC_WARNING_THRESHOLD:
+                low.append((label, cs))
+
+        if not low:
+            return
+
+        lines = '\n'.join(
+            f'  • {label}  (cosine = {cs:.4f})'
+            for label, cs in low
+        )
+        msg = QMessageBox(self)
+        msg.setWindowTitle('Cosine QC Warning')
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setText(
+            f'The following {len(low)} control(s) have a cosine similarity to the '
+            f'reference library below {COSINE_QC_WARNING_THRESHOLD}:\n\n'
+            f'{lines}\n\n'
+            f'Check the Cosine QC plots for details. If the Major Channel is '
+            f'incorrect, update it in the Spectral Model table and re-run '
+            f'Clean Controls.'
+        )
+        msg.exec()
 
 
     @Slot(list)

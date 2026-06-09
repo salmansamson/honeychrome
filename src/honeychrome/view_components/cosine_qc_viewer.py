@@ -33,6 +33,8 @@ from honeychrome.controller_components.cytometer_whitelist import (
 
 logger = logging.getLogger(__name__)
 
+# Controls below this cosine similarity to the reference library trigger a popup warning.
+COSINE_QC_WARNING_THRESHOLD = 0.97
 
 class CosineQCViewer(QFrame):
     """Spectral QC plot: calculated vs. reference spectrum with cosine score."""
