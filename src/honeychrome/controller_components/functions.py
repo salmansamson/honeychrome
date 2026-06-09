@@ -471,12 +471,12 @@ def _format_spillover(fl_pnn: list[str], spillover: np.ndarray) -> str:
     """
     Serialise the fine-tuning spillover matrix as an FCS 3.1 $SPILLOVER string.
     fl_pnn: ordered list of fluorophore $PnN names (must match spillover shape).
-    spillover: square (n_fluor × n_fluor) matrix.
+    spillover: square (n_fluor x n_fluor) matrix.
     """
     n = len(fl_pnn)
     if spillover is None or spillover.shape != (n, n):
         return ''
-    vals = ','.join(f'{v:.8g}' for v in spillover.flatten())
+    vals = ','.join(f'{v:.8g}' for v in spillover.T.flatten())
     names = ','.join(fl_pnn)
     return f'{n},{names},{vals}'
 
@@ -580,7 +580,7 @@ def write_fcs(
             offset         += rows
             rows_remaining -= rows
         fh.write(b'00000000')  # CRC placeholder
-        
+
 
 # All subfolders recursively
 def get_all_subfolders_recursive(path, experiment_dir):
