@@ -1142,8 +1142,8 @@ class SpectralCleaner(QObject):
             else:
                 # --- External-negative path: cosine filter + kNN scatter subtraction ---
                 af_median   = np.median(neg_events, axis=0)
-                peak_ch_idx = find_empirical_peak(pos_events, af_median)
-
+                peak_ch_idx = expected_peak_ch_idx
+                
                 sel_idx, cs_vals = cosine_filter(
                     pos_events, af_median, peak_ch_idx=peak_ch_idx
                 )
