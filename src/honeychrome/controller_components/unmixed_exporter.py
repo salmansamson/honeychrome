@@ -282,7 +282,7 @@ class UnmixedExporter(QObject):
                     ) if self.controller.experiment.process.get('spectra_matrix') is not None else None
 
                     af_spectra_export = af_spectra if active_profiles else None
-                    extra_null = ['AF Abundance', 'AF Index'] if active_profiles else None
+                    extra_null = None
 
                     export_unmixed_sample(
                         sample_name=sample_name,
