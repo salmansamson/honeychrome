@@ -163,12 +163,6 @@ class UnmixedExporter(QObject):
                 transfer_matrix = np.hstack([transfer_matrix, extra_cols])
                 # transfer_matrix is now (n_raw, n_unmixed_old + n_imaging)
 
-                # Also extend unmixed_settings so define_fcs_keywords() can classify
-                # the imaging channels correctly (they are neither fluorescence nor scatter
-                logger.info(
-                    f'UnmixedExporter: FACSDiscover imaging channels added to export: {imaging_pnn}'
-                )
-
             # Update the whitelist in raw_param_lookup so imaging channels get
             # their original metadata carried through (voltage, range, etc.).
             # This is handled automatically inside define_fcs_keywords() because
@@ -223,6 +217,7 @@ class UnmixedExporter(QObject):
                     for dst, ch in enumerate(pnn_raw):
                         if ch in _sample_ch_idx:
                             raw_event_data[:, dst] = _all_events[:, _sample_ch_idx[ch]]
+                np.nan_to_num(raw_event_data, copy=False, nan=0.0)
                 raw_keywords: dict[str, str] = cast(dict[str, str], sample.get_metadata().get('text', {}))
                 n_events = sample.event_count
 
@@ -244,8 +239,20 @@ class UnmixedExporter(QObject):
                             for p in active_profiles
                         ]
                         af_precomputed = combine_af_precomputed(precomputed_list)
-                        # Stack all AF spectra row-wise across assigned profiles
                         af_spectra = np.vstack([np.array(p['spectra']) for p in active_profiles])
+
+                        # Remap fluorescence channel indices from full event_channels_pnn
+                        # to positions in pnn_raw (the column order of raw_event_data).
+                        # Profiles and af_spectra were computed in whitelisted-PNN space;
+                        # raw_event_data here is aligned to pnn_raw (event_channels_pnn).
+                        # For cytometers where pnn_raw == whitelisted_pnn this is a no-op.
+                        _raw_settings = self.controller.experiment.settings['raw']
+                        _full_pnn = _raw_settings['event_channels_pnn']
+                        _fl_ids_remapped = [
+                            pnn_raw.index(_full_pnn[i])
+                            for i in self.controller.filtered_raw_fluorescence_channel_ids
+                            if _full_pnn[i] in pnn_raw
+                        ]
 
                         af_result = apply_af_transfer(
                             raw_event_data,
@@ -253,8 +260,8 @@ class UnmixedExporter(QObject):
                             af_precomputed,
                             af_spectra,
                             self.controller.experiment.settings,
-                            filtered_fl_ids_raw=self.controller.filtered_raw_fluorescence_channel_ids,
-                            spillover=None, # managed by flowkit at read-time
+                            filtered_fl_ids_raw=_fl_ids_remapped,
+                            spillover=None,
                         )
                         unmixed_event_data_without_fine_tuning = af_result['unmixed']
                         af_cols = np.column_stack([

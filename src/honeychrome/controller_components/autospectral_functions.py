@@ -542,7 +542,6 @@ def get_af_spectra(
         )
 
     n_clusters = max(2, min(n_clusters, n_cells // 3))
-    logger.info(f'get_af_spectra: n_cells={n_cells}, n_clusters={n_clusters}')
 
     # -------------------------------------------------------------------------
     # Stage 1 — Base spectra via KMeans
@@ -609,7 +608,6 @@ def get_af_spectra(
     # -------------------------------------------------------------------------
 
     if refine:
-        logger.info('get_af_spectra: running refine stage')
 
         # First-pass per-cell unmixing on the unstained sample using base spectra
         precomputed = precompute_af_matrices(fluor_spectra, af_spectra)
@@ -641,11 +639,6 @@ def get_af_spectra(
                 problem_n   = len(problem_idx)
                 break
 
-        logger.info(
-            f'get_af_spectra refine: {problem_n} problem cells '
-            f'(quantile={pq:.2f}, threshold={threshold:.2f})'
-        )
-
         if problem_n > 10:
             # Per-channel error for the problem cells.
             # error = residuals + proj_fluor in R; here we use the unmixed
@@ -665,10 +658,6 @@ def get_af_spectra(
             # Re-cluster the spill ratios to find distinct error patterns
             error_som_dim = max(2, int(np.floor(np.sqrt(problem_n / 3))))
             n_error_clusters = error_som_dim ** 2
-            logger.info(
-                f'get_af_spectra refine: clustering {problem_n} problem cells '
-                f'into {n_error_clusters} error clusters'
-            )
 
             if problem_n > 200_000:
                 km_err = MiniBatchKMeans(
