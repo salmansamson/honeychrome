@@ -49,6 +49,7 @@ from honeychrome.view_components.busy_cursor import with_busy_cursor
 from honeychrome.controller_components.autospectral_functions import (
         get_af_spectra,
         precompute_af_matrices,
+        precompute_joint_cov_extras,
         combine_af_precomputed,
         apply_af_unmixing,
         apply_af_transfer,
@@ -646,6 +647,9 @@ class Controller(QObject):
             combined = cached[0]
         else:
             combined = combine_af_precomputed(cached)
+            # Recompute af_error_weights across the full combined AF spectra
+            if af_spectra is not None:
+                combined.update(precompute_joint_cov_extras(combined, af_spectra))
 
         self.af_precomputed = combined
         assert af_spectra is not None
@@ -684,10 +688,10 @@ class Controller(QObject):
             return False
 
         try:
-            af_spectra = np.array(entry['spectra'])
-            self.af_precomputed_cache[profile_name] = precompute_af_matrices(
-                fluor_spectra, af_spectra
-            )
+            af_spectra  = np.array(entry['spectra'])
+            precomputed = precompute_af_matrices(fluor_spectra, af_spectra)
+            precomputed.update(precompute_joint_cov_extras(precomputed, af_spectra))
+            self.af_precomputed_cache[profile_name] = precomputed
             logger.info(
                 f'Controller: cached AF precomputed matrices for "{profile_name}" '
                 f'({af_spectra.shape[0]} AF spectra).'
@@ -718,10 +722,10 @@ class Controller(QObject):
 
         for name, entry in af_profiles.items():
             try:
-                af_spectra = np.array(entry['spectra'])
-                self.af_precomputed_cache[name] = precompute_af_matrices(
-                    fluor_spectra, af_spectra
-                )
+                af_spectra  = np.array(entry['spectra'])
+                precomputed = precompute_af_matrices(fluor_spectra, af_spectra)
+                precomputed.update(precompute_joint_cov_extras(precomputed, af_spectra))
+                self.af_precomputed_cache[name] = precomputed
             except Exception as e:
                 logger.error(f'cache_all_af_profiles: failed for "{name}": {e}')
 

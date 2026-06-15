@@ -18,3 +18,10 @@ build/
 .DS_Store
 Thumbs.db
 .idea
+
+# C kernel build artifacts
+*.o
+*.so
+*.pyd
+*.dylib
+_af_kernel*.c

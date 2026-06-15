@@ -34,6 +34,16 @@ import numpy as np
 import logging
 from pathlib import Path
 
+try:
+    from honeychrome.controller_components.af_kernel_wrapper import (
+        joint_cov_l1_argmin as _c_joint_cov_l1_argmin,
+        AF_KERNEL_AVAILABLE,
+    )
+except ImportError:
+    _c_joint_cov_l1_argmin = None
+    AF_KERNEL_AVAILABLE    = False
+
+
 logger = logging.getLogger(__name__)
 
 # Sub-folder inside the experiment directory where CSV files are stored
@@ -171,6 +181,23 @@ def precompute_af_matrices(fluor_spectra: np.ndarray, af_spectra: np.ndarray) ->
     }
 
 
+def precompute_joint_cov_extras(precomputed: dict, af_spectra: np.ndarray) -> dict:
+    """
+    Compute covariance-based fluorophore error weights for joint-cov L1 scoring.
+    Call once after precompute_af_matrices(); cache alongside af_precomputed.
+    """
+    P = precomputed['P']   # (n_fluors, n_channels)
+    n_channels = af_spectra.shape[1]
+    af_cov = (np.cov(af_spectra, rowvar=False)
+              if af_spectra.shape[0] > 1
+              else np.zeros((n_channels, n_channels)))
+    fluor_cov = P @ af_cov @ P.T
+    af_error_weights = np.sqrt(np.abs(np.diag(fluor_cov)))
+    if af_error_weights.max() < 1e-12:
+        af_error_weights = np.ones(P.shape[0])
+    return {'af_error_weights': af_error_weights}
+
+
 def combine_af_precomputed(precomputed_list: list) -> dict:
     """
     Combine a list of per-profile precomputed dicts into one combined dict.
@@ -253,6 +280,7 @@ def apply_af_transfer(raw_event_data, transfer_matrix, af_precomputed, af_spectr
 # Per-sample unmixing
 # ---------------------------------------------------------------------------
 
+# after
 def apply_af_unmixing(
     raw_data: np.ndarray,
     precomputed: dict,
@@ -262,76 +290,95 @@ def apply_af_unmixing(
     """
     Per-cell AF extraction and OLS unmixing (fluorescence channels only).
 
+    When the compiled C kernel is available (AF_KERNEL_AVAILABLE), uses joint
+    covariance-weighted L1 fluorophore × L2 residual scoring, parallelised
+    over cells with OpenMP.  Falls back to plain NumPy L1 if the extension
+    is absent or if af_error_weights is missing from precomputed.
+
     Parameters
     ----------
-    raw_data : ndarray, shape (n_cells, n_channels)
-        Raw fluorescence channels only.
-    precomputed : dict
-        Output of precompute_af_matrices().
-    af_spectra : ndarray, shape (n_af, n_channels)
-    chunk_size : int
-        Cells processed per batch.
+    raw_data    : (n_cells, n_channels) raw fluorescence only
+    precomputed : dict from precompute_af_matrices(), optionally extended
+                  with precompute_joint_cov_extras() merged in
+    af_spectra  : (n_af, n_channels)
+    chunk_size  : cells per processing batch
 
     Returns
     -------
-    dict with keys:
-        unmixed  : ndarray (n_cells, n_fluors) — AF-corrected OLS abundances
-        af_scale : ndarray (n_cells,)          — scale factor of best-fit AF
-        af_idx   : ndarray (n_cells,)          — 1-based index of best-fit AF
+    dict with keys: unmixed (n_cells, n_fluors), af_scale (n_cells,),
+                    af_idx (n_cells,) 1-based
     """
     P         = precomputed['P']           # (n_fluors, n_channels)
     v_library = precomputed['v_library']   # (n_fluors, n_af)
     r_library = precomputed['r_library']   # (n_channels, n_af)
     r_dots    = precomputed['r_dots']      # (n_af,)
+    S_t       = precomputed['S_t']         # (n_channels, n_fluors)
 
-    n_cells, n_channels = raw_data.shape
-    n_fluors = P.shape[0]
-    n_af = af_spectra.shape[0]
+    w = precomputed.get('af_error_weights')
+    use_c = AF_KERNEL_AVAILABLE and w is not None
 
-    unmixed_out = np.empty((n_cells, n_fluors), dtype=np.float64)
-    af_scale_out = np.empty(n_cells, dtype=np.float64)
-    af_idx_out = np.empty(n_cells, dtype=np.int32)
+    n_cells, _ = raw_data.shape
+    n_fluors   = P.shape[0]
+
+    unmixed_out  = np.empty((n_cells, n_fluors), dtype=np.float64)
+    af_scale_out = np.empty(n_cells,             dtype=np.float64)
+    af_idx_out   = np.empty(n_cells,             dtype=np.int32)
+
+    if use_c:
+        w       = np.ascontiguousarray(w, dtype=np.float64)
+        v_lib_c = np.ascontiguousarray(v_library, dtype=np.float64)
 
     for start in range(0, n_cells, chunk_size):
-        end = min(start + chunk_size, n_cells)
-        chunk = raw_data[start:end].astype(np.float64)   # (B, n_channels)
-        B = end - start
+        end   = min(start + chunk_size, n_cells)
+        chunk = np.ascontiguousarray(raw_data[start:end], dtype=np.float64)
+        B     = end - start
 
-        # Initial OLS unmix
-        init_fluor = chunk @ P.T   # (B, n_fluors)
+        init_fluor = chunk @ P.T
+        K          = (chunk @ r_library) / r_dots[np.newaxis, :]
 
-        # For each AF candidate j: scale k_j = (cell · r_j) / r_dots_j
-        # shape: (B, n_af)
-        r_dots_chunk = (chunk @ r_library) / r_dots[np.newaxis, :]   # k_j per cell
+        if use_c:
+            # L2 residual term — vectorised NumPy
+            init_fluor_nn = np.where(init_fluor < 0.0, 0.0, init_fluor)
+            resid_base    = chunk - init_fluor_nn @ S_t.T
+            rb_sq         = np.sum(resid_base ** 2, axis=1)
+            rb_rl         = resid_base @ r_library
+            er_sq         = (rb_sq[:, np.newaxis]
+                             - 2.0 * K * rb_rl
+                             + K ** 2 * r_dots[np.newaxis, :])
+            e_resid      = np.ascontiguousarray(np.sqrt(np.maximum(er_sq, 0.0)))
+            base_e_resid = np.sqrt(rb_sq) + 1e-6
+            base_e_fluor = (np.sum(w[np.newaxis, :] * np.abs(init_fluor), axis=1)
+                            + 1e-6)
 
-        # L1 error: |init_fluor - k_j * v_library_j|  summed over fluors
-        # init_fluor: (B, n_fluors), v_library: (n_fluors, n_af)
-        # error[b, j] = sum_f |init_fluor[b,f] - k[b,j] * v_library[f,j]|
-        error = np.sum(
-            np.abs(
-                init_fluor[:, :, np.newaxis]                      # (B, n_fluors, 1)
-                - r_dots_chunk[:, np.newaxis, :] * v_library[np.newaxis, :, :]  # (B, n_fluors, n_af)
-            ),
-            axis=1,
-        )   # (B, n_af)
+            # C kernel: L1 fluor scoring + argmin, OpenMP-parallel
+            best_j = _c_joint_cov_l1_argmin(
+                np.ascontiguousarray(init_fluor),
+                np.ascontiguousarray(K),
+                v_lib_c,
+                w,
+                np.ascontiguousarray(base_e_fluor),
+                e_resid,
+                np.ascontiguousarray(base_e_resid),
+            )
+        else:
+            # NumPy fallback: plain L1, 3D temporary
+            error = np.sum(
+                np.abs(
+                    init_fluor[:, :, np.newaxis]
+                    - K[:, np.newaxis, :] * v_library[np.newaxis, :, :]
+                ),
+                axis=1,
+            )
+            best_j = np.argmin(error, axis=1)
 
-        best_j = np.argmin(error, axis=1)   # (B,)
-        best_k = r_dots_chunk[np.arange(B), best_j]   # (B,)
-
-        # Subtract best AF from raw, re-unmix residual
-        best_af = af_spectra[best_j]   # (B, n_channels)
-        residual = chunk - best_k[:, np.newaxis] * best_af   # (B, n_channels)
-        final_unmixed = residual @ P.T   # (B, n_fluors)
-
-        unmixed_out[start:end] = final_unmixed
+        best_k   = K[np.arange(B), best_j]
+        best_af  = af_spectra[best_j]
+        residual = chunk - best_k[:, np.newaxis] * best_af
+        unmixed_out[start:end]  = residual @ P.T
         af_scale_out[start:end] = best_k
-        af_idx_out[start:end] = best_j + 1   # 1-based, matching R convention
+        af_idx_out[start:end]   = best_j + 1
 
-    return {
-        'unmixed': unmixed_out,
-        'af_scale': af_scale_out,
-        'af_idx': af_idx_out,
-    }
+    return {'unmixed': unmixed_out, 'af_scale': af_scale_out, 'af_idx': af_idx_out}
 
 
 # ---------------------------------------------------------------------------

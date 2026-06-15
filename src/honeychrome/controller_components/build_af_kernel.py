@@ -1,0 +1,92 @@
+"""
+build_af_kernel.py
+------------------
+Compile af_kernel.c into a cffi extension module (_af_kernel).
+
+Run once at build time (or during development setup):
+    python build_af_kernel.py
+
+The output is _af_kernel.<platform>.so (Linux) or
+_af_kernel.<platform>.dylib (macOS), placed alongside this script.
+
+OpenMP
+------
+Enabled by default on Linux (gcc -fopenmp).
+On macOS, requires libomp:
+    brew install libomp
+then set the environment variable:
+    HONEYCHROME_OPENMP=1 python build_af_kernel.py
+
+Without OpenMP the kernel still compiles and runs correctly,
+single-threaded.  The Python wrapper (_af_kernel_wrapper.py)
+works identically either way.
+"""
+
+import os
+import sys
+import cffi
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+ffi = cffi.FFI()
+
+ffi.cdef("""
+void joint_cov_l1_argmin(
+    const double *init_fluor,
+    const double *K,
+    const double *v_library,
+    const double *w,
+    const double *base_e_fluor,
+    const double *e_resid,
+    const double *base_e_resid,
+    int32_t      *best_j,
+    int B,
+    int n_fluors,
+    int n_af
+);
+""")
+
+with open(os.path.join(HERE, 'af_kernel.c'), 'r') as f:
+    source = f.read()
+
+use_openmp = os.environ.get('HONEYCHROME_OPENMP', '').strip() not in ('', '0', 'false', 'False')
+
+# On Linux, default to OpenMP on; on macOS, default off unless explicitly set
+if sys.platform.startswith('linux') and 'HONEYCHROME_OPENMP' not in os.environ:
+    use_openmp = True
+
+extra_compile_args = ['-O3', '-march=native', '-ffast-math']
+extra_link_args    = []
+libraries          = ['m']
+
+if use_openmp:
+    if sys.platform == 'darwin':
+        # Homebrew libomp path (arm64 and x86_64)
+        brew_prefix = os.popen('brew --prefix libomp 2>/dev/null').read().strip()
+        if brew_prefix:
+            extra_compile_args += ['-Xpreprocessor', '-fopenmp',
+                                   f'-I{brew_prefix}/include']
+            extra_link_args    += [f'-L{brew_prefix}/lib', '-lomp']
+            print(f'[build] macOS OpenMP via libomp at {brew_prefix}')
+        else:
+            print('[build] WARNING: HONEYCHROME_OPENMP set but brew libomp not found. '
+                  'Building single-threaded.')
+            use_openmp = False
+    else:
+        extra_compile_args.append('-fopenmp')
+        extra_link_args.append('-fopenmp')
+
+if not use_openmp:
+    print('[build] Building single-threaded (no OpenMP).')
+
+ffi.set_source(
+    '_af_kernel',
+    source,
+    extra_compile_args=extra_compile_args,
+    extra_link_args=extra_link_args,
+    libraries=libraries,
+)
+
+if __name__ == '__main__':
+    ffi.compile(tmpdir=HERE, verbose=True)
+    print('[build] _af_kernel extension built successfully.')
