@@ -60,8 +60,8 @@ def create_folder_link(experiment_path, link_name, target_path):
         raise ValueError(f"Target is not a directory: {target}")
 
     if link.exists():
-        print(f"Link path already exists: {link}. Skipping.")
-        return
+        print(f"Link path already exists: {link}.")
+        link.replace(link.with_suffix('.old'))
 
     # 2. Try Standard Symlink (Works on Linux, macOS, and Windows with Dev Mode/Admin)
     try:
