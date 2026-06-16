@@ -6,6 +6,7 @@ Honeychrome - open source cytometry data acquisition and analysis software
 
 import os
 import sys
+import threading
 from pathlib import Path
 import platform
 import shutil
@@ -124,6 +125,29 @@ def configure_multiprocessing():
         if os.name == 'posix':
             mp.set_start_method('spawn', force=True)
 
+def init_sentry():
+    try:
+
+        sentry_logging = LoggingIntegration(
+            level=logging.INFO,  # Send INFO and above as breadcrumbs (context)
+            event_level=logging.ERROR  # Actually send ERROR and above as alerts
+        )
+        # Keep it anonymous with send_default_pii=False (i.e. all personal data are scrubbed, e.g. usernames, file names and locations, etc)
+        sentry_sdk.init(dsn="https://c99858ad29b86e3c551978e9b72c7724@o4511334133334016.ingest.de.sentry.io/4511334139887696",
+                        shutdown_timeout=1,
+                        integrations=[sentry_logging],
+                        release=f"honeychrome@{__version__}",
+                        send_default_pii=False)
+        sentry_sdk.set_tag("os_name", platform.system())
+        sentry_sdk.set_tag("os_release", platform.release())
+        sentry_sdk.set_tag("os_version", platform.version())
+
+
+        sentry_sdk.metrics.count("honeychrome.launch", 1,
+            attributes={"version": __version__, "platform": sys.platform})
+    except Exception:
+        pass  # Sentry must never crash or stall the app
+
 
 def main():
     configure_multiprocessing()
@@ -153,19 +177,7 @@ def main():
 
     # send debug data if setting is on
     if q_settings_app_config.value("send_debug_data", send_debug_data, type=bool):
-        sentry_logging = LoggingIntegration(
-            level=logging.INFO,  # Send INFO and above as breadcrumbs (context)
-            event_level=logging.ERROR  # Actually send ERROR and above as alerts
-        )
-        # Keep it anonymous with send_default_pii=False (i.e. all personal data are scrubbed, e.g. usernames, file names and locations, etc)
-        sentry_sdk.init(dsn="https://c99858ad29b86e3c551978e9b72c7724@o4511334133334016.ingest.de.sentry.io/4511334139887696",
-                        integrations=[sentry_logging],
-                        release=f"honeychrome@{__version__}",
-                        send_default_pii=False)
-        sentry_sdk.set_tag("os_name", platform.system())
-        sentry_sdk.set_tag("os_release", platform.release())
-        sentry_sdk.set_tag("os_version", platform.version())
-        sentry_sdk.metrics.count("honeychrome.launch", 1, attributes={"version": __version__, 'platform': sys.platform})
+        threading.Thread(target=init_sentry, daemon=True).start()
 
         # # Test sentry
         # try:

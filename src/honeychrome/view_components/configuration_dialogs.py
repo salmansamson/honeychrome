@@ -464,12 +464,13 @@ class InstrumentConfigDialog(QDialog):
 
 
 class FolderSelectorLineEdit(QLineEdit):
-    def __init__(self, parent=None, experiment_path=None, current_path=None):
+    def __init__(self, parent=None, requirement=None, experiment_path=None, current_path=None):
         super().__init__(parent)
         self.setPlaceholderText("Click to select a folder...")
         self.setReadOnly(True)  # Prevents manual typing
         self.current_path = current_path
         self.experiment_path = experiment_path
+        self.requirement = requirement
 
     def mousePressEvent(self, event):
         # Trigger the dialog on click
@@ -481,7 +482,11 @@ class FolderSelectorLineEdit(QLineEdit):
             if is_subfolder(folder_path, self.experiment_path):
                 relative_path = os.path.relpath(folder_path, self.experiment_path)
             else:
-                relative_path = 'Link_to_'+path_to_folder_name_readable(folder_path)
+                if self.requirement:
+                    name = self.requirement
+                else:
+                    name = path_to_folder_name_readable(folder_path)
+                relative_path = 'Link_to_'+name
                 create_folder_link(self.experiment_path, relative_path, folder_path)
 
             self.setText(relative_path)
@@ -510,13 +515,13 @@ class ExperimentSettings(QDialog):
         experiment_path = Path(experiment.experiment_path)
         experiment_path = experiment_path.parent / experiment_path.stem
 
-        self.raw_samples_subdirectory_lineedit = FolderSelectorLineEdit(experiment_path=str(experiment_path), current_path=str(experiment_path / self.settings['raw']['raw_samples_subdirectory']))
+        self.raw_samples_subdirectory_lineedit = FolderSelectorLineEdit(requirement='raw', experiment_path=str(experiment_path), current_path=str(experiment_path / self.settings['raw']['raw_samples_subdirectory']))
         form.addRow("Raw Samples Folder", self.raw_samples_subdirectory_lineedit)
 
-        self.single_stain_controls_subdirectory_lineedit = FolderSelectorLineEdit(experiment_path=str(experiment_path), current_path=str(experiment_path / self.settings['raw']['single_stain_controls_subdirectory']))
+        self.single_stain_controls_subdirectory_lineedit = FolderSelectorLineEdit(requirement='single_stain_controls', experiment_path=str(experiment_path), current_path=str(experiment_path / self.settings['raw']['single_stain_controls_subdirectory']))
         form.addRow("Single Stain Controls Folder:", self.single_stain_controls_subdirectory_lineedit)
 
-        self.unmixed_samples_subdirectory_lineedit = FolderSelectorLineEdit(experiment_path=str(experiment_path), current_path=str(experiment_path / self.settings['unmixed']['unmixed_samples_subdirectory']))
+        self.unmixed_samples_subdirectory_lineedit = FolderSelectorLineEdit(requirement='unmixed', experiment_path=str(experiment_path), current_path=str(experiment_path / self.settings['unmixed']['unmixed_samples_subdirectory']))
         form.addRow("Unmixed Samples Folder:", self.unmixed_samples_subdirectory_lineedit)
 
         self.magnitude_ceiling_combo = QComboBox()
