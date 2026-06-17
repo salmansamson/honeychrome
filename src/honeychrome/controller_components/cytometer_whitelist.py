@@ -114,7 +114,7 @@ _CYTOMETER_PARAMS: dict[str, _CytParams] = {
 
     "Opteon": _CytParams(
         cyt_label       = "Agilent NovoCyte Opteon",
-        cyt_kw_pattern  = r"NovoCyte|Opteon",
+        cyt_kw_pattern  = r"Opteon",
         creator_pattern = r"NovoExpress|Opteon",
         non_spectral_pat = ["FSC", "SSC", "VSSC", "Time", r"-H$", r"-W$", "Width"],
         spectral_pat    = None,
@@ -127,7 +127,7 @@ _CYTOMETER_PARAMS: dict[str, _CytParams] = {
 
     "Mosaic": _CytParams(
         cyt_label       = "Beckman Coulter CytoFLEX Mosaic",
-        cyt_kw_pattern  = r"CytoFLEX",
+        cyt_kw_pattern  = r"mosaic",
         creator_pattern = r"CytExpert",
         non_spectral_pat = ["FSC", "SSC", "BSSC", "Time", r"-H$"],
         spectral_pat    = None,
@@ -141,7 +141,7 @@ _CYTOMETER_PARAMS: dict[str, _CytParams] = {
 
     "Xenith": _CytParams(
         cyt_label       = "ThermoFisher Attune Xenith",
-        cyt_kw_pattern  = r"Attune|Xenith",
+        cyt_kw_pattern  = r"Xenith",
         creator_pattern = r"Attune|VitesseSQ",
         non_spectral_pat = ["FSC", "SSC", "Time", "Event", "Gate", "Sort",
                              "Comp", r"-H$", r"-W$"],
@@ -274,13 +274,13 @@ def _match_cytometer(
     if kw_match(r"FACSymphony"):
         return _CYTOMETER_PARAMS["Symphony"]
 
-    if kw_match(r"NovoCyte|Opteon"):
+    if kw_match(r"Opteon"):
         return _CYTOMETER_PARAMS["Opteon"]
 
-    if kw_match(r"CytoFLEX"):
+    if kw_match(r"mosaic"):
         return _CYTOMETER_PARAMS["Mosaic"]
 
-    if kw_match(r"Attune|Xenith"):
+    if kw_match(r"Xenith"):
         return _CYTOMETER_PARAMS["Xenith"]
 
     # Aurora / NL share $CYT = "Aurora"; distinguished by presence of UV channels
