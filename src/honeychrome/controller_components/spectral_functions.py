@@ -348,7 +348,10 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles,
     # we probably will want to measure the noise in the detectors on the CytKit
     sample_means = None
     if unmixing_method == 'WLS' and experiment_dir is not None and experiment_samples is not None:
-        fl_ids = raw_settings.get('fluorescence_channel_ids', [])
+        # Use the channels actually in M, not the raw unfiltered list — otherwise
+        # sample_means length can mismatch M.shape[1] once Height/Width channels
+        # are present in settings['raw']['fluorescence_channel_ids'].
+        fl_ids = [raw_settings['event_channels_pnn'].index(name) for name in fluorescence_channels]
         sample_means = compute_sample_means_for_wls(experiment_dir, experiment_samples, fl_ids, raw_settings)
     Omega_inv = _build_omega_inv(M, method=unmixing_method, sample_means=sample_means)
     unmixing_matrix = np.linalg.inv(M @ Omega_inv @ M.T) @ M @ Omega_inv  # "W" matrix in Novo paper

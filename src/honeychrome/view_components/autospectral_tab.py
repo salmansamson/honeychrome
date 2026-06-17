@@ -1113,7 +1113,7 @@ class AutoSpectralTab(QWidget):
             return
 
         fl_ids = np.array(
-            self.controller.experiment.settings['raw']['fluorescence_channel_ids']
+            self.controller.filtered_raw_fluorescence_channel_ids
         )
         raw_fl = raw_event_data[:, fl_ids]
 
@@ -1148,7 +1148,7 @@ class AutoSpectralTab(QWidget):
         n_af = af_spectra.shape[0]
 
         pnn_raw = self.controller.experiment.settings['raw']['event_channels_pnn']
-        fl_ids = self.controller.experiment.settings['raw']['fluorescence_channel_ids']
+        fl_ids = self.controller.filtered_raw_fluorescence_channel_ids
         channel_names = [pnn_raw[i] for i in fl_ids]
 
         try:

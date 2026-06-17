@@ -398,10 +398,12 @@ def define_fcs_keywords(
         return f'{m.shape[0]},{m.shape[1]},{",".join(row_names)},{",".join(col_names)},{vals}'
 
     spectra_kw = {}
-    raw_fl_pnn = [raw_pnn[i] for i in sorted(sc_ids.__class__(raw_settings.get('fluorescence_channel_ids', [])))]
-    # Re-use the full raw fluorescence channel list for detector column names
-    raw_fl_ids = raw_settings.get('fluorescence_channel_ids', [])
-    det_names = [raw_pnn[i] for i in raw_fl_ids]
+    # Use the channels actually in the unmixing matrix, not the raw unfiltered
+    # list — keeps SPECTRA/AUTOFLUORESCENCE/WEIGHTS shape checks correct
+    # regardless of fluorescence_channel_filter.
+    det_names = unmixed_settings.get('fluorescence_channels') or [
+        raw_pnn[i] for i in raw_settings.get('fluorescence_channel_ids', [])
+    ]
 
     if unmixing_spectra is not None and unmixing_spectra.ndim == 2:
         fluor_names_short = [pnn[i].removesuffix('-A') for i in sorted(fl_ids_out) if i < len(pnn)]
