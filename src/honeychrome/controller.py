@@ -1534,6 +1534,7 @@ class Controller(QObject):
                 unmixing_method=unmixing_method,
                 experiment_dir=self.experiment_dir,
                 experiment_samples=self.experiment.samples,
+                filtered_fluorescence_channel_ids=self.filtered_raw_fluorescence_channel_ids,
             )
             self.experiment.process.update(spectral_process)
 

@@ -323,7 +323,8 @@ def _build_omega_inv(
 
 def calculate_spectral_process(raw_settings, spectral_model, profiles,
                                 existing_spillover=None, unmixing_method='OLS',
-                                experiment_dir=None, experiment_samples=None):
+                                experiment_dir=None, experiment_samples=None,
+                                filtered_fluorescence_channel_ids=None):
     from sklearn.metrics.pairwise import cosine_similarity
     from pandas import DataFrame
 
@@ -348,10 +349,13 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles,
     # we probably will want to measure the noise in the detectors on the CytKit
     sample_means = None
     if unmixing_method == 'WLS' and experiment_dir is not None and experiment_samples is not None:
-        # Use the channels actually in M, not the raw unfiltered list — otherwise
-        # sample_means length can mismatch M.shape[1] once Height/Width channels
-        # are present in settings['raw']['fluorescence_channel_ids'].
-        fl_ids = [raw_settings['event_channels_pnn'].index(name) for name in fluorescence_channels]
+        # fl_ids must index event_channels_pnn at the detector-channel granularity
+        # of the profile vectors (M.shape[1]), not at the per-control/label
+        # granularity of fluorescence_channels (M.shape[0]). The caller passes
+        # the same filtered channel ids used to build the profiles.
+        fl_ids = filtered_fluorescence_channel_ids
+        if fl_ids is None:
+            fl_ids = raw_settings.get('fluorescence_channel_ids', [])
         sample_means = compute_sample_means_for_wls(experiment_dir, experiment_samples, fl_ids, raw_settings)
     Omega_inv = _build_omega_inv(M, method=unmixing_method, sample_means=sample_means)
     unmixing_matrix = np.linalg.inv(M @ Omega_inv @ M.T) @ M @ Omega_inv  # "W" matrix in Novo paper
