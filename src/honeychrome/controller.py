@@ -286,9 +286,12 @@ class Controller(QObject):
     @with_busy_cursor
     @Slot(str, str)
     def on_gate_change(self, mode=None, top_gate='root'):
-        if mode == self.current_mode:
-            self.calculate_lookup_tables(mode=mode, top_gate=top_gate)
+        # lookup tables must stay in sync with the gating strategy even when
+        # the change happens on a tab the user isn't currently viewing —
+        # otherwise apply_gates_in_place crashes when that tab is later shown.
+        self.calculate_lookup_tables(mode=mode, top_gate=top_gate)
 
+        if mode == self.current_mode:
             # recalculate histograms and stats
             # which gates and plots have changed?
             # but recalculate everything if using dotplots coloured by gate
@@ -1280,9 +1283,9 @@ class Controller(QObject):
 
     @Slot(list)
     def reset_axes_transforms(self, channels):
-        if self.data_for_cytometry_plots['pnn'] is self.experiment.settings['raw']['event_channels_pnn']:
+        if self.current_mode in ('raw',):
             settings = self.experiment.settings['raw']
-        elif self.data_for_cytometry_plots['pnn'] is self.experiment.settings['unmixed']['event_channels_pnn']:
+        elif self.current_mode in ('process', 'unmixed', 'statistics'):
             settings = self.experiment.settings['unmixed']
         else:
             settings = None
@@ -1305,7 +1308,8 @@ class Controller(QObject):
     def reset_axes_transforms_all(self):
         # currently used only for changing default range in experiment settings
         settings = self.experiment.settings['raw']
-        transforms = assign_default_transforms(settings)
+        raw_channels = settings.get('whitelisted_pnn') or settings['event_channels_pnn']
+        transforms = assign_default_transforms(settings, channels=raw_channels)
         transformations = generate_transformations(transforms)
         self.raw_transformations.update(transformations)
 
