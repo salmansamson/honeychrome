@@ -66,6 +66,7 @@ class ImportFCSController(QObject):
                     all_pnn=representative_pnn,
                     text_keywords=sample_metadata.text,
                 )
+                channel_mismatch_note = None  # set below if files differ; folded into the single end-of-import dialog
 
                 if cyt_info is not None:
                     _fl_ids = cyt_info.fluorescence_channel_ids
@@ -88,7 +89,34 @@ class ImportFCSController(QObject):
                         + [representative_pnn[i] for i in _fl_ids]
                     )
                 else:
-                    whitelisted_pnn = representative_pnn  # non-whitelisted cytometer: use all
+                    # Unrecognised cytometer: restrict to channels common to every
+                    # file (not just the first one scanned), so files with extra or
+                    # missing derived parameters (e.g. a post-processing tool adding
+                    # parameters to only some files) can all be loaded afterwards
+                    # without re-triggering the "channels don't match" check.
+                    _common_pnn = set(representative_pnn)
+                    for sp in raw_samples:
+                        _common_pnn &= set(all_sample_pnn[sp])
+                    whitelisted_pnn = [ch for ch in representative_pnn if ch in _common_pnn]
+
+                    _dropped_pnn = [ch for ch in representative_pnn if ch not in _common_pnn]
+                    if _dropped_pnn:
+                        _per_file_drops = {
+                            sp: sorted(set(all_sample_pnn[sp]) - _common_pnn)
+                            for sp in raw_samples
+                            if set(all_sample_pnn[sp]) - _common_pnn
+                        }
+                        # Stash rather than emit immediately — combined into the single
+                        # end-of-import dialog below so only one QMessageBox is shown.
+                        channel_mismatch_note = (
+                            'Cytometer not recognised — channels were not identical across '
+                            'all imported files.\n'
+                            f'Retained {len(whitelisted_pnn)} channel(s) common to every file:\n'
+                            f'  {whitelisted_pnn}\n'
+                            'Channels present in only some files (ignored):\n'
+                            + '\n'.join(f'  {sp}: {chs}' for sp, chs in _per_file_drops.items())
+                        )
+                        warnings.warn(channel_mismatch_note)
 
                 logger.debug('Whitelisted PNN (%d channels): %s', len(whitelisted_pnn), whitelisted_pnn)
 
@@ -149,7 +177,20 @@ class ImportFCSController(QObject):
                         self.experiment.settings['raw']['cytometer_db_col'] = cyt_info.db_col
                         self.experiment.settings['raw']['scatter_param'] = cyt_info.scatter_param
                     else:
-                        fluorescence_channel_ids = sample_metadata.fluoro_indices
+                        _whitelisted_set = set(whitelisted_pnn)
+                        # flowio's own classification only excludes literal "FSC"/"SSC",
+                        # so detectors like SSC_1-4 or VSSC1-Width get misclassified as
+                        # fluorescence. Derive fluorescence channels by name pattern
+                        # instead, matching the convention used for recognised cytometers.
+                        _non_fluor_pat = re.compile(r'FSC|SSC|Time|Width|-H$|-W$', re.IGNORECASE)
+                        fluorescence_channel_ids = [
+                            i for i, ch in enumerate(representative_pnn)
+                            if ch in _whitelisted_set and not _non_fluor_pat.search(ch)
+                        ]
+                        scatter_channel_ids = [
+                            i for i in scatter_channel_ids
+                            if representative_pnn[i] in _whitelisted_set
+                        ]
                         cyt_kw = next(
                             (v for k, v in sample_metadata.text.items() if k.upper() in ('$CYT', 'CYT') and v),
                             ''
@@ -364,10 +405,18 @@ class ImportFCSController(QObject):
                             f'Time channel ID: {self.experiment.settings['raw']['time_channel_id']}\n'
                             f'Event ID channel ID: {self.experiment.settings['raw']['event_id_channel_id']}\n'
                             )
+                    # Fold the mismatch note (if any) into this single dialog instead
+                    # of emitting it separately — two stacked modal QMessageBoxes from
+                    # the background import thread triggered the native crash.
+                    if channel_mismatch_note:
+                        text = channel_mismatch_note + '\n\n' + text
                     logger.info(text)
                     if self.bus:
                         self.bus.reloadExpRequested.emit()
-                        self.bus.popupMessage.emit(text)
+                        if channel_mismatch_note:
+                            self.bus.warningMessage.emit(text)
+                        else:
+                            self.bus.popupMessage.emit(text)
                 else:
                     text = ('Cannot set up the experiment file: \n'
                             'the FCS files supplied do not have a consistent set of channels (channel names and ranges). \n'
