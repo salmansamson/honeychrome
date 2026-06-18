@@ -594,8 +594,10 @@ class Controller(QObject):
         transfer_matrix = np.zeros((len(pnn_unmixed), len(pnn_raw)))
         transfer_matrix[np.ix_(fl_channel_ids_unmixed, fl_channel_ids_raw)] = compensated_unmixing_matrix
         transfer_matrix[np.ix_(sc_channel_ids_unmixed, sc_channel_ids_raw)] = np.eye(n_scatter_channels)
-        raw_time_id = pnn_raw.index(full_pnn_raw[_raw['time_channel_id']])
-        transfer_matrix[self.experiment.settings['unmixed']['time_channel_id'], raw_time_id] = 1
+        if _raw['time_channel_id'] is not None:
+            raw_time_id = pnn_raw.index(full_pnn_raw[_raw['time_channel_id']])
+            transfer_matrix[self.experiment.settings['unmixed']['time_channel_id'], raw_time_id] = 1
+        # no Time channel in raw data — unmixed Time column stays zero
 
         if _raw['event_id_channel_id'] is not None:
             # event_id is not in whitelisted_pnn — omit silently (no event_id column in raw_event_data)

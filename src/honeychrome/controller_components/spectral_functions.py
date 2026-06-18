@@ -365,7 +365,12 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles,
     scatter_channel_ids_raw = raw_settings['scatter_channel_ids']
     scatter_channels_pnn = [pnn_raw[n] for n in scatter_channel_ids_raw]
     fluorescence_channels_pnn = fluorescence_channels
-    event_channels_pnn = [raw_settings['event_channels_pnn'][raw_settings['time_channel_id']], 'event_id'] + scatter_channels_pnn + fluorescence_channels_pnn
+    # synthetic placeholder if raw data has no Time channel (mirrors 'event_id' below)
+    time_channel_name_raw = (
+        pnn_raw[raw_settings['time_channel_id']]
+        if raw_settings['time_channel_id'] is not None else 'Time'
+    )
+    event_channels_pnn = [time_channel_name_raw, 'event_id'] + scatter_channels_pnn + fluorescence_channels_pnn
     area_channels = [s.removesuffix('-A') for s in event_channels_pnn if s.endswith("-A")]
     height_channels = [s.removesuffix('-H') for s in event_channels_pnn if s.endswith("-H")]
     width_channels = [s.removesuffix('-W') for s in event_channels_pnn if s.endswith("-W")]

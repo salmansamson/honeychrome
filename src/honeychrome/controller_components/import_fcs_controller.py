@@ -371,7 +371,7 @@ class ImportFCSController(QObject):
                     # ---hist1d: channel_x, source_gate, child_gates
                     # ---hist2d: channel_x, channel_y, source_gate, child_gates
                     # ---ribbon: source_gate, child_gates
-                    if time_channel_id:
+                    if time_channel_id is not None:
                         time_plot = [{'type': 'hist1d', 'channel_x': event_channels_pnn[time_channel_id], 'source_gate': 'root', 'child_gates': []}]
                     ribbon_plot = [{'type': 'ribbon', 'source_gate': label, 'child_gates': []}]
                     fluorescence_plots = [{'type': 'hist1d', 'channel_x': event_channels_pnn[i], 'source_gate': label, 'child_gates': []} for i in fluorescence_channel_ids]
