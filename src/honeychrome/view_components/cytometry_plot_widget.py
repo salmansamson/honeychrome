@@ -924,6 +924,8 @@ class CytometryPlotWidget(QFrame):
                     print(f'CytometryPlotWidget {self.mode} {self.n_in_plot_sequence}: removed gate {gate_name}')
                 except (GateReferenceError, ValueError, NetworkXError) as e:
                     print(f'Already deleted or invalid gate: {e}')
+                except RuntimeError:
+                    pass
 
             except GateReferenceError as e:
                 print(f'Already deleted: {e}')

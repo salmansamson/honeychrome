@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import re
 
-from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QDialog, QScrollArea, QFormLayout, QLineEdit, QCheckBox, QSpinBox, QDoubleSpinBox, QDialogButtonBox, QComboBox, QLabel, QButtonGroup, QFileDialog, QFrame)
+from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QDialog, QScrollArea, QFormLayout, QLineEdit, QCheckBox, QSpinBox, QDoubleSpinBox, QDialogButtonBox, QComboBox, QLabel, QButtonGroup, QFileDialog, QFrame, QMessageBox)
 from PySide6.QtCore import Qt, QSettings
 
 from honeychrome.settings import (colourmap_choice, graphics_export_formats, hist2dtype, colormap_name, graphics_export_format, cytometry_plot_width_target,
@@ -80,8 +80,10 @@ def create_folder_link(experiment_path, link_name, target_path):
     # — but only if target is not a UNC path
     if str(target).startswith('\\\\'):
         # Junctions don't support UNC targets; warn the user
-        raise OSError(f"Cannot create a junction to a UNC network path: {str(target)}. "
-                      "Map the network drive and use the mapped drive letter instead.")
+        QMessageBox.warning(
+            None, 'Network path not supported',
+            f"Honeychrome cannot create a junction to a UNC network path: {str(target)}. \n\nPlease map the network drive and use the mapped drive letter instead.")
+        return
     try:
         # mklink is a shell built-in, so shell=True is required
         cmd = f'mklink /J "{link}" "{target}"'

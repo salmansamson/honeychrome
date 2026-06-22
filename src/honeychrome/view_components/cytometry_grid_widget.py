@@ -85,7 +85,7 @@ class CytometryGridWidget(QScrollArea):
         layout.addWidget(cytometry_toolbar_popout)
         plot_widget._mouse_events_enabled = False
         layout.addWidget(plot_widget)
-        logger.info(f'CytometryGridWidget: popped out plot {plot_widget.n_in_plot_sequence}')
+        logger.info(f'CytometryGridWidget {self.mode}: popped out plot {plot_widget.n_in_plot_sequence}')
 
         # Add close button
         close_btn = QPushButton("Pop back in")
@@ -129,6 +129,7 @@ class CytometryGridWidget(QScrollArea):
                 plots[n], plots[m] = plots[m], plots[n]
                 widgets[n], widgets[m] = widgets[m], widgets[n]
                 widgets[n].n_in_plot_sequence, widgets[m].n_in_plot_sequence = widgets[m].n_in_plot_sequence, widgets[n].n_in_plot_sequence
+                logger.info(f'CytometryGridWidget {self.mode}: Permuting plots. len(histograms), n, m = {n}, {m}, {len(histograms)}')
                 histograms[n], histograms[m] = histograms[m], histograms[n]
             else: # start or end
                 plot = plots[n]
