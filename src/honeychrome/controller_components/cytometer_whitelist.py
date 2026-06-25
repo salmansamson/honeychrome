@@ -165,6 +165,24 @@ _CYTOMETER_PARAMS: dict[str, _CytParams] = {
         scatter_extra_pat = [],
         singlet_y_preference = "FSC-H",
     ),
+
+    "Bigfoot": _CytParams(
+        cyt_label       = "Thermo Fisher Bigfoot",
+        cyt_kw_pattern  = r"Bigfoot",
+        creator_pattern = None,
+        non_spectral_pat = [
+            "FSC", "SSC", "Time", "Clock", "GateMatch", "SortIndex",
+            "DropsSorted", "SortDestination", 
+            # "Comp-", # Comp parameters are unmixed/compensated fluorescence
+            # these are not spectral, but if we exclude them, people won't be able to use unmixed files
+        ],
+        spectral_pat    = None,
+        db_col          = "Bigfoot",
+        scatter_param = ["FSC07-A", "SSC58-A"],
+        sat_value = 100000,
+        scatter_extra_pat = ["FSC56", "FSC57", "SSC59"],
+        singlet_y_preference = "FSC07-H",
+    ),
 }
 
 # Path to the bundled cytometer_database.csv
@@ -282,6 +300,9 @@ def _match_cytometer(
 
     if kw_match(r"Xenith"):
         return _CYTOMETER_PARAMS["Xenith"]
+
+    if kw_match(r"Bigfoot"):
+        return _CYTOMETER_PARAMS["Bigfoot"]
 
     # Aurora / NL share $CYT = "Aurora"; distinguished by presence of UV channels
     if re.match(r"^Aurora$", cyt_kw, re.IGNORECASE):
