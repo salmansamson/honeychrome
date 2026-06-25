@@ -795,7 +795,12 @@ class SpectralAutoGenerator(QObject):
                             if re.search(r'bead', name, re.IGNORECASE) or re.search(r'bead', path, re.IGNORECASE):
                                 default_unstained_bead = name
                                 break
-                        assigned_negative = default_unstained_bead or ''
+                        # No bead-specific unstained available: explicitly opt out of the
+                        # global-unstained fallback (which is cell-only in ProfileUpdater)
+                        # rather than leaving this blank. A blank value reads to
+                        # ProfileUpdater.generate() as "no per-control override, use the
+                        # global default" — silently pulling in the cell AF vector.
+                        assigned_negative = default_unstained_bead or INTERNAL_NEGATIVE_SENTINEL
                     control = {
                         'label': label,
                         'antigen': antigen,
