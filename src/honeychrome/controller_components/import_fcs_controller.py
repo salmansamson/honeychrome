@@ -67,6 +67,7 @@ class ImportFCSController(QObject):
                     text_keywords=sample_metadata.text,
                 )
                 channel_mismatch_note = None  # set below if files differ; folded into the single end-of-import dialog
+                time_missing_note = None  # set below if no Time channel; folded into the same dialog
 
                 if cyt_info is not None:
                     _fl_ids = cyt_info.fluorescence_channel_ids
@@ -154,10 +155,10 @@ class ImportFCSController(QObject):
                     # set up all raw settings
                     time_channel_id = sample_metadata.time_index
                     if time_channel_id is None:
-                        text = "No Time channel found. The FCS file does not conform to standard."
-                        warnings.warn(text)
-                        if self.bus:
-                            self.bus.warningMessage.emit(text)
+                        time_missing_note = "No Time channel found. The FCS file does not conform to standard."
+                        warnings.warn(time_missing_note)
+                        # Stash rather than emit immediately — combined into the single
+                        # end-of-import dialog below so only one QMessageBox is shown.
 
                     scatter_channel_ids = sample_metadata.scatter_indices
                     event_channels_pnn = representative_pnn  # full list from first file
@@ -405,15 +406,15 @@ class ImportFCSController(QObject):
                             f'Time channel ID: {self.experiment.settings['raw']['time_channel_id']}\n'
                             f'Event ID channel ID: {self.experiment.settings['raw']['event_id_channel_id']}\n'
                             )
-                    # Fold the mismatch note (if any) into this single dialog instead
-                    # of emitting it separately — two stacked modal QMessageBoxes from
-                    # the background import thread triggered the native crash.
-                    if channel_mismatch_note:
-                        text = channel_mismatch_note + '\n\n' + text
+                    # Fold any collected notes (channel mismatch, missing Time channel)
+                    # into this single dialog instead of emitting separately
+                    notes = [n for n in (channel_mismatch_note, time_missing_note) if n]
+                    if notes:
+                        text = '\n\n'.join(notes) + '\n\n' + text
                     logger.info(text)
                     if self.bus:
                         self.bus.reloadExpRequested.emit()
-                        if channel_mismatch_note:
+                        if notes:
                             self.bus.warningMessage.emit(text)
                         else:
                             self.bus.popupMessage.emit(text)
