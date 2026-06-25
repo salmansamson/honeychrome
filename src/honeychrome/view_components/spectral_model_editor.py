@@ -666,6 +666,59 @@ class SpectralControlsEditor(QFrame):
         # else: leave at 0 (sentinel) — no unstained samples available
         self.bulk_negative_combo.blockSignals(False)
 
+    def _has_unstained_cell_sample(self) -> bool:
+        """True if at least one loaded sample is tagged/named "unstained"
+        and is not a bead sample.
+
+        Clean Controls needs a genuine unstained CELL control as the
+        negative reference for cosine-similarity selection and kNN
+        scatter-matched AF subtraction. Without one, cell controls would
+        otherwise fall back to the internal-negative approximation
+        (top-bright minus bottom-dim within the same tube), which is not
+        an adequate substitute.
+        """
+        all_samples = self.samples.get('all_samples', {})
+        manually_tagged = set(self.samples.get('unstained_samples', []))
+        for path, name in all_samples.items():
+            is_unstained = (
+                path in manually_tagged
+                or bool(re.search(r'unstained', name, re.IGNORECASE))
+                or bool(re.search(r'unstained', path, re.IGNORECASE))
+            )
+            if not is_unstained:
+                continue
+            if re.search(r'bead', name, re.IGNORECASE) or re.search(r'bead', path, re.IGNORECASE):
+                continue
+            return True
+        return False
+
+    def _update_clean_controls_enabled(self):
+        """Enable/disable Clean Controls based on unstained-cell-sample
+        availability. Deliberately surfaced via button state + tooltip,
+        never a popup: SpectralCleaner already emits bus.warningMessage
+        (-> QMessageBox.warning) per failing control from its background
+        thread, and multiple modal dialogs from that thread have previously
+        caused native heap-corruption crashes on macOS/PySide6.
+        """
+        has_unstained_cell = self._has_unstained_cell_sample()
+        self.clean_controls_btn.setEnabled(has_unstained_cell)
+        if has_unstained_cell:
+            self.clean_controls_btn.setToolTip(
+                'Run the cleaning pipeline for all cell controls that have an Unstained Negative assigned:\n'
+                '  • Saturation exclusion\n'
+                '  • Cosine-similarity event selection (least AF-like events)\n'
+                '  • kNN scatter-matched AF subtraction\n'
+                'Once complete, each control will have a "Use Cleaned" checkbox.\n'
+                'Cleaned controls use the kNN-subtracted spectrum directly.'
+            )
+        else:
+            self.clean_controls_btn.setToolTip(
+                'Disabled: no unstained cell sample found in this experiment.\n'
+                'Clean Controls needs a genuine unstained cell control as the\n'
+                'negative reference. Tag a sample as unstained (or include\n'
+                '"unstained" in its tube name) to enable this.'
+            )
+    
     def _on_bulk_apply_negative(self):
         """Set universal_negative_name for all controls matching the selected particle type."""
         particle_type = self.bulk_particle_type_combo.currentText()
@@ -702,6 +755,7 @@ class SpectralControlsEditor(QFrame):
                 self._add_comboboxes_to_row(row)
         finally:
             self._refreshing_comboboxes = False
+        self._update_clean_controls_enabled()
 
     def _add_or_replace_combobox_if_enabled(self, idx, should_have_combobox, items,
                                          searchable=False, row=None):
@@ -1459,6 +1513,17 @@ class SpectralControlsEditor(QFrame):
     def _on_clean_controls(self):
         """Launch SpectralCleaner in a QThread. On completion, set use_cleaned=True
         for all successfully cleaned controls and trigger a full recalculate."""
+        if not self._has_unstained_cell_sample():
+            # Button should already be disabled in this state — this guard only
+            # protects against a stale-enabled race. statusMessage only reaches the
+            # status bar (see main_window.status_message), never a QMessageBox, so
+            # it carries none of the modal-stacking risk warningMessage would.
+            if self.bus:
+                self.bus.statusMessage.emit(
+                    'Clean Controls needs an unstained cell sample as the negative reference — none found.'
+                )
+            return
+
         self.setEnabled(False)
         self.clean_controls_btn.setText("Cleaning…")
 
