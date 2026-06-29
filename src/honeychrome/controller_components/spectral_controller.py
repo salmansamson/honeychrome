@@ -684,7 +684,8 @@ class SpectralAutoGenerator(QObject):
 
                         # Determine AF reference for orthogonalisation:
                         # use particle-type-matched unstained events if available,
-                        # otherwise fall back to the bottom 25 % of this sample.
+                        # otherwise fall back to the brightest raw channel
+                        # (matches ProfileUpdater.generate()'s int(np.argmax(profile)) fallback).
                         unstained_ref = (
                             self.unstained_negative_events_beads
                             if particle_type == 'Beads'
@@ -692,15 +693,13 @@ class SpectralAutoGenerator(QObject):
                         )
                         if unstained_ref is not None and len(unstained_ref) > 1:
                             af_mean = unstained_ref.mean(axis=0)
+                            # find_empirical_peak returns an index into fluorescence_channel_ids
+                            fluor_peak_idx = find_empirical_peak(pos_events_all, af_mean)
                             af_ref_source = f'unstained ({particle_type})'
                         else:
-                            n_bottom = max(2, len(pos_events_all) // 4)
-                            order = np.argsort(pos_events_all.max(axis=1))
-                            af_mean = pos_events_all[order[:n_bottom]].mean(axis=0)
-                            af_ref_source = 'internal bottom-25%'
+                            fluor_peak_idx = int(np.argmax(pos_events_all.mean(axis=0)))
+                            af_ref_source = 'no unstained — brightest raw channel'
 
-                        # find_empirical_peak returns an index into fluorescence_channel_ids
-                        fluor_peak_idx = find_empirical_peak(pos_events_all, af_mean)
                         channel_id_best_match = self.fluorescence_channel_ids[fluor_peak_idx]
                         channel_x = self.event_channels_pnn[channel_id_best_match]
                         gate_channel = channel_x
@@ -1150,7 +1149,9 @@ class SpectralCleaner(QObject):
                 peak_ch_idx = expected_peak_ch_idx
                 
                 sel_idx, cs_vals = cosine_filter(
-                    pos_events, af_median, peak_ch_idx=peak_ch_idx
+                    pos_events, af_median, peak_ch_idx=peak_ch_idx,
+                    n_candidates=settings.spectral_cleaning_n_candidates_retrieved,
+                    n_spectral=settings.spectral_cleaning_n_spectral_retrieved,
                 )
                 pos_sel         = pos_events[sel_idx]
                 pos_scatter_sel = (pos_scatter[sel_idx]
