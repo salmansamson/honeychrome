@@ -684,8 +684,7 @@ class SpectralAutoGenerator(QObject):
 
                         # Determine AF reference for orthogonalisation:
                         # use particle-type-matched unstained events if available,
-                        # otherwise fall back to the brightest raw channel
-                        # (matches ProfileUpdater.generate()'s int(np.argmax(profile)) fallback).
+                        # otherwise fall back to the bottom 25 % of this sample.
                         unstained_ref = (
                             self.unstained_negative_events_beads
                             if particle_type == 'Beads'
@@ -693,13 +692,15 @@ class SpectralAutoGenerator(QObject):
                         )
                         if unstained_ref is not None and len(unstained_ref) > 1:
                             af_mean = unstained_ref.mean(axis=0)
-                            # find_empirical_peak returns an index into fluorescence_channel_ids
-                            fluor_peak_idx = find_empirical_peak(pos_events_all, af_mean)
                             af_ref_source = f'unstained ({particle_type})'
                         else:
-                            fluor_peak_idx = int(np.argmax(pos_events_all.mean(axis=0)))
-                            af_ref_source = 'no unstained — brightest raw channel'
+                            n_bottom = max(2, len(pos_events_all) // 4)
+                            order = np.argsort(pos_events_all.max(axis=1))
+                            af_mean = pos_events_all[order[:n_bottom]].mean(axis=0)
+                            af_ref_source = 'internal bottom-25%'
 
+                        # find_empirical_peak returns an index into fluorescence_channel_ids
+                        fluor_peak_idx = find_empirical_peak(pos_events_all, af_mean)
                         channel_id_best_match = self.fluorescence_channel_ids[fluor_peak_idx]
                         channel_x = self.event_channels_pnn[channel_id_best_match]
                         gate_channel = channel_x

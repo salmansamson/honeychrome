@@ -267,7 +267,6 @@ def compute_sample_means_for_wls(
     if not candidates:
         return None
 
-    whitelisted_pnn = raw_settings.get('whitelisted_pnn') if raw_settings else None
     # For whitelisted cytometers (e.g. FACSDiscover) the full FCS array has
     # heterogeneous channel counts across files; load via col_order so that
     # fluorescence_channel_ids (full-PNN indices) map consistently.
