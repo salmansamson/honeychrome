@@ -105,6 +105,9 @@ line_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b',
 spectral_positive_gate_percent = 5 # take the top few percent of events
 spectral_negative_gate_percent = 25 # take the bottom few percent of events
 
+spectral_cleaning_n_candidates = 1000 # cosine filter: top-N events by peak channel, ranked before AF-similarity filtering
+spectral_cleaning_n_spectral = 200 # cosine filter: number of least-AF-similar events kept for the cleaned profile
+
 spectral_model_column_labels = {
     "label": "Label",
     'antigen': 'Antigen', 
@@ -251,6 +254,9 @@ use_dummy_instrument_retrieved = q_settings.value("use_dummy_instrument", use_du
 
 spectral_positive_gate_percent_retrieved = q_settings.value("spectral_positive_gate_percent", spectral_positive_gate_percent, type=int)
 spectral_negative_gate_percent_retrieved = q_settings.value("spectral_negative_gate_percent", spectral_negative_gate_percent, type=int)
+
+spectral_cleaning_n_candidates_retrieved = q_settings.value("spectral_cleaning_n_candidates", spectral_cleaning_n_candidates, type=int)
+spectral_cleaning_n_spectral_retrieved = q_settings.value("spectral_cleaning_n_spectral", spectral_cleaning_n_spectral, type=int)
 
 report_include_raw_retrieved = q_settings.value("report_include_raw", report_include_raw, type=bool)
 report_include_unmixed_retrieved = q_settings.value("report_include_unmixed", report_include_unmixed, type=bool)

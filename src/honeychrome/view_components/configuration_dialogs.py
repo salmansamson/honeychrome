@@ -12,7 +12,7 @@ from honeychrome.settings import (colourmap_choice, graphics_export_formats, his
                       tile_size_nxn_grid, subsample, max_display_events, hist_bins, density_cutoff, trigger_channel, adc_channels, width_channels, height_channels,
                       use_dummy_instrument, magnitude_ceilings, magnitude_ceiling, raw_settings, unmixed_settings, experiments_folder,
                       magnitude_ceilings_int, spectral_positive_gate_percent, spectral_negative_gate_percent, report_include_raw, report_include_unmixed, report_include_process, send_debug_data,
-                      heatmap_colourmap_name, heatmap_colourmap_choice)
+                      heatmap_colourmap_name, heatmap_colourmap_choice, spectral_cleaning_n_candidates, spectral_cleaning_n_spectral)
 import honeychrome.settings as settings
 
 
@@ -202,6 +202,18 @@ class AppConfigDialog(QDialog):
         self.spectral_negative_gate_percent_spin.setSingleStep(1)
         form.addRow("Spectral control negative gate (brightest % of events):", self.spectral_negative_gate_percent_spin)
 
+        self.spectral_cleaning_n_candidates_spin = QSpinBox()
+        self.spectral_cleaning_n_candidates_spin.setRange(50, 5000)
+        self.spectral_cleaning_n_candidates_spin.setSingleStep(50)
+        form.addRow("Control cleaning: candidate pool size (top-N by Major Channel):", self.spectral_cleaning_n_candidates_spin)
+        self.spectral_cleaning_n_candidates_spin.setToolTip('Number of brightest events (by Major Channel) considered as cosine-similarity candidates during Clean Controls.')
+
+        self.spectral_cleaning_n_spectral_spin = QSpinBox()
+        self.spectral_cleaning_n_spectral_spin.setRange(10, 2000)
+        self.spectral_cleaning_n_spectral_spin.setSingleStep(10)
+        form.addRow("Control cleaning: events retained (least AF-similar):", self.spectral_cleaning_n_spectral_spin)
+        self.spectral_cleaning_n_spectral_spin.setToolTip('Number of candidate events retained for the cleaned spectral profile, ranked by lowest cosine similarity to the unstained AF reference.')
+
         self.report_include_raw_cb = QCheckBox("Raw Data")
         self.report_include_unmixed_cb = QCheckBox("Unmixed Data")
         self.report_include_process_cb = QCheckBox("Spectral Process")
@@ -298,6 +310,8 @@ class AppConfigDialog(QDialog):
         self.density_cutoff_spin.setValue(self.settings.value("density_cutoff", density_cutoff, type=int))
         self.spectral_positive_gate_percent_spin.setValue(self.settings.value("spectral_positive_gate_percent", spectral_positive_gate_percent, type=int))
         self.spectral_negative_gate_percent_spin.setValue(self.settings.value("spectral_negative_gate_percent", spectral_negative_gate_percent, type=int))
+        self.spectral_cleaning_n_candidates_spin.setValue(self.settings.value("spectral_cleaning_n_candidates", spectral_cleaning_n_candidates, type=int))
+        self.spectral_cleaning_n_spectral_spin.setValue(self.settings.value("spectral_cleaning_n_spectral", spectral_cleaning_n_spectral, type=int))
 
         self.report_include_raw_cb.setChecked(self.settings.value("report_include_raw", report_include_raw, type=bool))
         self.report_include_unmixed_cb.setChecked(self.settings.value("report_include_unmixed", report_include_unmixed, type=bool))
@@ -322,6 +336,8 @@ class AppConfigDialog(QDialog):
         self.settings.setValue("density_cutoff", self.density_cutoff_spin.value())
         self.settings.setValue("spectral_positive_gate_percent", self.spectral_positive_gate_percent_spin.value())
         self.settings.setValue("spectral_negative_gate_percent", self.spectral_negative_gate_percent_spin.value())
+        self.settings.setValue("spectral_cleaning_n_candidates", self.spectral_cleaning_n_candidates_spin.value())
+        self.settings.setValue("spectral_cleaning_n_spectral", self.spectral_cleaning_n_spectral_spin.value())
         self.settings.setValue("report_include_raw", self.report_include_raw_cb.isChecked())
         self.settings.setValue("report_include_unmixed", self.report_include_unmixed_cb.isChecked())
         self.settings.setValue("report_include_process", self.report_include_process_cb.isChecked())
@@ -358,6 +374,8 @@ class AppConfigDialog(QDialog):
         self.density_cutoff_spin.setValue(density_cutoff)
         self.spectral_positive_gate_percent_spin.setValue(spectral_positive_gate_percent)
         self.spectral_negative_gate_percent_spin.setValue(spectral_negative_gate_percent)
+        self.spectral_cleaning_n_candidates_spin.setValue(spectral_cleaning_n_candidates)
+        self.spectral_cleaning_n_spectral_spin.setValue(spectral_cleaning_n_spectral)
         self.report_include_raw_cb.setChecked(report_include_raw)
         self.report_include_unmixed_cb.setChecked(report_include_unmixed)
         self.report_include_process_cb.setChecked(report_include_process)
