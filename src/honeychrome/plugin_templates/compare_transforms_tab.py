@@ -4,15 +4,42 @@ Compare transforms tab
 ---------------------------
 """
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QPushButton, QLabel, QComboBox
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QPushButton, QLabel, QComboBox, QHBoxLayout, QGridLayout, QFrame
+from PySide6.QtCore import Qt, Signal, QRectF
+import numpy as np
+import colorcet as cc
+import pyqtgraph as pg
+from copy import deepcopy
+
+from honeychrome import settings
+from honeychrome.controller_components.transform import Transform
+
+
+from honeychrome.controller_components.functions import (
+    build_display_label_map,
+)
+
+from honeychrome.controller_components.transform import Transform
+from honeychrome.view_components.cytometry_plot_components import (
+    InteractiveLabel,
+    NoPanViewBox,
+    ZoomAxis,
+    TransparentGraphicsLayoutWidget,
+)
+import honeychrome.settings as settings
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 plugin_name = 'Compare Transforms Plugin'
 
 
 
-class AfComparisonPlotWidget(QWidget):
+class TransformsComparisonPlotWidget(QWidget):
     """
+    Based on AfComparisonPlotWidget from the autospectral tab.
+
     A single density-heatmap biplot that mirrors the style of CytometryPlotWidget
     (dark background, colorcet colourmap, logicle transforms, ZoomAxis drag zoom)
     but operates on a locally held event array rather than the shared controller
@@ -596,33 +623,62 @@ class PluginWidget(QWidget):
         overall_layout.addWidget(scroll)
 
 
-        # --- Add some GUI elements to show functionality ---
+        # --- Add GUI elements ---
         self.label = QLabel('Compare channel transforms in unmixed plots.')
         self.label.setTextFormat(Qt.RichText)
         self.label.setWordWrap(True)
 
-        # Add gate selection combobox
-        self.plot_combo = QComboBox()
-        self.plot_combo.addItem("Select Unmixed Plot:")
+        # Side-by-side plot widgets
+        plot_layout = QGridLayout()
+
+        self._plot_expt = TransformsComparisonPlotWidget(
+            'Transforms from experiment', self.controller, parent=self
+        )
+        self._plot_expt.sourceGateChanged.connect(self._on_expt_gate_changed)
+        self._plot_expt.channelChanged.connect(self._on_expt_channel_changed)
+
+        self._plot_adj = TransformsComparisonPlotWidget(
+            'Adjustable transforms', self.controller, parent=self
+        )
+        self._plot_adj.sourceGateChanged.connect(self._on_adj_gate_changed)
+        self._plot_adj.channelChanged.connect(self._on_adj_channel_changed)
+
+        # controls frame - starts blank
+        self.controls_frame = QFrame(self)
+
+        # row, col, h, w
+        plot_layout.addWidget(self._plot_expt, 0, 0)
+        plot_layout.addWidget(self._plot_adj, 0, 1)
+
+        # controls frame
+        plot_layout.addWidget(self.controls_frame, 1, 1)
+
+        controls_layout = QVBoxLayout(self.controls_frame)
+        controls_layout.addWidget(QLabel('test'))
+
+
 
         main_layout.addWidget(self.label)
-        main_layout.addWidget(self.plot_combo)
+        main_layout.addLayout(plot_layout)
+        main_layout.addStretch()
 
 
-        self.refresh()
+    def _on_expt_gate_changed(self, gate_name: str):
+        """Sync source gate."""
+        self._plot_adj.set_source_gate(gate_name)
 
-    def refresh(self):
-        # put some data from the controller into the label
-        import json
+    def _on_adj_gate_changed(self, gate_name: str):
+        """Sync source gate."""
+        self._plot_expt.set_source_gate(gate_name)
 
-        self.label.setText(f'''
-        <h1>Hello world!</h1>
-        
-        <p>Cytometry data can be accessed from the controller object (and the experiment object from controller.experiment):</p>
-        
-        <ul>
-            <li> controller.experiment_dir: <pre>{self.controller.experiment_dir}</pre> </li>
-            <li> controller.current_sample_path: <pre>{self.controller.current_sample_path}</pre> </li>
-            <li> controller.expreriment.samples: <pre>{json.dumps(self.controller.experiment.samples, indent=2)}</pre> </li>
-        </ul>
-        ''')
+    def _on_expt_channel_changed(self, ch_x: str, ch_y: str):
+        """Mirror channel selection from OLS to AF plot."""
+        self._plot_adj.blockSignals(True)
+        self._plot_adj.set_channels(ch_x, ch_y)
+        self._plot_adj.blockSignals(False)
+
+    def _on_adj_channel_changed(self, ch_x: str, ch_y: str):
+        """Mirror channel selection from AF to OLS plot."""
+        self._plot_expt.blockSignals(True)
+        self._plot_expt.set_channels(ch_x, ch_y)
+        self._plot_expt.blockSignals(False)
