@@ -4,7 +4,7 @@ Compare transforms tab
 ---------------------------
 """
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QPushButton, QLabel, QComboBox, QHBoxLayout, QGridLayout, QFrame, QSplitter
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QPushButton, QLabel, QComboBox, QHBoxLayout, QGridLayout, QFrame, QSplitter, QTableWidget, QTableWidgetItem, QTreeWidget, QTreeWidgetItem, QHeaderView, QSpinBox, QDoubleSpinBox
 from PySide6.QtCore import Qt, Signal, QRectF, QTimer, QSize
 import numpy as np
 import colorcet as cc
@@ -33,7 +33,35 @@ logger = logging.getLogger(__name__)
 
 plugin_name = 'Compare Transforms Plugin'
 
+row_height = 30
+cell_width = 200
+class FullyExpandedTree(QTreeWidget):
+    def __init__(self):
+        super().__init__()
+        # Ensure scrollbars never appear
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
+        # Connect signals to auto-resize when user interacts
+        self.itemExpanded.connect(self.update_size)
+        self.itemCollapsed.connect(self.update_size)
+
+        self.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.header().setSectionResizeMode(1, QHeaderView.Stretch)
+
+    def update_size(self):
+        # Calculate total height of visible rows
+        total_height = self.header().height()
+        for i in range(self.topLevelItemCount()):
+            total_height += self.visualItemRect(self.topLevelItem(i)).height()
+            # If expanded, add heights of children
+            if self.topLevelItem(i).isExpanded():
+                for j in range(self.topLevelItem(i).childCount()):
+                    total_height += self.visualItemRect(self.topLevelItem(i).child(j)).height()
+
+
+        # Add a small buffer for borders
+        self.setFixedHeight(total_height + 5)
 
 class TransformsComparisonPlotWidget(QWidget):
     """
@@ -61,7 +89,7 @@ class TransformsComparisonPlotWidget(QWidget):
     # Emitted when a zoom/scaling is applied on one axis, so the sibling can mirror.
     scalingChanged = Signal(str, object)  # (axis_name, Transform)
 
-    def __init__(self, title: str, controller, parent=None):
+    def __init__(self, title: str, controller, parent=None, editable_transforms=False):
         super().__init__(parent)
         self.controller = controller
         self._title_text = title
@@ -134,11 +162,18 @@ class TransformsComparisonPlotWidget(QWidget):
         self.vb.addItem(self.img)
 
         # Status label (shown when computing or on error)
-        self._status_label = QLabel('', alignment=Qt.AlignCenter)
+        self._status_label = QLabel('', alignment=Qt.AlignLeft)
         self._status_label.setStyleSheet('color: #aaaaaa;')
+
+        # transforms label
+        self.transforms_tree = FullyExpandedTree()
+        self.transforms_tree.setHeaderLabels(["Parameter", "Value"])
+        self.editable_transforms = editable_transforms
+        self._running = False
 
         main_layout.addWidget(self.graphics_widget)
         main_layout.addWidget(self._status_label)
+        main_layout.addWidget(self.transforms_tree)
 
         # Axis label left-click: change channel
         self.label_x.leftClickMenuFunction = self._set_channel_x
@@ -152,8 +187,8 @@ class TransformsComparisonPlotWidget(QWidget):
 
     def resizeEvent(self, event):
         side = max(cytometry_plot_width_target, self.width())
-        self.setFixedHeight(side)
-        self.resize(side, side)
+        self.graphics_widget.setFixedHeight(side)
+        self.graphics_widget.resize(side, side)
         super().resizeEvent(event)
 
     def sizeHint(self):
@@ -186,38 +221,6 @@ class TransformsComparisonPlotWidget(QWidget):
         self._configure_axes()
         self._draw()
 
-    def set_scaling(self, axis_name: str, tr):
-        """
-        Mirror scaling/zoom from the sibling plot.
-        tr is the Transform object that was already modified by the sibling's _apply_zoom.
-        We copy its parameters into our own Transform and update the view accordingly.
-        """
-        if axis_name == 'x':
-            channel = self._channel_x
-            axis = self.axis_bottom
-            vb_set_range = self.vb.setXRange
-        else:
-            channel = self._channel_y
-            axis = self.axis_left
-            vb_set_range = self.vb.setYRange
-
-        if channel not in self._transformations:
-            return
-
-        my_tr = self._transformations[channel]
-        # Copy the transform state from the sibling
-        my_tr.id = tr.id
-        my_tr.logicle_w = tr.logicle_w
-        my_tr.logicle_a = tr.logicle_a
-        my_tr.limits = tr.limits
-        my_tr.set_transform(my_tr.id, my_tr.limits)
-
-        vb_set_range(*my_tr.limits, padding=0)
-        axis.zoomZero = my_tr.zero
-        axis.limits = my_tr.limits
-        axis.setTicks(my_tr.ticks())
-        self._draw()
-
     def set_source_gate(self, gate_name: str):
         """Change the source gate (called from external sync)."""
         self._source_gate = gate_name
@@ -236,10 +239,68 @@ class TransformsComparisonPlotWidget(QWidget):
     # ------------------------------------------------------------------
 
     def _configure_axes(self):
+        if not self._running: self._running = True; QTimer.singleShot(100, lambda: [self._configure_axes_debounced(), setattr(self, '_running', False)])
+
+    def _configure_axes_debounced(self):
         if (not self._transformations
                 or self._channel_x not in self._transformations
                 or self._channel_y not in self._transformations):
             return
+
+
+        self.transforms_tree.clear()
+        for channel in [self._channel_x, self._channel_y]:
+            parent = QTreeWidgetItem(self.transforms_tree, [channel])
+            parent.setSizeHint(0, QSize(cell_width, row_height))
+            tr = self._transformations[channel]
+            if tr.id == 0:
+                transform_type = 'Linear'
+                transform_parameters = {'Transform':transform_type, 'linear T':tr.scale_t, 'linear A':tr.linear_a, 'bins':tr.scale_bins}
+            elif tr.id == 1:
+                transform_type = 'Logicle'
+                transform_parameters = {'Transform':transform_type, 'logicle T':tr.scale_t, 'logicle A':tr.logicle_a, 'logicle W':tr.logicle_w, 'logicle M':tr.logicle_m, 'bins':tr.scale_bins}
+            elif tr.id == 2:
+                transform_type = 'Log'
+                transform_parameters = {'Transform':transform_type, 'log T':tr.scale_t, 'log M':tr.log_m, 'bins':tr.scale_bins}
+            else:
+                transform_type = 'Default'
+                transform_parameters = {'Transform':transform_type, 'bins':tr.scale_bins}
+
+            transform_parameters.update({'crop scale lower':tr.limits[0], 'crop scale upper':tr.limits[1]})
+            for key, value in transform_parameters.items():
+                child = QTreeWidgetItem(parent, [key, str(value)])
+                if self.editable_transforms:
+                    if key == 'Transform':
+                        combo = QComboBox()
+                        transform_list = ["Linear", "Logicle", "Log"]
+                        combo.addItems(transform_list)
+                        combo.setCurrentIndex(tr.id)
+                        self.transforms_tree.setItemWidget(child, 1, combo)
+                        combo.currentIndexChanged.connect(lambda index, parent_axis=self.axis_bottom if channel == self._channel_x else self.axis_left: self.set_axis_transform(index, parent_axis))
+                    else:
+                        if key in ['bins']:
+                            spin = QSpinBox()
+                            spin.setRange(10, 1000)
+                            spin.setSingleStep(10)
+                        elif key in ['crop scale lower', 'crop scale upper']:
+                            spin = QDoubleSpinBox()
+                            spin.setRange(0.0, 1.0)
+                            spin.setSingleStep(0.01)
+                        else:
+                            spin = QDoubleSpinBox()
+                            spin.setRange(-10**9, 10**9)
+                            spin.setSingleStep(0.1)
+
+                        spin.setValue(value)
+                        self.transforms_tree.setItemWidget(child, 1, spin)
+                        combo.currentIndexChanged.connect(lambda index, parent_axis=self.axis_bottom if channel == self._channel_x else self.axis_left: self.set_axis_transform(index, parent_axis))
+
+
+
+                child.setSizeHint(0, QSize(cell_width, row_height))
+
+
+        self.transforms_tree.expandAll()
 
         pnn = self.controller.experiment.settings['unmixed'].get('event_channels_pnn', [])
         fl_ids = self.controller.experiment.settings['unmixed'].get('fluorescence_channel_ids', [])
@@ -539,6 +600,7 @@ class TransformsComparisonPlotWidget(QWidget):
         axis.zoomZero = tr.zero
         axis.setTicks(tr.ticks())
         self._draw()
+        self._configure_axes()
         self.scalingChanged.emit(axis_name, tr)
 
     # ------------------------------------------------------------------
@@ -591,6 +653,21 @@ class TransformsComparisonPlotWidget(QWidget):
     def select_plot_on_parent_grid(self):
         pass   # No parent grid — no-op
 
+    def update_table_height(self):
+        # 1. Force the table to recalculate its contents
+        self.transforms_tree.resizeRowsToContents()
+
+        # 2. Calculate the height of all rows + the header (if visible)
+        total_height = self.transforms_tree.horizontalHeader().height()
+        for i in range(self.transforms_tree.rowCount()):
+            total_height += self.transforms_tree.rowHeight(i)
+
+        # 3. Add a small buffer for grid lines/borders (approx 2px)
+        total_height += 2
+
+        # 4. Set fixed height
+        self.transforms_tree.setFixedHeight(total_height)
+
 
 class PluginWidget(QWidget):
     """
@@ -617,6 +694,7 @@ class PluginWidget(QWidget):
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setWidget(content_widget)
+        scroll.setWidgetResizable(True)
 
         overall_layout = QVBoxLayout(self)
         overall_layout.addWidget(scroll)
@@ -631,13 +709,13 @@ class PluginWidget(QWidget):
         plot_splitter = QSplitter(Qt.Horizontal)
 
         self._plot_expt = TransformsComparisonPlotWidget(
-            'Transforms from experiment', self.controller, parent=self
+            'Transforms from experiment', self.controller, parent=self, editable_transforms=False
         )
         self._plot_expt.sourceGateChanged.connect(self._on_expt_gate_changed)
         self._plot_expt.channelChanged.connect(self._on_expt_channel_changed)
 
         self._plot_adj = TransformsComparisonPlotWidget(
-            'Adjustable transforms', self.controller, parent=self
+            'Adjustable transforms', self.controller, parent=self, editable_transforms=True
         )
         self._plot_adj.sourceGateChanged.connect(self._on_adj_gate_changed)
         self._plot_adj.channelChanged.connect(self._on_adj_channel_changed)
