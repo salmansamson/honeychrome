@@ -172,9 +172,9 @@ _CYTOMETER_PARAMS: dict[str, _CytParams] = {
         creator_pattern = None,
         non_spectral_pat = [
             "FSC", "SSC", "Time", "Clock", "GateMatch", "SortIndex",
-            "DropsSorted", "SortDestination", 
-            # "Comp-", # Comp parameters are unmixed/compensated fluorescence
-            # these are not spectral, but if we exclude them, people won't be able to use unmixed files
+            "DropsSorted", "SortDestination",
+            r"^Comp-",  # conventional-mode compensated channel
+            r"-Comp$",  # spectral-mode unmixed channel (incl. stray FSC07-Comp)
         ],
         spectral_pat    = None,
         db_col          = "Bigfoot",
