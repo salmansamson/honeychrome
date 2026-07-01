@@ -11,7 +11,6 @@ from typing import cast
 from honeychrome.controller_components.functions import apply_transfer_matrix, export_unmixed_sample, sample_from_fcs
 from honeychrome.controller_components.autospectral_functions import precompute_af_matrices, combine_af_precomputed, apply_af_transfer
 import honeychrome.settings as settings
-from honeychrome.view_components.busy_cursor import with_busy_cursor
 from honeychrome.__init__ import __version__
 
 import logging
@@ -33,7 +32,6 @@ class UnmixedExporter(QObject):
         self.controller = controller
         self.bus = bus
 
-    @with_busy_cursor
     def run(self):
         all_samples = self.controller.experiment.samples['all_samples']
         exp_dir = self.controller.experiment_dir
