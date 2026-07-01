@@ -177,9 +177,15 @@ class Controller(QObject):
         }
         meta = self.experiment.process.get('cleaned_meta', {})
         arrays = {}
-        if self.cleaned_npz_path.exists():
+        npz_path = self.cleaned_npz_path
+        if not npz_path.exists() and self._legacy_cleaned_npz_path.exists():
+            # one-time migration from old alongside-.kit location
+            npz_path.parent.mkdir(parents=True, exist_ok=True)
+            self._legacy_cleaned_npz_path.replace(npz_path)
+            logger.info(f'Controller: migrated cleaned.npz to {npz_path}')
+        if npz_path.exists():
             try:
-                npz = np.load(str(self.cleaned_npz_path), allow_pickle=False)
+                npz = np.load(str(npz_path), allow_pickle=False)
                 arrays = dict(npz)
             except Exception as e:
                 logger.warning(f'Controller: failed to load cleaned.npz: {e}')
@@ -248,6 +254,13 @@ class Controller(QObject):
 
     @property
     def cleaned_npz_path(self) -> Path:
+        cache_dir = self.experiment_dir / 'cache'
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return cache_dir / 'cleaned.npz'
+
+    @property
+    def _legacy_cleaned_npz_path(self) -> Path:
+        """Pre-migration location, alongside the .kit file."""
         return Path(self.experiment.experiment_path).with_suffix('.cleaned.npz')
     
     @Slot(str)
