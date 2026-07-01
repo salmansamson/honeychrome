@@ -5,7 +5,7 @@ Compare transforms tab
 """
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QPushButton, QLabel, QComboBox, QHBoxLayout, QGridLayout, QFrame
-from PySide6.QtCore import Qt, Signal, QRectF
+from PySide6.QtCore import Qt, Signal, QRectF, QTimer
 import numpy as np
 import colorcet as cc
 import pyqtgraph as pg
@@ -69,8 +69,6 @@ class TransformsComparisonPlotWidget(QWidget):
 
         # Local copies of Transform objects (not shared with Unmixed Data tab)
         self._transformations: dict[str, Transform] = {}
-        # Event data for this plot (full array, gate mask applied only for display)
-        self._event_data: np.ndarray | None = None
         # Current source gate name
         self._source_gate: str = 'root'
         # Current channel names
@@ -173,13 +171,6 @@ class TransformsComparisonPlotWidget(QWidget):
     # Public API
     # ------------------------------------------------------------------
 
-    def set_status(self, text: str):
-        self._status_label.setText(text)
-
-    def set_event_data(self, event_data: np.ndarray | None):
-        """Set the full (ungated) unmixed event array for this plot."""
-        self._event_data = event_data
-
     def initialise_from_controller(self, channel_x: str, channel_y: str):
         """
         Copy Transform objects from controller.unmixed_transformations,
@@ -245,7 +236,6 @@ class TransformsComparisonPlotWidget(QWidget):
 
     def clear(self):
         self.img.clear()
-        self._event_data = None
         self._status_label.setText('')
 
     # ------------------------------------------------------------------
@@ -320,7 +310,7 @@ class TransformsComparisonPlotWidget(QWidget):
     # ------------------------------------------------------------------
 
     def _draw(self):
-        if self._event_data is None:
+        if self.controller.unmixed_event_data is None:
             self.img.clear()
             return
         if (self._channel_x not in self._transformations
@@ -335,7 +325,7 @@ class TransformsComparisonPlotWidget(QWidget):
         y_col = pnn.index(self._channel_y)
 
         # Start with all events; gate masking will narrow this down if needed.
-        event_data = self._event_data
+        event_data = self.controller.unmixed_event_data
 
         # Compute a per-event gate mask using the same mechanism as
         # apply_gates_in_place in functions.py.  The unmixed_lookup_tables,
@@ -644,24 +634,90 @@ class PluginWidget(QWidget):
         self._plot_adj.channelChanged.connect(self._on_adj_channel_changed)
 
         # controls frame - starts blank
-        self.controls_frame = QFrame(self)
+        controls_frame = QFrame(self)
+        controls_frame.setObjectName("borderFrame")
+        controls_frame.setStyleSheet("""
+            #borderFrame {
+                border: 2px solid #4A4A4A;
+                border-radius: 8px;
+            }
+        """)
 
         # row, col, h, w
         plot_layout.addWidget(self._plot_expt, 0, 0)
         plot_layout.addWidget(self._plot_adj, 0, 1)
 
         # controls frame
-        plot_layout.addWidget(self.controls_frame, 1, 1)
-
-        controls_layout = QVBoxLayout(self.controls_frame)
-        controls_layout.addWidget(QLabel('test'))
-
-
+        plot_layout.addWidget(controls_frame, 1, 1)
+        self.controls_layout = QVBoxLayout(controls_frame)
 
         main_layout.addWidget(self.label)
         main_layout.addLayout(plot_layout)
         main_layout.addStretch()
 
+        if self.bus:
+            self.bus.modeChangeRequested.connect(self._on_mode_change)
+            self.bus.loadSampleRequested.connect(self._on_sample_loaded)
+
+
+    # ======================================================================
+    # Bus signal handlers
+    # ======================================================================
+
+    def _on_mode_change(self, mode):
+        if mode == plugin_name:
+            self._refresh_ui()
+            if self.controller.raw_event_data is not None:
+                QTimer.singleShot(0, self._initialise_comparison_plots)
+
+    def _on_sample_loaded(self, _sample_path):
+        if self.controller.current_mode == plugin_name:
+            QTimer.singleShot(0, self._initialise_comparison_plots)
+
+
+
+    # ======================================================================
+    # Full UI refresh
+    # ======================================================================
+
+    def _refresh_ui(self):
+        if self.controller.experiment.process.get('unmixing_matrix') is None:
+            return
+
+    def _initialise_comparison_plots(self):
+        """
+        Feed event data to both plot widgets and initialise their transforms
+        from the live unmixed_transformations.  Pick default X/Y channels.
+        Existing channel, scaling, and gate selections are preserved.
+        """
+        pnn = self.controller.experiment.settings['unmixed'].get('event_channels_pnn', [])
+        fl_ids = self.controller.experiment.settings['unmixed'].get('fluorescence_channel_ids', [])
+        if not pnn or not fl_ids or len(fl_ids) < 2:
+            return
+
+        fl_names = [pnn[i] for i in fl_ids]
+        # Default: first two fluorescence channels
+        ch_x = fl_names[0]
+        ch_y = fl_names[1]
+
+        # Preserve existing channel selections if both plots already have them
+        if (self._plot_expt._channel_x in fl_names
+                and self._plot_expt._channel_y in fl_names):
+            ch_x = self._plot_expt._channel_x
+            ch_y = self._plot_expt._channel_y
+
+        gate_expt = self._plot_expt._source_gate
+        gate_adj = self._plot_adj._source_gate
+
+        self._plot_expt.initialise_from_controller(ch_x, ch_y)
+        self._plot_expt._source_gate = gate_expt
+        self._plot_expt._configure_axes()
+        self._plot_expt.redraw()
+
+        self._plot_adj.initialise_from_controller(ch_x, ch_y)
+        self._plot_adj._source_gate = gate_adj
+        self._plot_adj._configure_axes()
+        self._plot_adj.redraw()
 
     def _on_expt_gate_changed(self, gate_name: str):
         """Sync source gate."""
@@ -682,3 +738,33 @@ class PluginWidget(QWidget):
         self._plot_expt.blockSignals(True)
         self._plot_expt.set_channels(ch_x, ch_y)
         self._plot_expt.blockSignals(False)
+
+
+
+if __name__ == "__main__":
+    import sys
+    from PySide6.QtWidgets import QApplication
+    from honeychrome.controller import Controller
+    from honeychrome.view_components.event_bus import EventBus
+    from pathlib import Path
+
+    app = QApplication(sys.argv)
+
+    controller = Controller()
+    bus = EventBus()
+    controller.bus = bus
+    experiment_name = Path.home() / 'Experiments' / 'AutoSpectral Full Workflow Imported.kit'
+    controller.load_experiment(experiment_name)
+
+    controller.load_sample(controller.experiment.samples['single_stain_controls'][-1])
+
+    controller.set_mode('Unmixed Data')
+    controller.initialise_data_for_cytometry_plots()
+    controller.set_mode(plugin_name)
+
+    widget = PluginWidget(controller=controller, bus=bus)
+    widget._on_mode_change(plugin_name)
+    widget.show()
+
+
+    sys.exit(app.exec())
