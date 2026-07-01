@@ -4,16 +4,14 @@ Compare transforms tab
 ---------------------------
 """
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QPushButton, QLabel, QComboBox, QHBoxLayout, QGridLayout, QFrame
-from PySide6.QtCore import Qt, Signal, QRectF, QTimer
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QPushButton, QLabel, QComboBox, QHBoxLayout, QGridLayout, QFrame, QSplitter
+from PySide6.QtCore import Qt, Signal, QRectF, QTimer, QSize
 import numpy as np
 import colorcet as cc
 import pyqtgraph as pg
 from copy import deepcopy
 
-from honeychrome import settings
-from honeychrome.controller_components.transform import Transform
-
+from honeychrome.settings import cytometry_plot_width_target
 
 from honeychrome.controller_components.functions import (
     build_display_label_map,
@@ -27,6 +25,7 @@ from honeychrome.view_components.cytometry_plot_components import (
     TransparentGraphicsLayoutWidget,
 )
 import honeychrome.settings as settings
+from honeychrome.controller_components.transform import transforms_menu_items
 
 import logging
 
@@ -145,27 +144,21 @@ class TransformsComparisonPlotWidget(QWidget):
         self.label_x.leftClickMenuFunction = self._set_channel_x
         self.label_y.leftClickMenuFunction = self._set_channel_y
 
+        self.label_x.rightClickMenuFunction = self.set_axis_transform
+        self.label_y.rightClickMenuFunction = self.set_axis_transform
+
         # Title left-click: change source gate
         self.plot_title.leftClickMenuFunction = self._set_source_gate
 
-        self.setMinimumHeight(280)
-        self.setMinimumWidth(280)
-
-    # ------------------------------------------------------------------
-    # Square aspect ratio — always keeps width == height
-    # ------------------------------------------------------------------
+    def resizeEvent(self, event):
+        side = max(cytometry_plot_width_target, self.width())
+        self.setFixedHeight(side)
+        self.resize(side, side)
+        super().resizeEvent(event)
 
     def sizeHint(self):
-        from PySide6.QtCore import QSize
-        side = max(self.minimumHeight(), self.width())
-        return QSize(side, side)
-
-    def resizeEvent(self, event):
-        # Force square: set height to match width, clamped to minimum
-        side = max(self.minimumHeight(), event.size().width())
-        if self.height() != side:
-            self.setFixedHeight(side)
-        super().resizeEvent(event)
+        # Suggest a square to the layout
+        return QSize(cytometry_plot_width_target, cytometry_plot_width_target)
 
     # ------------------------------------------------------------------
     # Public API
@@ -255,6 +248,11 @@ class TransformsComparisonPlotWidget(QWidget):
             pnn, self.controller.experiment.process.get('spectral_model')
         )
         fl_display = [pnn_labels.get(n, n) for n in fl_names]
+
+        self.label_x.rightItemSelected = self._transformations[self._channel_x].id
+        self.label_y.rightItemSelected = self._transformations[self._channel_y].id
+        self.label_x.rightClickMenuItems = transforms_menu_items
+        self.label_y.rightClickMenuItems = transforms_menu_items
 
         # X axis
         self.label_x.setText(pnn_labels.get(self._channel_x, self._channel_x))
@@ -567,6 +565,17 @@ class TransformsComparisonPlotWidget(QWidget):
             self._draw()
             self.channelChanged.emit(self._channel_x, self._channel_y)
 
+    def set_axis_transform(self, n, parent):
+        if parent == self.axis_bottom:
+            channel = self._channel_x
+        else:
+            channel = self._channel_y
+
+        self._transformations[channel].set_transform(id=n)
+
+        self.channelChanged.emit(self._channel_x, self._channel_y)
+
+
     def _set_source_gate(self, n, _parent):
         gate_names = self.plot_title.leftClickMenuItems
         if 0 <= n < len(gate_names):
@@ -619,7 +628,7 @@ class PluginWidget(QWidget):
         self.label.setWordWrap(True)
 
         # Side-by-side plot widgets
-        plot_layout = QGridLayout()
+        plot_splitter = QSplitter(Qt.Horizontal)
 
         self._plot_expt = TransformsComparisonPlotWidget(
             'Transforms from experiment', self.controller, parent=self
@@ -633,26 +642,29 @@ class PluginWidget(QWidget):
         self._plot_adj.sourceGateChanged.connect(self._on_adj_gate_changed)
         self._plot_adj.channelChanged.connect(self._on_adj_channel_changed)
 
-        # controls frame - starts blank
+        column_left_widget = QWidget()
+        column_right_widget = QWidget()
+        column_left_layout = QVBoxLayout(column_left_widget)
+        column_right_layout = QVBoxLayout(column_right_widget)
+        column_left_layout.addWidget(self._plot_expt)
+        column_right_layout.addWidget(self._plot_adj)
+        column_left_layout.setAlignment(Qt.AlignTop)
+        column_right_layout.setAlignment(Qt.AlignTop)
+        plot_splitter.addWidget(column_left_widget)
+        plot_splitter.addWidget(column_right_widget)
+        plot_splitter.setSizes([1000, 1000])
+
+        # values and controls frame
+        values_frame = QFrame(self)
         controls_frame = QFrame(self)
-        controls_frame.setObjectName("borderFrame")
-        controls_frame.setStyleSheet("""
-            #borderFrame {
-                border: 2px solid #4A4A4A;
-                border-radius: 8px;
-            }
-        """)
 
-        # row, col, h, w
-        plot_layout.addWidget(self._plot_expt, 0, 0)
-        plot_layout.addWidget(self._plot_adj, 0, 1)
-
-        # controls frame
-        plot_layout.addWidget(controls_frame, 1, 1)
+        column_left_layout.addWidget(values_frame)
+        self.values_layout = QVBoxLayout(values_frame)
+        column_right_layout.addWidget(controls_frame)
         self.controls_layout = QVBoxLayout(controls_frame)
 
         main_layout.addWidget(self.label)
-        main_layout.addLayout(plot_layout)
+        main_layout.addWidget(plot_splitter)
         main_layout.addStretch()
 
         if self.bus:
@@ -683,6 +695,7 @@ class PluginWidget(QWidget):
     def _refresh_ui(self):
         if self.controller.experiment.process.get('unmixing_matrix') is None:
             return
+        # self.controls_layout.addWidget()
 
     def _initialise_comparison_plots(self):
         """
