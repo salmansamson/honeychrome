@@ -186,12 +186,13 @@ class TransformsComparisonPlotWidget(QWidget):
     def resizeEvent(self, event):
         side = min(1.5*cytometry_plot_width_target, self.width())
         self.graphics_widget.setFixedHeight(side)
+        self.graphics_widget.setFixedWidth(side)
         self.graphics_widget.resize(side, side)
         super().resizeEvent(event)
 
     def sizeHint(self):
         # Suggest a square to the layout
-        return QSize(cytometry_plot_width_target, cytometry_plot_width_target)
+        return QSize(1.5*cytometry_plot_width_target, 1.5*cytometry_plot_width_target)
 
     # ------------------------------------------------------------------
     # Public API
