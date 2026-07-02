@@ -94,6 +94,8 @@ class TransformsComparisonPlotWidget(QWidget):
 
         # Local copies of Transform objects (not shared with Unmixed Data tab)
         self._transformations: dict[str, Transform] = {}
+        # Local copy of cutoff
+        self.cutoff = settings.density_cutoff_retrieved
         # Current source gate name
         self._source_gate: str = 'root'
         # Current channel names
@@ -335,7 +337,7 @@ class TransformsComparisonPlotWidget(QWidget):
                 transform_type = 'Default'
                 transform_parameters = {'Transform':transform_type, 'bins':tr.scale_bins}
 
-            transform_parameters.update({'crop scale lower':tr.limits[0], 'crop scale upper':tr.limits[1]})
+            transform_parameters.update({'crop scale lower':tr.limits[0], 'crop scale upper':tr.limits[1], 'density cutoff':self.cutoff})
             for key, value in transform_parameters.items():
                 child = QTreeWidgetItem(parent, [key, str(value)])
                 if self.editable_transforms:
@@ -363,6 +365,10 @@ class TransformsComparisonPlotWidget(QWidget):
                             spin = QDoubleSpinBox()
                             spin.setRange(10000, 10**9)
                             spin.setSingleStep(int(0.1*value+1))
+                        elif key == 'density cutoff':
+                            spin = QSpinBox()
+                            spin.setRange(0, 1000)
+                            spin.setSingleStep(1)
                         else:
                             spin = QDoubleSpinBox()
                             spin.setRange(-10**9, 10**9)
@@ -427,8 +433,7 @@ class TransformsComparisonPlotWidget(QWidget):
             return
 
         # Apply density cutoff (match CytometryPlotWidget: bins below cutoff → 0)
-        cutoff = settings.density_cutoff_retrieved
-        heatmap[heatmap < cutoff] = 0
+        heatmap[heatmap < self.cutoff] = 0
 
         # Rescale border bins to interior max — mirrors calc_hist2d() in functions.py
         # so that edge overflow events don't compress the interior colour range.
@@ -660,8 +665,10 @@ class TransformsComparisonPlotWidget(QWidget):
 
     def adjust_axis_transform(self, channel, parameter, value):
 
-        if parameter in ['crop scale lower', 'crop scale upper']:
-            if parameter == 'crop scale lower':
+        if parameter in ['density cutoff', 'crop scale lower', 'crop scale upper']:
+            if parameter == 'density cutoff':
+                self.cutoff = value
+            elif parameter == 'crop scale lower':
                 self._transformations[channel].limits[0] = value
             else:
                 self._transformations[channel].limits[1] = value
