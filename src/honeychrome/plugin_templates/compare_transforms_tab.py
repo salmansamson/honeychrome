@@ -86,8 +86,6 @@ class TransformsComparisonPlotWidget(QWidget):
     sourceGateChanged = Signal(str)
     # Emitted when either channel is changed, so the sibling plot can mirror it.
     channelChanged = Signal(str, str)   # (channel_x, channel_y)
-    # Emitted when a zoom/scaling is applied on one axis, so the sibling can mirror.
-    scalingChanged = Signal(str, object)  # (axis_name, Transform)
 
     def __init__(self, title: str, controller, parent=None, editable_transforms=False):
         super().__init__(parent)
@@ -186,7 +184,7 @@ class TransformsComparisonPlotWidget(QWidget):
         self.plot_title.leftClickMenuFunction = self._set_source_gate
 
     def resizeEvent(self, event):
-        side = max(cytometry_plot_width_target, self.width())
+        side = min(1.5*cytometry_plot_width_target, self.width())
         self.graphics_widget.setFixedHeight(side)
         self.graphics_widget.resize(side, side)
         super().resizeEvent(event)
@@ -213,11 +211,13 @@ class TransformsComparisonPlotWidget(QWidget):
         self._channel_y = channel_y
         self._source_gate = 'root'
         self._configure_axes()
+        self._construct_transformations_tree()
 
     def set_channels(self, channel_x: str, channel_y: str):
         """Change the displayed channels and reconfigure axes."""
         self._channel_x = channel_x
         self._channel_y = channel_y
+        self._construct_transformations_tree()
         self._configure_axes()
         self._draw()
 
@@ -246,61 +246,6 @@ class TransformsComparisonPlotWidget(QWidget):
                 or self._channel_x not in self._transformations
                 or self._channel_y not in self._transformations):
             return
-
-
-        self.transforms_tree.clear()
-        for channel in [self._channel_x, self._channel_y]:
-            parent = QTreeWidgetItem(self.transforms_tree, [channel])
-            parent.setSizeHint(0, QSize(cell_width, row_height))
-            tr = self._transformations[channel]
-            if tr.id == 0:
-                transform_type = 'Linear'
-                transform_parameters = {'Transform':transform_type, 'linear T':tr.scale_t, 'linear A':tr.linear_a, 'bins':tr.scale_bins}
-            elif tr.id == 1:
-                transform_type = 'Logicle'
-                transform_parameters = {'Transform':transform_type, 'logicle T':tr.scale_t, 'logicle A':tr.logicle_a, 'logicle W':tr.logicle_w, 'logicle M':tr.logicle_m, 'bins':tr.scale_bins}
-            elif tr.id == 2:
-                transform_type = 'Log'
-                transform_parameters = {'Transform':transform_type, 'log T':tr.scale_t, 'log M':tr.log_m, 'bins':tr.scale_bins}
-            else:
-                transform_type = 'Default'
-                transform_parameters = {'Transform':transform_type, 'bins':tr.scale_bins}
-
-            transform_parameters.update({'crop scale lower':tr.limits[0], 'crop scale upper':tr.limits[1]})
-            for key, value in transform_parameters.items():
-                child = QTreeWidgetItem(parent, [key, str(value)])
-                if self.editable_transforms:
-                    if key == 'Transform':
-                        combo = QComboBox()
-                        transform_list = ["Linear", "Logicle", "Log"]
-                        combo.addItems(transform_list)
-                        combo.setCurrentIndex(tr.id)
-                        self.transforms_tree.setItemWidget(child, 1, combo)
-                        combo.currentIndexChanged.connect(lambda index, parent_axis=self.axis_bottom if channel == self._channel_x else self.axis_left: self.set_axis_transform(index, parent_axis))
-                    else:
-                        if key in ['bins']:
-                            spin = QSpinBox()
-                            spin.setRange(10, 1000)
-                            spin.setSingleStep(10)
-                        elif key in ['crop scale lower', 'crop scale upper']:
-                            spin = QDoubleSpinBox()
-                            spin.setRange(0.0, 1.0)
-                            spin.setSingleStep(0.01)
-                        else:
-                            spin = QDoubleSpinBox()
-                            spin.setRange(-10**9, 10**9)
-                            spin.setSingleStep(0.1)
-
-                        spin.setValue(value)
-                        self.transforms_tree.setItemWidget(child, 1, spin)
-                        combo.currentIndexChanged.connect(lambda index, parent_axis=self.axis_bottom if channel == self._channel_x else self.axis_left: self.set_axis_transform(index, parent_axis))
-
-
-
-                child.setSizeHint(0, QSize(cell_width, row_height))
-
-
-        self.transforms_tree.expandAll()
 
         pnn = self.controller.experiment.settings['unmixed'].get('event_channels_pnn', [])
         fl_ids = self.controller.experiment.settings['unmixed'].get('fluorescence_channel_ids', [])
@@ -364,6 +309,78 @@ class TransformsComparisonPlotWidget(QWidget):
         self.plot_title.leftClickMenuFunction = self._set_source_gate
         self.plot_title.leftItemSelected = gate_names.index(self._source_gate)
 
+    def _construct_transformations_tree(self):
+        if (not self._transformations
+                or self._channel_x not in self._transformations
+                or self._channel_y not in self._transformations):
+            return
+
+        ### redraw transforms_tree
+        self.transforms_tree.clear()
+        for channel in [self._channel_x, self._channel_y]:
+            parent = QTreeWidgetItem(self.transforms_tree, [channel])
+            parent.setSizeHint(0, QSize(cell_width, row_height))
+            tr = self._transformations[channel]
+            if tr.id == 0:
+                transform_type = 'Linear'
+                transform_parameters = {'Transform':transform_type, 'linear T':tr.scale_t, 'linear A':tr.linear_a, 'bins':tr.scale_bins}
+            elif tr.id == 1:
+                transform_type = 'Logicle'
+                transform_parameters = {'Transform':transform_type, 'logicle T':tr.scale_t, 'logicle A':tr.logicle_a, 'logicle W':tr.logicle_w, 'logicle M':tr.logicle_m, 'bins':tr.scale_bins}
+            elif tr.id == 2:
+                transform_type = 'Log'
+                transform_parameters = {'Transform':transform_type, 'log T':tr.scale_t, 'log M':tr.log_m, 'bins':tr.scale_bins}
+            else:
+                transform_type = 'Default'
+                transform_parameters = {'Transform':transform_type, 'bins':tr.scale_bins}
+
+            transform_parameters.update({'crop scale lower':tr.limits[0], 'crop scale upper':tr.limits[1]})
+            for key, value in transform_parameters.items():
+                child = QTreeWidgetItem(parent, [key, str(value)])
+                if self.editable_transforms:
+                    if key == 'Transform':
+                        combo = QComboBox()
+                        transform_list = ["Linear", "Logicle", "Log"]
+                        combo.addItems(transform_list)
+                        combo.setCurrentIndex(tr.id)
+                        self.transforms_tree.setItemWidget(child, 1, combo)
+                        combo.currentIndexChanged.connect(lambda index, parent_axis=self.axis_bottom if channel == self._channel_x else self.axis_left: self.set_axis_transform(index, parent_axis))
+                    else:
+                        if key in ['bins']:
+                            spin = QSpinBox()
+                            spin.setRange(10, 1000)
+                            spin.setSingleStep(10)
+                        elif key in ['crop scale lower', 'crop scale upper']:
+                            spin = QDoubleSpinBox()
+                            spin.setRange(0.0, 1.0)
+                            spin.setSingleStep(0.01)
+                        elif key in ['logicle A', 'logicle W', 'logicle M', 'linear A', 'log M']:
+                            spin = QDoubleSpinBox()
+                            spin.setRange(0.0, 10.0)
+                            spin.setSingleStep(0.1)
+                        elif key in ['logicle T', 'linear T', 'log T']:
+                            spin = QDoubleSpinBox()
+                            spin.setRange(10000, 10**9)
+                            spin.setSingleStep(int(0.1*value+1))
+                        else:
+                            spin = QDoubleSpinBox()
+                            spin.setRange(-10**9, 10**9)
+                            spin.setSingleStep(0.1)
+
+                        spin.setValue(value)
+                        self.transforms_tree.setItemWidget(child, 1, spin)
+                        spin.valueChanged.connect(
+                            lambda val, ch=channel, parameter=key:
+                            self.adjust_axis_transform(ch, parameter, val)
+                        )
+
+
+
+                child.setSizeHint(0, QSize(cell_width, row_height))
+
+        self.transforms_tree.expandAll()
+
+
     # ------------------------------------------------------------------
     # Internal: drawing
     # ------------------------------------------------------------------
@@ -405,7 +422,7 @@ class TransformsComparisonPlotWidget(QWidget):
                 bins=[tr_x.scale, tr_y.scale],
             )
         except Exception as e:
-            logger.error(f'AfComparisonPlotWidget._draw histogram failed: {e}')
+            logger.error(f'TransformComparisonPlotWidget._draw histogram failed: {e}')
             return
 
         # Apply density cutoff (match CytometryPlotWidget: bins below cutoff → 0)
@@ -600,8 +617,8 @@ class TransformsComparisonPlotWidget(QWidget):
         axis.zoomZero = tr.zero
         axis.setTicks(tr.ticks())
         self._draw()
+        self._construct_transformations_tree()
         self._configure_axes()
-        self.scalingChanged.emit(axis_name, tr)
 
     # ------------------------------------------------------------------
     # Slot: channel changed via label click
@@ -613,6 +630,7 @@ class TransformsComparisonPlotWidget(QWidget):
         fl_names = [pnn[i] for i in fl_ids] if pnn and fl_ids else []
         if 0 <= n < len(fl_names):
             self._channel_x = fl_names[n]
+            self._construct_transformations_tree()
             self._configure_axes()
             self._draw()
             self.channelChanged.emit(self._channel_x, self._channel_y)
@@ -623,6 +641,7 @@ class TransformsComparisonPlotWidget(QWidget):
         fl_names = [pnn[i] for i in fl_ids] if pnn and fl_ids else []
         if 0 <= n < len(fl_names):
             self._channel_y = fl_names[n]
+            self._construct_transformations_tree()
             self._configure_axes()
             self._draw()
             self.channelChanged.emit(self._channel_x, self._channel_y)
@@ -634,9 +653,39 @@ class TransformsComparisonPlotWidget(QWidget):
             channel = self._channel_y
 
         self._transformations[channel].set_transform(id=n)
+        self._construct_transformations_tree()
+        self._configure_axes()
+        self._draw()
 
-        self.channelChanged.emit(self._channel_x, self._channel_y)
+    def adjust_axis_transform(self, channel, parameter, value):
 
+        if parameter in ['crop scale lower', 'crop scale upper']:
+            if parameter == 'crop scale lower':
+                self._transformations[channel].limits[0] = value
+            else:
+                self._transformations[channel].limits[1] = value
+        else:
+            if parameter in ['linear T', 'logicle T', 'log T']:
+                attr = 'scale_t'
+            elif parameter == 'linear A':
+                attr = 'linear_a'
+            elif parameter == 'logicle A':
+                attr = 'logicle_a'
+            elif parameter == 'logicle W':
+                attr = 'logicle_w'
+            elif parameter == 'logicle M':
+                attr = 'logicle_m'
+            elif parameter == 'log M':
+                attr = 'log_m'
+            elif parameter == 'bins':
+                attr = 'scale_bins'
+            else:
+                return
+            setattr(self._transformations[channel], attr, value)
+
+        self._transformations[channel].set_transform()
+        self._configure_axes()
+        self._draw()
 
     def _set_source_gate(self, n, _parent):
         gate_names = self.plot_title.leftClickMenuItems
