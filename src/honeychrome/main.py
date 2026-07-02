@@ -11,6 +11,7 @@ from pathlib import Path
 import platform
 import shutil
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 import multiprocessing as mp
@@ -257,6 +258,7 @@ def main():
     '''
     start application and view
     '''
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts, True)
     app = QApplication(sys.argv)
 
     if sys.platform == 'win32':
