@@ -918,7 +918,7 @@ def calc_hist2d(event_data, mask, id_channel_x, id_channel_y, transform_x, trans
 
     # make sure all unit bins get lowest LUT
     global_max_value = heatmap.max()
-    inside_max_value = heatmap[1:-1,1:-1].max()
+    inside_max_value = heatmap[1:-1,1:-1].max()#
 
     if inside_max_value < global_max_value:
         # heatmap[0,:] *= inside_max_value
