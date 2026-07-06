@@ -67,7 +67,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = []
+dev = [
+    'pytest>=8',
+    'pytest-qt>=4.4',
+]
 
 [project.scripts]
 honeychrome = "honeychrome.__main__:main"
@@ -93,7 +96,9 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+qt_api = "pyside6"
 markers = [
     "numpy_only: fast pure-numpy tests, no FCS files required",
     "controller: controller-level tests requiring an experiment on disk",
+    "ui: GUI tests driven through pytest-qt",
 ]

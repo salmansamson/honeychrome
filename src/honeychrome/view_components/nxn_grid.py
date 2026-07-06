@@ -88,6 +88,9 @@ class HeatmapGridModel(QAbstractTableModel):
             r = index.row()
             c = index.column()
 
+            if r >= len(self.vertical_headers) or c >= len(self.horizontal_headers):
+                return None
+
             return ("Spillover:\n"
                     f"{self.vertical_headers[r]} --- {self.horizontal_headers[c]}: {self.controller.experiment.process['spillover'][r][c]:0.3f}\n"
                     f"{self.horizontal_headers[c]} --- {self.vertical_headers[r]}: {self.controller.experiment.process['spillover'][c][r]:0.3f}\n"
@@ -501,6 +504,9 @@ class NxNGrid(QFrame):
     @Slot(QModelIndex, QModelIndex)
     def selected_cell_changed(self, current, previous):
         if current.isValid():
+            if current.row() >= len(self.vertical_headers) or current.column() >= len(self.horizontal_headers):
+                return
+
             row_chan = self.vertical_headers[current.row()]
             col_chan = self.horizontal_headers[current.column()]
             self.bus.spilloverSelectedCellChanged.emit(row_chan, col_chan)
