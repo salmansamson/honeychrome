@@ -403,6 +403,10 @@ class StatisticsPlotWidget(QWidget):
 
         # Clean appearance for publication-like aesthetics
         sns.set_theme(style="whitegrid", font_scale=1.2)
+        import matplotlib as mpl
+        mpl.rcParams['font.sans-serif'] = ['DejaVu Sans'] + [
+            f for f in mpl.rcParams['font.sans-serif'] if f != 'DejaVu Sans'
+        ]
 
 
         if self.statistics_comparison['data']:

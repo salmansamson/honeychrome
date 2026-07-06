@@ -43,6 +43,10 @@ class ExportablePlotWidget(QWidget):
         # Clean appearance for publication-like aesthetics
         import seaborn as sns
         sns.set_theme(style="whitegrid", font_scale=1.2)
+        import matplotlib as mpl
+        mpl.rcParams['font.sans-serif'] = ['DejaVu Sans'] + [
+            f for f in mpl.rcParams['font.sans-serif'] if f != 'DejaVu Sans'
+        ]
 
         self.canvas.draw()
 
