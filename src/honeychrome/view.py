@@ -175,7 +175,7 @@ class View(QObject):
         <html>
         <body>
         <h3>Honeychrome<sup>TM</sup> is part of the Cytkit<sup>TM</sup> project</h3>
-        <p>Version {__version__} (beta)</p>
+        <p>Version {__version__}</p>
         <p>This software is licensed as open source under the GNU Public License V2.0</p>
         
         <p>
