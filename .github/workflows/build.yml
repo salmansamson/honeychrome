@@ -61,6 +61,13 @@ jobs:
 
       - name: Build macOS
         if: startsWith(matrix.os, 'macos')
+        env:
+          APPLE_CERT_BASE64: ${{ secrets.APPLE_CERT_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          HONEYCHROME_OPENMP: "1"
         run: |
           echo "$APPLE_CERT_BASE64" | base64 --decode > cert.p12
           security create-keychain -p "" build.keychain
@@ -69,6 +76,9 @@ jobs:
           security list-keychains -d user -s build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "" build.keychain
+
+          brew install libomp
+          python src/honeychrome/controller_components/build_af_kernel.py
 
           make build
           brew install create-dmg
@@ -79,27 +89,28 @@ jobs:
           echo "--- Contents of dist/honeychrome.app/Contents/ ---"
           ls -R dist/honeychrome.app/Contents/
           ./create_dmg_mac.sh
-        env:
-          APPLE_CERT_BASE64: ${{ secrets.APPLE_CERT_BASE64 }}
-          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Build Windows
-        if: matrix.os == 'windows-2022'
-        run: |
-          python build.py
-          # You can run your Inno Setup script here. 
-          # GitHub Windows runners have 'ISCC' (Inno Setup Compiler) pre-installed.
-          ISCC honeychrome.iss
-
-      # Adds Windows SDK tools (like MakeAppx.exe) to the environment path
+      # Adds cl.exe, MakeAppx.exe, and MSVC linker to PATH
       - name: Set up Windows SDK Tools
         if: matrix.os == 'windows-2022'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
+
+      - name: Build AF C kernel (Windows)
+        if: matrix.os == 'windows-2022'
+        shell: cmd
+        env:
+          HONEYCHROME_OPENMP: "1"
+        run: |
+          python src/honeychrome/controller_components/build_af_kernel.py
+
+      - name: Build Windows
+        if: matrix.os == 'windows-2022'
+        shell: cmd
+        run: |
+          python build.py
+          ISCC honeychrome.iss
 
       # Prepares the frozen directory with the required AppxManifest and Assets
       - name: Prepare and Package MSIX
