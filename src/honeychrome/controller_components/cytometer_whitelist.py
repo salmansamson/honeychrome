@@ -58,7 +58,7 @@ _CYTOMETER_PARAMS: dict[str, _CytParams] = {
         db_col          = "Aurora",
         scatter_param = ["FSC-A", "SSC-A"],
         sat_value = 4194304,
-        scatter_extra_pat = ["SSC-B-A"],
+        scatter_extra_pat = ["SSC-B"],
         singlet_y_preference = "FSC-H",
     ),
 
@@ -71,7 +71,7 @@ _CYTOMETER_PARAMS: dict[str, _CytParams] = {
         db_col          = "NorthernLights",
         scatter_param = ["FSC-A", "SSC-A"],
         sat_value = 4194304,
-        scatter_extra_pat = ["SSC-B-A"],
+        scatter_extra_pat = ["SSC-B"],
         singlet_y_preference = "FSC-H",
     ),
 

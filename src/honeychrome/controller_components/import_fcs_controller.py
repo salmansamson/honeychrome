@@ -183,7 +183,7 @@ class ImportFCSController(QObject):
                         # so detectors like SSC_1-4 or VSSC1-Width get misclassified as
                         # fluorescence. Derive fluorescence channels by name pattern
                         # instead, matching the convention used for recognised cytometers.
-                        _non_fluor_pat = re.compile(r'FSC|SSC|Time|Width|-H$|-W$', re.IGNORECASE)
+                        _non_fluor_pat = re.compile(r'FSC|SSC|Time|Width', re.IGNORECASE)
                         fluorescence_channel_ids = [
                             i for i, ch in enumerate(representative_pnn)
                             if ch in _whitelisted_set and not _non_fluor_pat.search(ch)

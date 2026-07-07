@@ -55,7 +55,21 @@ class StatisticsCalculator(QObject):
 
                 full_sample_path = str(self.controller.experiment_dir / samples_to_calculate[n])
                 sample = sample_from_fcs(full_sample_path)
-                raw_event_data = sample.get_events(source='raw')
+                whitelisted_pnn = self.controller.experiment.settings['raw'].get('whitelisted_pnn')
+                try:
+                    raw_event_data = sample.get_events(source='raw', col_order=whitelisted_pnn)
+                except (KeyError, ValueError) as e:
+                    logger.warning(
+                        'StatisticsCalculator: col_order get_events failed (%s) for %s — '
+                        'skipping sample (channels do not match experiment whitelist)',
+                        e, full_sample_path,
+                    )
+                    if self.bus:
+                        self.bus.warningMessage.emit(
+                            f'Skipped "{sample_name}" when calculating statistics: '
+                            f'its channels do not match the experiment whitelist ({e}).'
+                        )
+                    continue
                 n_events = sample.event_count
 
                 data_by_sample[samples_to_calculate[n]] = {'Sample': sample_name, 'Group': group_name, 'Category': category_name, 'Statistics': {}}

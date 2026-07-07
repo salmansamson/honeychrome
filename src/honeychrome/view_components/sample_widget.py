@@ -13,7 +13,6 @@ from honeychrome.controller_components.exporter import ReportGenerator
 from honeychrome.controller_components.functions import get_all_subfolders_recursive
 from honeychrome.controller_components.unmixed_exporter import UnmixedExporter
 from honeychrome.view_components.batch_export_samples_modal import BatchExportSamplesModal
-from honeychrome.view_components.busy_cursor import with_busy_cursor
 from honeychrome.view_components.icon_loader import icon as load_icon, icon
 from honeychrome.view_components.new_sample_modal import NewSampleModal
 
@@ -486,14 +485,11 @@ class SampleWidget(QWidget):
         self.refresh_sample_tree()
 
     def generate_report(self):
-        self.thread = QThread()
+        # export() creates/renders real QWidgets (plots, heatmaps, NxN grid) to
+        # build the report images, so it must run on the main GUI thread — do not
+        # move ReportGenerator to a QThread here.
         self.report_generator = ReportGenerator(self.bus, self.controller)
-        self.report_generator.moveToThread(self.thread)
-        self.thread.started.connect(self.report_generator.export)
-        self.report_generator.finished.connect(self.thread.quit)
-        self.report_generator.finished.connect(self.report_generator.deleteLater)
-        self.thread.finished.connect(self.thread.deleteLater)
-        self.thread.start()
+        self.report_generator.export()
 
     def rename_item(self, path):
         sample_path = self.controller.experiment_dir / path

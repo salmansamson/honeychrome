@@ -572,6 +572,11 @@ class SpectralControlsEditor(QFrame):
             self.fluorescence_channel_filter_combo.setToolTip('Ignoring height channels in spectral model')
         logger.info(f'SpectralModelEditor: set fluorescence channel filter to {self.controller.experiment.process['fluorescence_channel_filter']}')
 
+        # Refresh filtered channel state so -H/-W channels become
+        # addable/removable immediately, matching auto_conventional().
+        self.controller.filter_raw_fluorescence_channels()
+        self.update_fluorescence_channels_pnn()
+
         if self.bus:
             self.bus.spectralModelUpdated.emit()
             self.bus.showSelectedProfiles.emit(None)
