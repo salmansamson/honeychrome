@@ -62,10 +62,11 @@ void joint_cov_l1_argmin(
     int n_af
 )
 {
+    int b;
     #ifdef _OPENMP
     #pragma omp parallel for schedule(static)
     #endif
-    for (int b = 0; b < B; b++) {
+    for (b = 0; b < B; b++) {
         const double bef = base_e_fluor[b];
         const double ber = base_e_resid[b];
         double min_score = 1e300;
