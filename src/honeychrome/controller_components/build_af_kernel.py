@@ -62,7 +62,7 @@ if sys.platform == 'win32':
         extra_compile_args.append('/openmp')
 else:
     libraries = ['m']
-    extra_compile_args = ['-O3', '-march=native', '-ffast-math']
+    extra_compile_args = ['-O3', '-ffast-math']
     extra_link_args = []
     if use_openmp:
         if sys.platform == 'darwin':
