@@ -144,10 +144,9 @@ autospectral_cleaning_help_text = '''
 <li><b>Set up the basic scatter gates in the Raw Data tab:</b> for ease of use, set broad gates that capture all events of interest, including large and small cells but not doublets. The cleaning pipeline will automatically select the relevant events for each control based on the positive gate and particle type.</li>
 <li><b>Run "Auto generate spectral controls":</b> do this in the Spectral Model Editor to set up the single stained controls, if you haven't already. This will add positive and negative gates to the raw gating for each control.</li>
 <li><b>Ensure that "Particle type" is set correctly for each control:</b> this determines the scatter-matching process. If particle type is incorrect, the cleaning will not work well.</li>
-<li><b>For best results, switch to "Unstained Negative" profiles:</b> these provide a more accurate negative reference for the spectral profiles than the default internal negatives.</li>
+<li><b>For best results, use "Unstained Negative" profiles (instead of "Internal Negatives":</b> these provide a more accurate negative reference for the spectral profiles than the default internal negatives.</li>
 <li><b>Assign unstained negatives:</b> Ensure each cell control has an "Unstained Negative" assigned in the table. Right-click a sample in the Sample panel and select "Mark as Unstained" to make it available as a negative reference.</li>
 <li><b>Optional: Adjust the positive and negative gates:</b> By default, the positive gate is set to the brightest 5% of events and the negative gate to the dimmest 25% of events (percentages are configurable in Application Configuration). If these gates do not capture the positive and negative populations well, adjust them by moving the gate boundaries. The gates will be updated in the Spectral Model Editor and used for cleaning.</li>
-<li><b>Tick "Exclude noise" if needed:</b> For controls where intrusive autofluorescence is expected (e.g. tissue-derived or highly autofluorescent cell types), tick the "Exclude noise" checkbox for that control <em>before</em> running Clean Controls. This step must be done first — it cannot be applied retrospectively without re-running the pipeline.</li>
 <li><b>Run "Clean Controls":</b> Click the "Clean Controls" button. The pipeline will run for all eligible cell controls (those with an unstained negative assigned). Steps performed per control:
   <ul>
     <li>Saturation exclusion — removes detector-saturated events.</li>
@@ -155,7 +154,7 @@ autospectral_cleaning_help_text = '''
     <li>Noise exclusion (if ticked) — identifies and removes intrusive autofluorescent events from the positive control using PCA on the matched unstained.</li>
   </ul>
 </li>
-<li><b>Inspect diagnostic plots:</b> After cleaning, use the scatter-matching and noise exclusion diagnostic plots (visible below when cleaning is active and relevant box ticked) to verify that the cleaning has worked as expected.</li>
+<li><b>Inspect diagnostic plots:</b> After cleaning, use the scatter-matching and spectral QC diagnostic plots (visible below when cleaning is active and relevant box ticked) to verify that the cleaning has worked as expected.</li>
 <li><b>If unsatisfied:</b> adjust the options and re-run or untick the "Use Cleaned" checkbox to revert to the original profiles for that control.</li>
 <li><b>Use Cleaned profiles:</b> Once cleaning is complete, each eligible control will show a "Use Cleaned" checkbox. This is ticked by default and the shown profiles will be the cleaned ones. Uncheck to revert to the standard gate-mean method for a specific control. Hit "Recalculate" to update the spectral model.</li>
 <li><b>Recalculate:</b> The spectral model is automatically recalculated after cleaning. If you change any cleaning settings, click "Clean controls" again to update. Only controls with updated settings will be updated.</li>
