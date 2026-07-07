@@ -1,10 +1,13 @@
 Honeychrome v0.8.3 Release Notes
 
+We have switched Honeychrome to the LGPL (from GPL) license. As more people download, try it out, and tell us of their interests in contributing to the code and using it for various purposes, we think it's a good time to make this change.
+
 New features:
 * Improved and faster AutoSpectral workflow
+* Improved deterination of major (peak) channels in spectral process
 
 Bug fixes:
-* Compatibility with spectral and conventional cytometers
+* Improved compatibility with spectral and conventional cytometers, in particular the FACSDiscover
 
 Additionally the previous v0.8.x Release Notes:
 
