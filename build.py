@@ -27,9 +27,9 @@ def get_project_files():
     assets_path_destination = os.path.join('honeychrome', 'view_components', 'assets')
     assets.append((assets_path, assets_path_destination))
 
-    templates_path = os.path.join('src', 'honeychrome', 'plugin_templates')
-    templates_dest = os.path.join('honeychrome', 'plugin_templates')
-    assets.append((templates_path, templates_dest))
+    bundled_plugins_path = os.path.join('src', 'honeychrome', 'bundled_plugins')
+    bundled_plugins_dest = os.path.join('honeychrome', 'bundled_plugins')
+    assets.append((bundled_plugins_path, bundled_plugins_dest))
 
     label_data_path = os.path.join(project_root, 'src', 'honeychrome', 'data')
     label_data_destination = os.path.join('honeychrome', 'data')
@@ -103,10 +103,17 @@ def main():
                         'numpy.fft._pocketfft_internal',
                         'pytz',
                         'scipy.special.cython_special',
+                        'pyqtgraph.opengl',
                         ]
 
     for imp in essential_hidden:
         args.append(f'--hidden-import={imp}')
+
+    # OpenGL uses ctypes-based dynamic platform loading (OpenGL.platform.*)
+    # that PyInstaller's static analysis can't see — collect everything since
+    # plot_3d_tab.py is only ever loaded dynamically at runtime, never
+    # statically imported from main.py.
+    args.append('--collect-all=OpenGL')
 
     # Exclude heavy packages
     # heavy_packages = ['IPython', 'jedi', 'parso', 'bokeh', 'sklearn', 'matplotlib', 'pyqtgraph', 'scipy.sparse', 'scipy.optimize', 'scipy.special', 'scipy.linalg', 'scipy.stats', 'lxml', 'jinja2', 'docx', 'pytest', 'pandas.plotting', 'tkinter', '_tkinter', 'PIL', 'pyarrow', 'urllib3', 'certifi', ]

@@ -12,29 +12,54 @@ settings = QSettings("honeychrome", "app_configuration")
 
 meipass = getattr(sys, '_MEIPASS', None)
 
+# Bundled/approved plugins — shipped inside the app itself, loaded directly
+# from here in both dev and frozen builds. Never copied into the
+# user-writable plugins_path above.
+if meipass:
+    BUNDLED_PLUGIN_DIR = Path(meipass) / "honeychrome" / "bundled_plugins"
+else:
+    BUNDLED_PLUGIN_DIR = Path(__file__).resolve().parent.parent / "bundled_plugins"
+bundled_plugins_path = Path(BUNDLED_PLUGIN_DIR)
+
 def load_plugin_modules():
     """Import and execute plugin modules only — no Qt widget creation.
     Safe to call from a background thread."""
     loaded_modules = {}
+
+    # Bundled/approved plugins: available in both the frozen app and source
+    # runs, sourced only from bundled_plugins_path — never from the
+    # user-writable Experiments/plugins folder.
+    for file_path in bundled_plugins_path.glob("*_tab.py"):
+        if settings.value(f"EnableBundledPlugin_{file_path.stem}", False, type=bool):
+            module_name = f"bundled_plugins.{file_path.stem}"
+            spec = importlib.util.spec_from_file_location(module_name, file_path)
+            if spec and spec.loader:
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module
+                spec.loader.exec_module(module)
+                if hasattr(module, '_bootstrap'):
+                    module._bootstrap()
+                print(f"Successfully loaded bundled plugin module: {module_name}")
+                loaded_modules[module_name] = module
+
+    # Arbitrary user-added plugins: the open plugin ecosystem. Deliberately
+    # source/dev-only — these are unreviewed files a user can drop into
+    # ~/Experiments/plugins/, and we are not executing unreviewed third-party
+    # code inside the distributed executable. Unchanged from current behaviour.
     if not meipass:
-        # Iterate over all *_tab.py files in the directory
         for file_path in plugins_path.glob("*_tab.py"):
             if settings.value(f"EnablePlugin_{file_path}", False, type=bool):
-                # 1. Create a module name
                 module_name = f"{plugins_path.name}.{file_path.stem}"
-                # 2. Create a module spec from the file location
                 spec = importlib.util.spec_from_file_location(module_name, file_path)
                 if spec and spec.loader:
-                    # 3. Create a new module based on the spec
                     module = importlib.util.module_from_spec(spec)
-                    # 4. Add to sys.modules so it behaves like a normal import
                     sys.modules[module_name] = module
-                    # 5. Execute the module to actually load its code
                     spec.loader.exec_module(module)
                     if hasattr(module, '_bootstrap'):
                         module._bootstrap()
                     print(f"Successfully loaded plugin module: {module_name}")
                     loaded_modules[module_name] = module
+
     return loaded_modules
 
 

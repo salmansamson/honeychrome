@@ -29,6 +29,14 @@ plugins_path = Path(PLUGIN_DIR)
 # Plugin enable checkboxes only if run in full python environment
 meipass = getattr(sys, '_MEIPASS', None)
 
+# Bundled/approved plugins — always available, dev and frozen. Mirrors the
+# resolution in plugin_loaders.py.
+if meipass:
+    BUNDLED_PLUGIN_DIR = Path(meipass) / "honeychrome" / "bundled_plugins"
+else:
+    BUNDLED_PLUGIN_DIR = Path(__file__).resolve().parent.parent / "bundled_plugins"
+bundled_plugins_path = Path(BUNDLED_PLUGIN_DIR)
+
 def path_to_folder_name_readable(original_path):
     # 1. Convert to string and resolve
     path_str = str(Path(original_path).resolve())
@@ -223,14 +231,20 @@ class AppConfigDialog(QDialog):
         form.addRow("Include unmixed data in sample report", self.report_include_unmixed_cb)
         form.addRow("Include spectral process in sample report", self.report_include_process_cb)
 
-        # Plugin enable checkboxes only if run in full python environment
+        # Bundled/approved plugins — always shown, dev and frozen
+        self.enable_bundled_plugin = {}
+        for file_path in bundled_plugins_path.glob("*_tab.py"):
+            self.enable_bundled_plugin[file_path] = QCheckBox(f"Enable {file_path.stem}")
+            form.addRow("Bundled plugin", self.enable_bundled_plugin[file_path])
+
+        # Arbitrary user-added plugins — full Python (dev) environment only
         if not meipass:
             self.enable_plugin = {}
             for file_path in plugins_path.glob("*_tab.py"):
                 self.enable_plugin[file_path] = QCheckBox(f"Enable {file_path.stem}")
                 form.addRow(f"Tabbed plugin", self.enable_plugin[file_path])
         else:
-            form.addRow(QLabel("Note: plugins not available. (Run Honeychrome in full Python environment to use plugins.)"))
+            form.addRow(QLabel("Note: custom user plugins require running Honeychrome in a full Python environment. Bundled plugins above are still available."))
 
 
         frame = QFrame(self)
@@ -321,9 +335,12 @@ class AppConfigDialog(QDialog):
 
         self.send_debug_data.setChecked(self.settings.value("send_debug_data", send_debug_data, type=bool))
 
+        for file_path in bundled_plugins_path.glob("*_tab.py"):
+            self.enable_bundled_plugin[file_path].setChecked(self.settings.value(f"EnableBundledPlugin_{file_path.stem}", False, type=bool))
+
         if not meipass:
             for file_path in plugins_path.glob("*_tab.py"):
-                self.enable_plugin[file_path].setChecked(self.settings.value(f"EnablePlugin_{file_path}", False, type=bool))\
+                self.enable_plugin[file_path].setChecked(self.settings.value(f"EnablePlugin_{file_path}", False, type=bool))
 
     def save_settings(self):
         self.settings.setValue("hist2dtype", self.hist2dtype_combo.currentText())
@@ -344,6 +361,9 @@ class AppConfigDialog(QDialog):
         self.settings.setValue("report_include_unmixed", self.report_include_unmixed_cb.isChecked())
         self.settings.setValue("report_include_process", self.report_include_process_cb.isChecked())
         self.settings.setValue("send_debug_data", self.send_debug_data.isChecked())
+
+        for file_path in bundled_plugins_path.glob("*_tab.py"):
+            self.settings.setValue(f"EnableBundledPlugin_{file_path.stem}", self.enable_bundled_plugin[file_path].isChecked())
 
         if not meipass:
             for file_path in plugins_path.glob("*_tab.py"):
@@ -382,6 +402,9 @@ class AppConfigDialog(QDialog):
         self.report_include_unmixed_cb.setChecked(report_include_unmixed)
         self.report_include_process_cb.setChecked(report_include_process)
         self.send_debug_data.setChecked(send_debug_data)
+
+        for file_path in bundled_plugins_path.glob("*_tab.py"):
+            self.enable_bundled_plugin[file_path].setChecked(False)
 
         if not meipass:
             for file_path in plugins_path.glob("*_tab.py"):
