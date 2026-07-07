@@ -50,7 +50,7 @@ You may now click "Clean Controls". The AutoSpectal cleaning pipeline will autom
 - Scatter matching (selection of the best-matching negative cells)
 - Noise removal (subtraction of matching autofluorescence per control event)
 
-![show_autospectral_cleaning.png](/assets/show_autospectral_cleaning.png)
+![show_autospectral_cleaning2.png](/assets/show_autospectral_cleaning2.png)
 
 ### Show peak channel event histograms
 There is now a checkbox below the spectral model table, "Show peak channel event histograms". Enable this and click on a line of the spectral model table to see the events selected for both positive and negative controls after control cleaning, against all events in that sample.
@@ -63,13 +63,13 @@ You can adjust the gating here before re-running control cleaning.
 
 A further checkbox "Show scatter-matching plots" is shown. These show the unstained cells that best match the positive cells on the morphology plot, and are therefore the best choice to use for negatives of that profile.
 
-![show_scatter_matching_diagnostics.png](/assets/show_scatter_matching_diagnostics.png)
+![show_scatter_matching_diagnostics2.png](/assets/show_scatter_matching_diagnostics2.png)
 
-### Noise Exclusion Diagnostics
+### Spectral QC
 
-A further checkbox "Show noise exclusion plots" is shown, which is enabled only for controls for which exclude noise has been enabled (see above). The scatter plots show excluded events among both the negative and positive events for that control. 
+A further checkbox "Spectral QC" is shown, which . 
 
-![show_noise_exclusion_diagnostics.png](/assets/show_noise_exclusion_diagnostics.png)
+![spectral_qc.png](/assets/spectral_qc.png)
 
 ## How to perform AutoSpectral AF (per-cell autofluorescence extraction)
 
