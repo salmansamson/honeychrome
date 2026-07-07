@@ -567,8 +567,12 @@ def get_af_spectra(
         Quantile of post-correction fluorophore L2 norm used to define
         "problem cells" for the refine stage.  Default 0.99 (top 1%).
     contaminant_threshold : float
-        Cosine similarity to a fluorophore above which an AF spectrum is
-        considered contamination and removed.  Default 0.99.
+        Used twice: (1) per-event pre-clustering filter — events in the
+        mean-background-subtracted unstained sample whose cosine similarity
+        to any fluorophore spectrum meets or exceeds this value are dropped
+        before clustering; (2) post-clustering QC — cosine similarity to a
+        fluorophore above which a resulting AF spectrum is considered
+        contamination and removed.  Default 0.99.
 
     Returns
     -------
@@ -598,13 +602,18 @@ def get_af_spectra(
     P = np.linalg.solve(fluor_spectra @ fluor_spectra.T, fluor_spectra)
     unmixed_no_af = unstained_raw @ P.T   # (n_cells, n_fluors)
 
-    # Per-event contaminant filter before clustering
-    keep = _filter_contaminant_events(unstained_raw, fluor_spectra, contaminant_threshold)
+    # Per-event contaminant filter before clustering.
+    # Subtract mean background first so the cosine-similarity check targets
+    # contamination spikes rather than the baseline AF shape itself.
+    sample_mean = unstained_raw.mean(axis=0)
+    unstained_orth = unstained_raw - sample_mean[np.newaxis, :]
+    keep = _filter_contaminant_events(unstained_orth, fluor_spectra, contaminant_threshold)
     n_removed = int((~keep).sum())
     if n_removed > 0:
         logger.info(
             f'get_af_spectra: removed {n_removed} event(s) prior to clustering '
-            f'(cosine similarity >= {contaminant_threshold} to a fluorophore spectrum)'
+            f'(cosine similarity >= {contaminant_threshold} to a fluorophore spectrum '
+            f'on background-subtracted data)'
         )
     unstained_raw_cl = unstained_raw[keep]
     unmixed_no_af_cl = unmixed_no_af[keep]
