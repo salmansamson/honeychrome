@@ -368,8 +368,7 @@ class ProfileUpdater:
                                 f'Run Control Cleaning to fix this.'
                             )
                             warnings.warn(profile_warning)
-                            if self.bus:
-                                self.bus.warningMessage.emit(profile_warning)
+                            self.negative_profile_warnings.append(control['label'])
                             abs_max = np.abs(profile).max()
                             profile = np.abs(profile) / abs_max if abs_max > 0 else positive_profile
 
@@ -453,6 +452,8 @@ class SpectralAutoGenerator(QObject):
         self.unstained_negative = None
         self.unstained_negative_events = None          # cells unstained raw events
         self.unstained_negative_events_beads = None    # beads unstained raw events
+        self.negative_profile_warnings = []            # labels; shown once at end of run()
+        self.insufficient_events_warnings = []         # tubenames; shown once at end of run()
 
         self.progress_target = len(self.samples['single_stain_controls'])
         # self.progress_target = len(self.samples['single_stain_controls'][:5]) # quick test
@@ -491,6 +492,27 @@ class SpectralAutoGenerator(QObject):
 
         logger.info('SpectralAutoGenerator: regenerated spectral model and raw gating hierarchy:')
         logger.info(self.raw_gating.get_gate_hierarchy(output='json'))
+
+        if self.bus and self.negative_profile_warnings:
+            labels = ', '.join(f'"{label}"' for label in self.negative_profile_warnings)
+            combined_warning = (
+                f'The following control(s) have a negative profile — the negative gate '
+                f'has higher mean fluorescence than the positive: {labels}.\n\n'
+                f'These controls have been added but will not unmix correctly. '
+                f'Run Control Cleaning to fix this.'
+            )
+            self.bus.warningMessage.emit(combined_warning)
+
+        if self.bus and self.insufficient_events_warnings:
+            tubenames = ', '.join(f'"{name}"' for name in self.insufficient_events_warnings)
+            combined_insufficient = (
+                f'The following sample(s) have fewer than two events in the '
+                f'"{self.base_gate_label}" base gate, so a spectral control could not be '
+                f'defined for them: {tubenames}.\n\n'
+                f'Adjust the "{self.base_gate_label}" gate to make sure the relevant events '
+                f'for all your single stain control samples are within it.'
+            )
+            self.bus.warningMessage.emit(combined_insufficient)
 
         if self.bus:
             self.bus.progress.emit(self.progress_target, self.progress_target)
@@ -674,12 +696,7 @@ class SpectralAutoGenerator(QObject):
 
                         if len(pos_events_all) < 2:
                             warnings.warn(f'Control sample has less than two events in base gate {self.base_gate_label}: cannot define spectral control')
-                            if self.bus:
-                                self.bus.warningMessage.emit(
-                                    f'{sample_path} has less than two events in "{self.base_gate_label}" gate: cannot define spectral control.\n\n'
-                                    f'The spectral auto generator is using "{self.base_gate_label}" as a base gate '
-                                    f'within your raw data. Adjust this gate to make sure the relevant events for '
-                                    f'all your single stain control samples are within it.')
+                            self.insufficient_events_warnings.append(tubename)
                             return False
 
                         # Determine AF reference for orthogonalisation:
@@ -856,8 +873,7 @@ class SpectralAutoGenerator(QObject):
                             f'Run Control Cleaning to fix this.'
                         )
                         warnings.warn(profile_warning)
-                        if self.bus:
-                            self.bus.warningMessage.emit(profile_warning)
+                        self.negative_profile_warnings.append(control['label'])
                         abs_max = np.abs(profile).max()
                         profile = np.abs(profile) / abs_max if abs_max > 0 else positive_profile
 
