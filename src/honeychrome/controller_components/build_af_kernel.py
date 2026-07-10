@@ -27,7 +27,6 @@ import sys
 import cffi
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
 ffi = cffi.FFI()
 
 ffi.cdef("""
@@ -55,26 +54,29 @@ use_openmp = os.environ.get('HONEYCHROME_OPENMP', '').strip() not in ('', '0', '
 if sys.platform.startswith('linux') and 'HONEYCHROME_OPENMP' not in os.environ:
     use_openmp = True
 
-extra_compile_args = ['-O3', '-march=native', '-ffast-math']
-extra_link_args    = []
-libraries          = ['m']
-
-if use_openmp:
-    if sys.platform == 'darwin':
-        # Homebrew libomp path (arm64 and x86_64)
-        brew_prefix = os.popen('brew --prefix libomp 2>/dev/null').read().strip()
-        if brew_prefix:
-            extra_compile_args += ['-Xpreprocessor', '-fopenmp',
-                                   f'-I{brew_prefix}/include']
-            extra_link_args    += [f'-L{brew_prefix}/lib', '-lomp']
-            print(f'[build] macOS OpenMP via libomp at {brew_prefix}')
-        else:
-            print('[build] WARNING: HONEYCHROME_OPENMP set but brew libomp not found. '
-                  'Building single-threaded.')
-            use_openmp = False
-    else:
-        extra_compile_args.append('-fopenmp')
-        extra_link_args.append('-fopenmp')
+if sys.platform == 'win32':
+    libraries = []
+    extra_compile_args = ['/O2', '/fp:fast']
+    extra_link_args = []
+    if use_openmp:
+        extra_compile_args.append('/openmp')
+else:
+    libraries = ['m']
+    extra_compile_args = ['-O3', '-ffast-math']
+    extra_link_args = []
+    if use_openmp:
+        if sys.platform == 'darwin':
+            brew_prefix = os.popen('brew --prefix libomp 2>/dev/null').read().strip()
+            if brew_prefix:
+                extra_compile_args += ['-Xpreprocessor', '-fopenmp', f'-I{brew_prefix}/include']
+                extra_link_args += [f'-L{brew_prefix}/lib', '-lomp']
+                print(f'[build] macOS OpenMP via libomp at {brew_prefix}')
+            else:
+                print('[build] WARNING: libomp not found. Building single-threaded.')
+                use_openmp = False
+        else:  # Linux
+            extra_compile_args.append('-fopenmp')
+            extra_link_args.append('-fopenmp')
 
 if not use_openmp:
     print('[build] Building single-threaded (no OpenMP).')
