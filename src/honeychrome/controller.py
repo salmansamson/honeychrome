@@ -116,6 +116,7 @@ class Controller(QObject):
         self.data_for_cytometry_plots_process = deepcopy(self.data_for_cytometry_plots)
         self.data_for_cytometry_plots_unmixed = deepcopy(self.data_for_cytometry_plots)
         self.current_mode = 'raw'
+        self.mode_switch_in_progress = False
 
         # pipe connections
         self.pipe_connection_instrument = pipe_connection_instrument
@@ -522,7 +523,14 @@ class Controller(QObject):
             if self.experiment.process['unmixing_matrix']:
                 self.unmixed_gating = from_gml(self.experiment.cytometry['gating'])
                 self.unmixed_transformations = generate_transformations(self.experiment.cytometry['transforms'])
-                self.reapply_fine_tuning()
+                # Call the plain impl, not reapply_fine_tuning(): this method
+                # (initialise_ephemeral_data) is itself called from inside the
+                # worker thread of @with_busy_cursor methods (load_experiment,
+                # refresh_spectral_process). Calling the decorated
+                # reapply_fine_tuning() here would re-enter with_busy_cursor
+                # from a background thread — QApplication.setOverrideCursor()
+                # and a nested QEventLoop off the main thread
+                self._reapply_fine_tuning_impl()
 
                 source_gate = 'root'
                 unmixed_gate_names = [g[0].lower() for g in self.unmixed_gating.get_gate_ids()]
@@ -987,15 +995,22 @@ class Controller(QObject):
         self.initialise_data_for_cytometry_plots()
         logger.info(f"Controller: unloaded sample")
 
-    # added with busy cursor since with AF integration this may be noticeable
-    @with_busy_cursor
-    def reapply_fine_tuning(self):
+    def _reapply_fine_tuning_impl(self):
         self.initialise_transfer_matrix()
         if self.raw_event_data is not None:
             self.initialise_af_matrices()
             self.unmixed_event_data = self._apply_unmixing(self.raw_event_data)
             self.clear_data_for_cytometry_plots()
             self.initialise_data_for_cytometry_plots()
+
+    # added with busy cursor since with AF integration this may be noticeable
+    # only call this decorated entry point from the main thread (e.g. direct
+    # UI callbacks). Anything already running inside another @with_busy_cursor
+    # worker thread (e.g. initialise_ephemeral_data) must call
+    # _reapply_fine_tuning_impl() directly — see note there.
+    @with_busy_cursor
+    def reapply_fine_tuning(self):
+        self._reapply_fine_tuning_impl()
 
     @Slot()
     def on_gain_change(self, ch_name, value):
@@ -1143,28 +1158,31 @@ class Controller(QObject):
     def set_mode(self, tab_name):
         # select set of plots: raw, process or unmixed
         logger.info(f"Controller: set mode to {tab_name}")
-        if tab_name == 'Raw Data':
-            self.current_mode = 'raw'
-            self.data_for_cytometry_plots = self.data_for_cytometry_plots_raw
-        elif tab_name == 'Spectral Process':
-            self.current_mode = 'process'
-            self.data_for_cytometry_plots_process['histograms'] = self.data_for_cytometry_plots_unmixed['histograms']
-            self.data_for_cytometry_plots_process['statistics'] = self.data_for_cytometry_plots_unmixed['statistics']
-            self.data_for_cytometry_plots = self.data_for_cytometry_plots_process
-        elif tab_name == 'Unmixed Data':
-            self.current_mode = 'unmixed'
-            self.data_for_cytometry_plots = self.data_for_cytometry_plots_unmixed
-        elif tab_name == 'Statistics':
-            self.current_mode = 'statistics'
-            self.data_for_cytometry_plots = self.data_for_cytometry_plots_unmixed
-        else:
-            # catch all for plugin tabs
-            self.current_mode = tab_name
-            self.data_for_cytometry_plots = None
-            return
+        self.mode_switch_in_progress = True
+        try:
+            if tab_name == 'Raw Data':
+                self.current_mode = 'raw'
+                self.data_for_cytometry_plots = self.data_for_cytometry_plots_raw
+            elif tab_name == 'Spectral Process':
+                self.current_mode = 'process'
+                self.data_for_cytometry_plots_process['histograms'] = self.data_for_cytometry_plots_unmixed['histograms']
+                self.data_for_cytometry_plots_process['statistics'] = self.data_for_cytometry_plots_unmixed['statistics']
+                self.data_for_cytometry_plots = self.data_for_cytometry_plots_process
+            elif tab_name == 'Unmixed Data':
+                self.current_mode = 'unmixed'
+                self.data_for_cytometry_plots = self.data_for_cytometry_plots_unmixed
+            elif tab_name == 'Statistics':
+                self.current_mode = 'statistics'
+                self.data_for_cytometry_plots = self.data_for_cytometry_plots_unmixed
+            else:
+                # catch all for plugin tabs
+                self.current_mode = tab_name
+                self.data_for_cytometry_plots = None
+                return
 
-
-        self.initialise_data_for_cytometry_plots()
+            self.initialise_data_for_cytometry_plots()
+        finally:
+            self.mode_switch_in_progress = False
 
     def clear_data_for_cytometry_plots(self):
         for data in [self.data_for_cytometry_plots_raw, self.data_for_cytometry_plots_process, self.data_for_cytometry_plots_unmixed]:

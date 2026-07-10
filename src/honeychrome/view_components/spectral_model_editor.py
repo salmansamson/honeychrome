@@ -751,6 +751,15 @@ class SpectralControlsEditor(QFrame):
                     ' — press Recalculate to update spectral profiles.'
                 )
 
+    def _emit_spectral_model_updated_when_mode_switch_done(self):
+        # Guards against emitting while controller.set_mode is mid-flight on its
+        # own worker thread (e.g. a tab switch), which previously raced with
+        # refresh_spectral_process and corrupted shared state / crashed.
+        if getattr(self.controller, 'mode_switch_in_progress', False):
+            QTimer.singleShot(50, self._emit_spectral_model_updated_when_mode_switch_done)
+        else:
+            self.bus.spectralModelUpdated.emit()
+
     def refresh_comboboxes(self):
         if getattr(self, '_refreshing_comboboxes', False):
             return
@@ -974,7 +983,7 @@ class SpectralControlsEditor(QFrame):
                 self.refresh_comboboxes()
                 self.setEnabled(True)
                 if control_valid:
-                    self.bus.spectralModelUpdated.emit()
+                    self._emit_spectral_model_updated_when_mode_switch_done()
 
             cb.toggled.connect(_on_toggle)
             self.view.setIndexWidget(proxy_uc_idx, cb)
