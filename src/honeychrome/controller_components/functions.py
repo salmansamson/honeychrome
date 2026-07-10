@@ -1007,7 +1007,7 @@ def calc_stats(data_for_cytometry_plots, initialise=True):
                     channels = [dim.id for dim in gate_node.gate.dimensions]
                     intensity = {}
                     rCV = {}
-                    if len(gate_membership[gate_id]) > 0:
+                    if gate_membership[gate_id].sum() > 0:
                         intensity = {channel: event_data[gate_membership[gate_id], pnn.index(channel)].mean() for channel in channels}
                         rCV = {channel: robust_cv(event_data[gate_membership[gate_id], pnn.index(channel)]) for channel in channels}
 
