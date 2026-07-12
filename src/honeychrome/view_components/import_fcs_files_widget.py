@@ -104,7 +104,7 @@ class ImportFCSFilesWidget(QDialog):
         self.thread = QThread()
         self.import_fcs_controller = ImportFCSController(self.controller.experiment, bus=self.bus)
         self.import_fcs_controller.moveToThread(self.thread)
-        self.thread.started.connect(self.import_fcs_controller.reconfigure_experiment_from_fcs_files)
+        self.thread.started.connect(self.import_fcs_controller._reconfigure_experiment_from_fcs_files_impl)
         self.import_fcs_controller.finished.connect(self.thread.quit)
         self.thread.finished.connect(self._on_thread_finished)
         self.thread.start()
