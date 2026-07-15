@@ -474,11 +474,14 @@ def _format_spillover(fl_pnn: list[str], spillover: np.ndarray) -> str:
     Serialise the fine-tuning spillover matrix as an FCS 3.1 $SPILLOVER string.
     fl_pnn: ordered list of fluorophore $PnN names (must match spillover shape).
     spillover: square (n_fluor x n_fluor) matrix.
+    Written row-major, untransposed: spillover[i][j] (row i spills into column j)
+    matches FlowJo's own row/column convention directly now that Changes 1 and 2
+    apply the same convention internally without an extra transpose.
     """
     n = len(fl_pnn)
     if spillover is None or spillover.shape != (n, n):
         return ''
-    vals = ','.join(f'{v:.8g}' for v in spillover.T.flatten())
+    vals = ','.join(f'{v:.8g}' for v in spillover.flatten())
     names = ','.join(fl_pnn)
     return f'{n},{names},{vals}'
 
