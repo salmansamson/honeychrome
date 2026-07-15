@@ -1124,7 +1124,7 @@ class SpectralCleaner(QObject):
                 neg_sample = sample_from_fcs(neg_full_path)
                 neg_events, neg_scatter_all = get_raw_events(
                     neg_sample, self.fluor_ch_ids,
-                    gate_label=None,
+                    gate_label=base_gate_label,
                     gating_strategy=self.raw_gating,
                     extra_channel_ids=scatter_ch_ids,
                 )
