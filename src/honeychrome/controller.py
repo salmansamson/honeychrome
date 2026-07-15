@@ -610,7 +610,10 @@ class Controller(QObject):
 
         unmixing_matrix = np.array(self.experiment.process['unmixing_matrix'])
         spillover = np.array(self.experiment.process['spillover'])
-        compensation = np.linalg.inv(spillover)
+        # spillover[i][j] = row i spills into column j (see nxn_help_text);
+        # compensation is applied as compensation @ measured (column vectors),
+        # which needs the transposed inverse to match that row/column convention.
+        compensation = np.linalg.inv(spillover).T
         compensated_unmixing_matrix = compensation @ unmixing_matrix
         transfer_matrix = np.zeros((len(pnn_unmixed), len(pnn_raw)))
         transfer_matrix[np.ix_(fl_channel_ids_unmixed, fl_channel_ids_raw)] = compensated_unmixing_matrix
