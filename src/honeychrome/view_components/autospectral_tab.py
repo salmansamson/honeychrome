@@ -908,10 +908,12 @@ class AutoSpectralTab(QWidget):
         layout.addWidget(self._assign_header_scroll)
 
         # Scrollable grid: rows = non-SSC samples, columns = AF profiles
+        # Min/max here are just the pre-populate defaults; _rebuild_assignment_grid()
+        # re-sizes this to fit the actual sample count each time it's called.
         self._assign_scroll = QScrollArea()
         self._assign_scroll.setWidgetResizable(True)
-        self._assign_scroll.setMinimumHeight(120)
-        self._assign_scroll.setMaximumHeight(300)
+        self._assign_scroll.setMinimumHeight(240)
+        self._assign_scroll.setMaximumHeight(900)
         self._assign_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._assign_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._assign_grid_widget = QWidget()
@@ -1429,6 +1431,8 @@ class AutoSpectralTab(QWidget):
                 QLabel('No profiles or non-SSC samples available yet.'), 0, 0
             )
             self._assign_header_scroll.setFixedHeight(1)
+            self._assign_scroll.setMinimumHeight(60)
+            self._assign_scroll.setMaximumHeight(60)
             return
 
         # Header (frozen row, own layout — not row 0 of the scrolling body)
@@ -1489,6 +1493,30 @@ class AutoSpectralTab(QWidget):
         self._assign_header_scroll.setFixedHeight(
             row_height + margins.top() + margins.bottom() + 10
         )
+
+        # Size the body strip to fit ALL sample rows (up to a generous cap),
+        # so the grid doesn't need its own inner scrollbar for typical sample
+        # counts — the tab's outer QScrollArea handles page-level scrolling
+        # instead. Beyond the cap, the inner scrollbar takes back over.
+        self._assign_grid_layout.activate()
+        n_rows = len(non_ssc)
+        row_heights = [
+            self._assign_grid_layout.itemAtPosition(r, 0).widget().sizeHint().height()
+            for r in range(n_rows)
+        ]
+        grid_margins = self._assign_grid_layout.contentsMargins()
+        content_height = (
+            sum(row_heights)
+            + self._assign_grid_layout.spacing() * max(n_rows - 1, 0)
+            + grid_margins.top() + grid_margins.bottom()
+        )
+
+        MIN_ASSIGN_HEIGHT = 240   # doubled from the old fixed 120px minimum
+        MAX_ASSIGN_HEIGHT = 900   # safety cap for very large sample counts
+        target_height = max(MIN_ASSIGN_HEIGHT, min(content_height, MAX_ASSIGN_HEIGHT))
+        self._assign_scroll.setMinimumHeight(MIN_ASSIGN_HEIGHT)
+        self._assign_scroll.setMaximumHeight(MAX_ASSIGN_HEIGHT)
+        self._assign_scroll.setFixedHeight(target_height)
 
     def _make_assignment_handler(self, sample_path: str, profile_name: str, cb: QCheckBox):
         def handler(_state):
