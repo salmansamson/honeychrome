@@ -125,7 +125,7 @@ def sample_from_fcs(path, bus=None):
         sample = _load_fcs_with_repaired_delimiter(path)
 
     # Replace literal 'NA' keyword values (some FACSDiscover files write these).
-    meta = sample.get_metadata().get('text', {})
+    meta = sample.get_metadata()
     if meta:
         na_keys = [k for k, v in meta.items() if str(v).strip().upper() == 'NA']
         for k in na_keys:
@@ -287,6 +287,20 @@ def define_fcs_keywords(
     import re
     from datetime import datetime, timezone
 
+    # Keywords Honeychrome recomputes fresh elsewhere in this function (or in
+    # write_fcs). Raw values for these must never be carried through, or they
+    # end up as duplicate keywords alongside the correct ones — since raw
+    # keyword keys now come back lowercased/$-stripped from get_metadata(),
+    # they no longer collide by exact key string with the ones we write below.
+    _RECOMPUTED_KEYWORDS = {
+        'FIL', 'PAR', 'TOT', 'DATATYPE', 'BYTEORD', 'MODE', 'NEXTDATA',
+        'BEGINANALYSIS', 'ENDANALYSIS', 'BEGINSTEXT', 'ENDSTEXT',
+        'BEGINDATA', 'ENDDATA', 'ORIGINALITY', 'LAST_MODIFIED', 'LAST_MODIFIER',
+        'HONEYCHROME', 'UNMIXINGMETHOD', 'SPILLOVER',
+        'SPECTRA', 'FLUOROCHROMES', 'AUTOFLUORESCENCE', 'WEIGHTS',
+        'BDCHORUSDATARECORD',
+    }
+
     # ---- 1. Carry-through non-parameter keywords from raw file ----
     # Guard against malformed keyword dicts produced by FlowIO when the FCS
     # TEXT delimiter byte is wrong (FACSDiscover export bug): corrupt entries
@@ -299,7 +313,7 @@ def define_fcs_keywords(
         and len(k) <= 64
         and not re.match(r'^\$?P\d+', k, re.IGNORECASE)
         and not re.match(r'^\$?CH\d+', k, re.IGNORECASE)
-        and k.upper() not in ('BDCHORUSDATARECORD',)
+        and k.lstrip('$').upper() not in _RECOMPUTED_KEYWORDS
     }
 
     # ---- 2. Whitelist for raw param carry-through ----
