@@ -1691,6 +1691,7 @@ class Controller(QObject):
         raw_settings = self.experiment.settings['raw']
         spectral_model = self.experiment.process['spectral_model']
         profiles = self.experiment.process['profiles']
+        conditioning_warnings = []
 
         # Sort spectral model by major-channel position so fluorescence_channels
         # and all downstream structures (NxN grid, heatmaps) use the correct order.
@@ -1713,7 +1714,7 @@ class Controller(QObject):
                 self.bus.statusMessage.emit(f'Refreshing spectral process...')
             existing_spillover = self.experiment.process.get('spillover')
             unmixing_method = self.experiment.settings.get('unmixing_method', 'OLS')
-            unmixed_settings, spectral_process = calculate_spectral_process(
+            unmixed_settings, spectral_process, conditioning_warnings = calculate_spectral_process(
                 raw_settings, spectral_model, profiles,
                 existing_spillover=existing_spillover,
                 unmixing_method=unmixing_method,
@@ -1804,6 +1805,14 @@ class Controller(QObject):
             self.bus.spectralProcessRefreshed.emit()
             # self.bus.changedGatingHierarchy.emit('unmixed', 'root')
             self.bus.statusMessage.emit(f'Spectral process refreshed.')
+            # Single consolidated dialog for both profile-QC checks — piped through
+            # the bus rather than shown directly, since this method can be entered
+            # via a queued connection from a worker-thread emit (SpectralAutoGenerator,
+            # SpectralCleaner) and must never pop a QMessageBox from that thread.
+            if conditioning_warnings:
+                self.bus.warningMessage.emit(
+                    'Spectral Profile QC:\n\n' + '\n\n'.join(conditioning_warnings)
+                )
 
         logger.info(f'Controller: refreshed spectral process, unmixed settings, unmixed cytometry')
 

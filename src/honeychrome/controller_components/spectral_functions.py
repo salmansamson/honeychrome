@@ -8,6 +8,9 @@ from flowkit import GatingStrategy
 import honeychrome.settings as settings
 
 logger = logging.getLogger(__name__)
+
+PROFILE_COSINE_WARNING_THRESHOLD = 0.95  # cross-profile cosine similarity QC threshold
+
 # otb: get_best_channel can now be removed entirely
 def get_best_channel(sample, gating_strategy, base_gate_label, fluorescence_channel_ids):
     from sklearn.decomposition import PCA
@@ -341,6 +344,39 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles,
     similarity_matrix = cosine_similarity(Mnorm)
     hotspot_matrix = np.sqrt(np.abs(np.linalg.inv(similarity_matrix)))
 
+    # --- Spectral profile QC: condition number + inter-profile cosine similarity ---
+    # M is (n_fluorophores, n_channels); a high condition number here means the
+    # unmixing system (M @ Omega_inv @ M.T) is close to singular.
+    conditioning_warnings = []
+    n_profiles = unmixed_length
+    cond_number = np.linalg.cond(M)
+    if cond_number > n_profiles:
+        msg = (
+            f'Spectral profile matrix is ill-conditioned: condition number '
+            f'{cond_number:.1f} exceeds the number of fluorophores ({n_profiles}). '
+            f'Unmixing may be unstable — check for redundant or highly similar profiles.'
+        )
+        conditioning_warnings.append(msg)
+        logger.warning(f'calculate_spectral_process: {msg}')
+
+    high_similarity_pairs = [
+        (fluorescence_channels[i], fluorescence_channels[j], similarity_matrix[i, j])
+        for i in range(n_profiles)
+        for j in range(i + 1, n_profiles)
+        if similarity_matrix[i, j] > PROFILE_COSINE_WARNING_THRESHOLD
+    ]
+    if high_similarity_pairs:
+        pairs_text = ', '.join(
+            f'"{a}" / "{b}" ({sim:.3f})' for a, b, sim in high_similarity_pairs
+        )
+        msg = (
+            f'The following profile pair(s) have cosine similarity above '
+            f'{PROFILE_COSINE_WARNING_THRESHOLD}: {pairs_text}. '
+            f'These fluorophores may unmix poorly.'
+        )
+        conditioning_warnings.append(msg)
+        logger.warning(f'calculate_spectral_process: {msg}')
+
     # calculate unmixing matrix
     variance_per_detector = np.ones(raw_length)  # trivial example... try something better like cv on each detector for brightest fluorophores?
     # otb: pure variance is too noisy and varies between samples. could be done per experiment
@@ -435,7 +471,7 @@ def calculate_spectral_process(raw_settings, spectral_model, profiles,
     # for label in event_channels_pnn:
     #     gating.transformations[label] = transformations[label].xform
 
-    return unmixed_settings, spectral_process
+    return unmixed_settings, spectral_process, conditioning_warnings
 
 def sanitise_control_in_place(control):
     if control['control_type'] == 'Single Stained Spectral Control':
