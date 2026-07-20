@@ -203,7 +203,7 @@ def discover_fluor_variants(
     af_pcs: np.ndarray | None,
     saturation_ceiling: float,
     n_cells: int = 10_000,
-    som_dim: int = 10,
+    variants: int = 20,
     k_neighbors: int = 3,
     sim_threshold: float = 0.985,
     random_state: int = 0,
@@ -278,11 +278,10 @@ def discover_fluor_variants(
     final_idx = keep_idx[cosine_idx]
     event_n = len(final_idx)
 
-    # 7. Clustering — grid-equivalent count, auto-shrunk for small event counts.
-    eff_som_dim = som_dim
+    # 7. Clustering — target variant count, auto-shrunk for small event counts.
+    n_clusters = variants
     if event_n < 500:
-        eff_som_dim = max(2, int(np.floor(np.sqrt(event_n / 3))))
-    n_clusters = eff_som_dim ** 2
+        n_clusters = max(4, int(np.floor(event_n / 3)))
 
     cluster_input = np.concatenate(
         [unmixed_full[final_idx], spectral_sub[final_idx]], axis=1
@@ -374,7 +373,7 @@ def _resolve_unstained_cell_sample_names(samples: dict) -> list:
 def discover_all_variants(
     controller,
     n_cells: int = 10_000,
-    som_dim: int = 10,
+    variants: int = 20,
     k_neighbors: int = 3,
     sim_threshold: float = 0.985,
     n_af_pcs: int = 4,
@@ -592,7 +591,7 @@ def discover_all_variants(
             unmixed_pos_threshold=control_unmixed_pos_threshold,
             af_pcs=af_pcs,
             saturation_ceiling=saturation_ceiling,
-            n_cells=n_cells, som_dim=som_dim, k_neighbors=k_neighbors,
+            n_cells=n_cells, variants=variants, k_neighbors=k_neighbors,
             sim_threshold=sim_threshold,
         )
         if variant_result is not None:
