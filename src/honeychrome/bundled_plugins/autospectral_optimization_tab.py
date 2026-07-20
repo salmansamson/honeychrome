@@ -19,7 +19,9 @@ Sections
 
 from __future__ import annotations
 
+import gc
 import logging
+import math
 import os
 import sys
 from pathlib import Path
@@ -74,6 +76,11 @@ from autospectral_optimization_functions import (   # noqa: E402
     fluorescence_channel_names,
 )
 from autospectral_opt_kernel_wrapper import AUTOSPECTRAL_OPT_KERNEL_AVAILABLE  # noqa: E402
+
+# Events per chunk for AutoSpectralOptExporter. Mirrors unmix_fcs.R's
+# chunk.size default (2e6) — bounds the per-cell variant-search buffers
+# in unmix_autospectral_optimization() regardless of total file size.
+_UNMIX_CHUNK_SIZE = 2_000_000
 
 
 # ---------------------------------------------------------------------------
@@ -200,9 +207,16 @@ class AutoSpectralOptExporter(QObject):
     since the Unmix section supplies an explicit sample list (via
     OrderedMultiSamplePicker) rather than a folder to scan.
 
-    Known simplification vs. UnmixedExporter: does not carry through
-    FACSDiscover imaging channels (unmixed_exporter.py lines ~110-173) —
-    worth adding if this plugin needs to support FACSDiscover exports.
+    FACSDiscover imaging channels are now detected and carried through via
+    an identity block on the transfer matrix, same approach as
+    unmixed_exporter.py. Note this widens the raw channel space back out
+    from whitelisted-only to whitelisted + imaging, so per-sample memory
+    for FACSDiscover experiments is close to UnmixedExporter's footprint.
+    Per-sample processing below is chunked (_UNMIX_CHUNK_SIZE) to keep the
+    AutoSpectral Optimization per-cell variant-search buffers bounded
+    regardless of file size — this does NOT stream the FCS read itself
+    (FlowKit/flowio load the whole file eagerly; there's no partial-read
+    API exposed here), it only bounds the compute-side buffers.
     """
     progress = Signal(int, int)
     finished = Signal()
@@ -242,8 +256,48 @@ class AutoSpectralOptExporter(QObject):
             pnn_raw = raw_settings.get('whitelisted_pnn') or pnn_raw_full
             pnn_unmixed = unmixed_settings['event_channels_pnn']
 
-            fl_ids_raw = [pnn_raw.index(pnn_raw_full[i]) for i in c.filtered_raw_fluorescence_channel_ids]
-            sc_ids_raw = [pnn_raw.index(pnn_raw_full[i]) for i in raw_settings['scatter_channel_ids']]
+            # FACSDiscover imaging channels: detected against the FULL raw pnn
+            # list (not the whitelisted subset used for unmixing), then carried
+            # through via an identity block appended to both the raw and
+            # unmixed channel spaces. Mirrors unmixed_exporter.py's approach.
+            cytometer = raw_settings.get('cytometer', '')
+            imaging_pnn = []
+            if 'FACSDiscover' in cytometer:
+                from honeychrome.controller_components.cytometer_whitelist import _CYTOMETER_PARAMS
+                import re as _re
+
+                params = _CYTOMETER_PARAMS.get('FACSDiscover')
+                if params is not None:
+                    EXCLUDE_FROM_IMAGING = {'FSC', 'SSC', 'Time'}
+                    imaging_prefixes = [
+                        p for p in params.non_spectral_pat
+                        if not p.startswith('-')
+                        and p not in EXCLUDE_FROM_IMAGING
+                    ]
+                    imaging_pat = _re.compile(
+                        '|'.join(rf'(?:^|\b){_re.escape(p)}' for p in imaging_prefixes)
+                    )
+                    already_whitelisted = set(pnn_raw)
+                    if raw_settings.get('event_id_channel_id') is not None:
+                        already_whitelisted = already_whitelisted | {
+                            pnn_raw_full[raw_settings['event_id_channel_id']]
+                        }
+                    imaging_pnn = [
+                        ch for ch in pnn_raw_full
+                        if _re.search(imaging_pat, ch) and ch not in already_whitelisted
+                    ]
+
+            # Widen the raw and unmixed channel spaces to carry imaging
+            # channels straight through (identity mapping), appended after
+            # the existing whitelisted / unmixed channels so every index
+            # computed below (fl_ids_raw, sc_ids_raw, etc.) stays valid.
+            pnn_raw_export = pnn_raw + imaging_pnn
+            n_imaging = len(imaging_pnn)
+            n_unmixed_before_imaging = len(pnn_unmixed)
+            pnn_unmixed = pnn_unmixed + imaging_pnn
+
+            fl_ids_raw = [pnn_raw_export.index(pnn_raw_full[i]) for i in c.filtered_raw_fluorescence_channel_ids]
+            sc_ids_raw = [pnn_raw_export.index(pnn_raw_full[i]) for i in raw_settings['scatter_channel_ids']]
             fl_ids_unmixed = np.array(unmixed_settings['fluorescence_channel_ids'])
             sc_ids_unmixed = np.array(unmixed_settings['scatter_channel_ids'])
             n_scatter = unmixed_settings['n_scatter_channels']
@@ -252,12 +306,15 @@ class AutoSpectralOptExporter(QObject):
             spillover = np.array(exp.process['spillover'])
             compensation = np.linalg.inv(spillover).T
 
-            transfer_matrix = np.zeros((len(pnn_unmixed), len(pnn_raw)))
+            transfer_matrix = np.zeros((len(pnn_unmixed), len(pnn_raw_export)))
             transfer_matrix[np.ix_(fl_ids_unmixed, fl_ids_raw)] = compensation @ unmixing_matrix
             transfer_matrix[np.ix_(sc_ids_unmixed, sc_ids_raw)] = np.eye(n_scatter)
             if raw_settings.get('time_channel_id') is not None:
-                raw_time_id = pnn_raw.index(pnn_raw_full[raw_settings['time_channel_id']])
+                raw_time_id = pnn_raw_export.index(pnn_raw_full[raw_settings['time_channel_id']])
                 transfer_matrix[unmixed_settings['time_channel_id'], raw_time_id] = 1
+            if n_imaging:
+                for k in range(n_imaging):
+                    transfer_matrix[n_unmixed_before_imaging + k, len(pnn_raw) + k] = 1.0
             transfer_matrix = transfer_matrix.T   # raw @ transfer_matrix -> unmixed
 
             reference_spectra = c._build_fluor_spectra()
@@ -304,46 +361,71 @@ class AutoSpectralOptExporter(QObject):
                 sample = sample_from_fcs(full_sample_path, self.bus)
                 all_events = sample.get_events(source='raw')
                 sample_ch_idx = {ch: i for i, ch in enumerate(sample.pnn_labels)}
-                if set(pnn_raw) <= set(sample.pnn_labels):
-                    raw_event_data = all_events[:, [sample_ch_idx[ch] for ch in pnn_raw]]
+                if set(pnn_raw_export) <= set(sample.pnn_labels):
+                    raw_event_data = all_events[:, [sample_ch_idx[ch] for ch in pnn_raw_export]]
                 else:
-                    raw_event_data = np.zeros((all_events.shape[0], len(pnn_raw)), dtype=all_events.dtype)
-                    for dst, ch in enumerate(pnn_raw):
+                    raw_event_data = np.zeros((all_events.shape[0], len(pnn_raw_export)), dtype=all_events.dtype)
+                    for dst, ch in enumerate(pnn_raw_export):
                         if ch in sample_ch_idx:
                             raw_event_data[:, dst] = all_events[:, sample_ch_idx[ch]]
                 np.nan_to_num(raw_event_data, copy=False, nan=0.0)
+                del all_events, sample_ch_idx
                 raw_keywords = sample.get_metadata()
                 n_events = sample.event_count
                 if n_events == 0:
                     continue
 
-                raw_fl = raw_event_data[:, fl_ids_raw]
                 sample_thresholds = (
                     cached_thresholds if use_cached_thresholds
                     else np.zeros(reference_spectra.shape[0])
                 )
 
-                opt_result = unmix_autospectral_optimization(
-                    raw_fl_events=raw_fl,
-                    reference_spectra=reference_spectra,
-                    fluor_names=fluor_names,
-                    af_spectra=af_spectra,
-                    variants_meta=c.autospectral_variants,
-                    active_labels=active_labels,
-                    unmixed_pos_thresholds=sample_thresholds,
-                    **self.kernel_kwargs,
-                )
-                opt_unmixed_fl = (compensation @ opt_result['unmixed'].T).T
-
-                unmixed_event_data = apply_transfer_matrix(transfer_matrix, raw_event_data)
-                unmixed_event_data[:, fl_ids_unmixed] = opt_unmixed_fl
-
-                af_cols = np.column_stack([
-                    opt_result['af_scale'],
-                    opt_result['af_idx'].astype(np.float64),
-                ])
-                export_event_data = np.hstack([unmixed_event_data, af_cols])
+                # Pre-allocate the export array once; each chunk writes
+                # directly into its row-slice, so at most one chunk's worth
+                # of unmixing intermediates (raw_fl_chunk, opt_result, etc.)
+                # is held at a time — the per-cell variant search is the
+                # main memory multiplier on large FACSDiscover S8 files.
                 export_pnn = pnn_unmixed + ['AF Abundance', 'AF Index']
+                export_event_data = np.zeros((n_events, len(export_pnn)), dtype=np.float64)
+                n_unmixed_cols = len(pnn_unmixed)
+
+                n_chunks = math.ceil(n_events / _UNMIX_CHUNK_SIZE)
+                for chunk_i in range(n_chunks):
+                    s_row = chunk_i * _UNMIX_CHUNK_SIZE
+                    e_row = min((chunk_i + 1) * _UNMIX_CHUNK_SIZE, n_events)
+                    if n_chunks > 1:
+                        logger.debug(
+                            f'AutoSpectral Optimization export: "{sample_path}" '
+                            f'chunk {chunk_i + 1}/{n_chunks} (events {s_row}-{e_row})'
+                        )
+
+                    raw_chunk = raw_event_data[s_row:e_row]
+                    raw_fl_chunk = raw_chunk[:, fl_ids_raw]
+
+                    opt_result = unmix_autospectral_optimization(
+                        raw_fl_events=raw_fl_chunk,
+                        reference_spectra=reference_spectra,
+                        fluor_names=fluor_names,
+                        af_spectra=af_spectra,
+                        variants_meta=c.autospectral_variants,
+                        active_labels=active_labels,
+                        unmixed_pos_thresholds=sample_thresholds,
+                        **self.kernel_kwargs,
+                    )
+                    opt_unmixed_fl = (compensation @ opt_result['unmixed'].T).T
+
+                    unmixed_chunk = apply_transfer_matrix(transfer_matrix, raw_chunk)
+                    unmixed_chunk[:, fl_ids_unmixed] = opt_unmixed_fl
+
+                    export_event_data[s_row:e_row, :n_unmixed_cols] = unmixed_chunk
+                    export_event_data[s_row:e_row, n_unmixed_cols] = opt_result['af_scale']
+                    export_event_data[s_row:e_row, n_unmixed_cols + 1] = opt_result['af_idx'].astype(np.float64)
+
+                    del raw_chunk, raw_fl_chunk, opt_result, opt_unmixed_fl, unmixed_chunk
+                    if n_chunks > 1 and chunk_i % 5 == 4:
+                        gc.collect()
+
+                del raw_event_data
 
                 sample_abs = sample_key_to_abs(sample_path)
                 sample_rel_suffix = None
