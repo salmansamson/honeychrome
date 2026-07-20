@@ -29,6 +29,7 @@ Sends and receives signals to GUI
 '''
 
 import warnings
+import hashlib
 from datetime import datetime
 import numpy as np
 from pathlib import Path
@@ -203,6 +204,82 @@ class Controller(QObject):
         if meta:
             logger.info(f'Controller: loaded cleaned_events for {len(meta)} controls.')
 
+    def _load_autospectral_variants(self):
+        """Restore autospectral_variants from .kit autospectral_variants_data
+        and .autospectral_variants.npz sidecar. Backs the AutoSpectral
+        Optimization bundled plugin's Setup section (bundled_plugins/
+        autospectral_optimization_tab.py). Mirrors _load_cleaned_events
+        with one addition: each label is only restored if its saved profile_fingerprint
+        still matches the current experiment.process['profiles'][label] — if the reference
+        spectrum has changed since Setup was run, the cached variants no
+        longer describe it and are skipped (falls back to needing Setup
+        re-run for that fluorophore, same as if it had never been computed).
+        Note: the *scoring* state (optimize_score/optimize_recommended/active)
+        lives separately in experiment.process['autospectral_variants_meta'],
+        written directly by the plugin — this method only restores the
+        variant/delta arrays themselves plus their small JSON fields
+        (n_events_used, profile_fingerprint).
+
+        Also restores the unstained-derived positivity thresholds
+        (autospectral_raw_pos_thresholds / autospectral_unmixed_pos_thresholds)
+        from the same npz sidecar, gated on a fingerprint of the full
+        reference-spectra matrix (see _save_autospectral_variants) — if the
+        spectral model has changed since Setup was run, the cached
+        thresholds are discarded and Setup must be re-run."""
+        self.autospectral_raw_pos_thresholds = None
+        self.autospectral_unmixed_pos_thresholds = None
+        _ARRAY_KEYS = {'v_mats', 'delta', 'delta_norms'}
+        meta = self.experiment.process.get('autospectral_variants_data', {})
+        profiles = self.experiment.process.get('profiles', {})
+        arrays = {}
+        npz_path = self.autospectral_variants_npz_path
+        if npz_path.exists():
+            try:
+                npz = np.load(str(npz_path), allow_pickle=False)
+                arrays = dict(npz)
+            except Exception as e:
+                logger.warning(f'Controller: failed to load autospectral_variants.npz: {e}')
+
+        self.autospectral_variants.clear()
+        n_skipped_stale = 0
+        for label, json_fields in meta.items():
+            profile_vec = profiles.get(label)
+            saved_fingerprint = json_fields.get('profile_fingerprint')
+            if profile_vec is None or saved_fingerprint is None or self._profile_fingerprint(profile_vec) != saved_fingerprint:
+                n_skipped_stale += 1
+                continue
+            entry = dict(json_fields)
+            safe = label.replace('/', '_').replace(' ', '_')
+            for k in _ARRAY_KEYS:
+                key = f'{safe}__{k}'
+                if key in arrays:
+                    entry[k] = arrays[key]
+            self.autospectral_variants[label] = entry
+        if self.autospectral_variants:
+            logger.info(f'Controller: loaded autospectral_variants for {len(self.autospectral_variants)} fluorophore(s).')
+        if n_skipped_stale:
+            logger.info(
+                f'Controller: skipped {n_skipped_stale} cached autospectral_variants '
+                f'entrie(s) whose profile has changed since Setup was run — re-run Setup for these.'
+            )
+
+        thresholds_meta = self.experiment.process.get('autospectral_thresholds_meta', {})
+        saved_thresholds_fingerprint = thresholds_meta.get('reference_spectra_fingerprint')
+        reference_spectra = self._build_fluor_spectra()
+        if (saved_thresholds_fingerprint is not None and reference_spectra is not None
+                and self._profile_fingerprint(reference_spectra) == saved_thresholds_fingerprint):
+            if 'autospectral_thresholds_raw' in arrays:
+                self.autospectral_raw_pos_thresholds = arrays['autospectral_thresholds_raw']
+            if 'autospectral_thresholds_unmixed' in arrays:
+                self.autospectral_unmixed_pos_thresholds = arrays['autospectral_thresholds_unmixed']
+            if self.autospectral_unmixed_pos_thresholds is not None:
+                logger.info('Controller: loaded cached unstained-derived AutoSpectral Optimization thresholds.')
+        elif saved_thresholds_fingerprint is not None:
+            logger.info(
+                'Controller: skipped cached AutoSpectral Optimization thresholds — '
+                'reference spectra have changed since Setup was run; re-run Setup.'
+            )
+
     @with_busy_cursor
     def load_experiment(self, experiment_path):
         self.experiment.load(experiment_path)
@@ -212,6 +289,7 @@ class Controller(QObject):
         self.current_mode = 'raw'
         self.initialise_ephemeral_data()
         self._load_cleaned_events()
+        self._load_autospectral_variants()
         self.cache_all_af_profiles()
         self.initialise_af_matrices()
 
@@ -263,7 +341,74 @@ class Controller(QObject):
     def _legacy_cleaned_npz_path(self) -> Path:
         """Pre-migration location, alongside the .kit file."""
         return Path(self.experiment.experiment_path).with_suffix('.cleaned.npz')
-    
+
+    @staticmethod
+    def _profile_fingerprint(vec) -> str:
+        """Stable fingerprint of a fluorophore profile vector, used to detect
+        whether cached autospectral_variants still describe the current
+        reference spectrum (see _load_autospectral_variants)."""
+        arr = np.round(np.asarray(vec, dtype=np.float64), 8)
+        return hashlib.sha1(arr.tobytes()).hexdigest()
+
+    def _save_autospectral_variants(self):
+        """Write autospectral_variants to JSON meta (.kit) and numpy sidecar
+        (.autospectral_variants.npz). Mirrors _save_cleaned_events exactly.
+        See _load_autospectral_variants() for the counterpart and the note
+        on where the scoring state (separate from the arrays saved here)
+        lives. Each label's meta is stamped with a fingerprint of the profile
+        vector used to compute it, so a later load can tell whether the
+        reference spectrum has since changed.
+
+        Also persists the unstained-derived positivity thresholds
+        (autospectral_raw_pos_thresholds / autospectral_unmixed_pos_thresholds)
+        computed by the Setup section, into the same npz sidecar, stamped
+        with a fingerprint of the full reference-spectra matrix so a later
+        load can tell whether the spectral model has since changed and
+        discard the cache accordingly."""
+        _JSON_KEYS = {'n_events_used'}
+        _ARRAY_KEYS = {'v_mats', 'delta', 'delta_norms'}
+        profiles = self.experiment.process.get('profiles', {})
+        meta = {}
+        arrays = {}
+        for label, entry in self.autospectral_variants.items():
+            profile_vec = profiles.get(label)
+            if profile_vec is None:
+                continue
+            safe = label.replace('/', '_').replace(' ', '_')
+            meta[label] = {k: v for k, v in entry.items() if k in _JSON_KEYS}
+            meta[label]['profile_fingerprint'] = self._profile_fingerprint(profile_vec)
+            for k in _ARRAY_KEYS:
+                arr = entry.get(k)
+                if arr is not None and isinstance(arr, np.ndarray) and arr.size:
+                    arrays[f'{safe}__{k}'] = arr
+
+        raw_thresholds = self.autospectral_raw_pos_thresholds
+        unmixed_thresholds = self.autospectral_unmixed_pos_thresholds
+        if isinstance(raw_thresholds, np.ndarray) and raw_thresholds.size:
+            arrays['autospectral_thresholds_raw'] = raw_thresholds
+        if isinstance(unmixed_thresholds, np.ndarray) and unmixed_thresholds.size:
+            arrays['autospectral_thresholds_unmixed'] = unmixed_thresholds
+        if raw_thresholds is not None or unmixed_thresholds is not None:
+            reference_spectra = self._build_fluor_spectra()
+            if reference_spectra is not None:
+                self.experiment.process['autospectral_thresholds_meta'] = {
+                    'reference_spectra_fingerprint': self._profile_fingerprint(reference_spectra),
+                }
+        elif 'autospectral_thresholds_meta' in self.experiment.process:
+            del self.experiment.process['autospectral_thresholds_meta']
+
+        self.experiment.process['autospectral_variants_data'] = meta
+        if arrays:
+            np.savez_compressed(str(self.autospectral_variants_npz_path), **arrays)
+        elif self.autospectral_variants_npz_path.exists():
+            self.autospectral_variants_npz_path.unlink()
+
+    @property
+    def autospectral_variants_npz_path(self) -> Path:
+        cache_dir = self.experiment_dir / 'cache'
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return cache_dir / 'autospectral_variants.npz'
+
     @Slot(str)
     def save_experiment(self, experiment_path=None):
         if self.raw_transformations is None:
@@ -278,6 +423,7 @@ class Controller(QObject):
 
         if not experiment_path:
             self._save_cleaned_events()
+            self._save_autospectral_variants()
             self.experiment.save()
             logger.info(f'Controller: experiment saved {self.experiment_dir}')
             if self.bus:
@@ -468,6 +614,9 @@ class Controller(QObject):
         self.raw_gating = GatingStrategy()
         self.unmixed_gating = GatingStrategy()
         self.cleaned_events: dict = {}
+        self.autospectral_variants: dict = {}
+        self.autospectral_raw_pos_thresholds = None
+        self.autospectral_unmixed_pos_thresholds = None
         self.data_for_cytometry_plots = {'pnn': None, 'fluoro_indices': None, 'lookup_tables': None, 'event_data': None, 'transformations': None, 'statistics': {}, 'gating': GatingStrategy(), 'plots': [], 'histograms': [], 'gate_membership': {}}
         self.data_for_cytometry_plots_raw = deepcopy(self.data_for_cytometry_plots)
         self.data_for_cytometry_plots_process = deepcopy(self.data_for_cytometry_plots)
