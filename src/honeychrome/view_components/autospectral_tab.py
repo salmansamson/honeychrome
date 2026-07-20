@@ -132,6 +132,45 @@ class ComparisonWorker(QObject):
             self.error.emit(str(e))
 
 
+def pick_most_affected_channels(
+    data_a: np.ndarray,
+    data_b: np.ndarray,
+    pnn: list[str],
+    fl_names: list[str],
+    min_scale: float = 1e-6,
+) -> tuple[str, str] | None:
+    """
+    Return the two fluorescence channels with the largest *proportional*
+    change between data_a and data_b (e.g. OLS vs AF-corrected, or
+    AF-corrected vs Optimization).
+
+    Raw mean(|a - b|) is biased toward whichever channels happen to have the
+    largest dynamic range. Instead, each channel's mean absolute difference
+    is normalised by that channel's own robust spread (5th-95th percentile
+    of data_a), so a small absolute shift in an otherwise quiet channel can
+    outrank a larger absolute shift in a channel that is naturally bright/
+    noisy. min_scale floors the denominator to avoid blow-ups on flat or
+    all-zero channels.
+
+    Returns None if fewer than two fluorescence channels are available or the
+    arrays don't align with pnn.
+    """
+    if len(fl_names) < 2:
+        return None
+    try:
+        cols = [pnn.index(ch) for ch in fl_names]
+    except ValueError:
+        return None
+    a = data_a[:, cols]
+    b = data_b[:, cols]
+    diff = np.abs(a - b).mean(axis=0)
+    scale = np.percentile(a, 95, axis=0) - np.percentile(a, 5, axis=0)
+    scale = np.maximum(scale, min_scale)
+    proportional_diff = diff / scale
+    top2 = np.argsort(proportional_diff)[-2:][::-1]
+    return fl_names[top2[0]], fl_names[top2[1]]
+
+
 # ---------------------------------------------------------------------------
 # AfComparisonPlotWidget
 # ---------------------------------------------------------------------------
@@ -1836,6 +1875,17 @@ class AutoSpectralTab(QWidget):
         # Default: first two fluorescence channels
         ch_x = fl_names[0]
         ch_y = fl_names[1]
+
+        # Better default: the two channels most affected by AF correction
+        # (largest mean |OLS - AF| difference).
+        try:
+            picked = pick_most_affected_channels(
+                self._ols_data, self._af_data, pnn, fl_names
+            )
+            if picked is not None:
+                ch_x, ch_y = picked
+        except Exception as e:
+            logger.debug(f'AutoSpectral comparison: channel auto-pick failed: {e}')
 
         # Preserve existing channel selections if both plots already have them
         if (self._plot_ols._channel_x in fl_names
