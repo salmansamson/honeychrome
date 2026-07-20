@@ -368,8 +368,7 @@ class ProfileUpdater:
                                 f'Run Control Cleaning to fix this.'
                             )
                             warnings.warn(profile_warning)
-                            if self.bus:
-                                self.bus.warningMessage.emit(profile_warning)
+                            self.negative_profile_warnings.append(control['label'])
                             abs_max = np.abs(profile).max()
                             profile = np.abs(profile) / abs_max if abs_max > 0 else positive_profile
 
@@ -453,6 +452,8 @@ class SpectralAutoGenerator(QObject):
         self.unstained_negative = None
         self.unstained_negative_events = None          # cells unstained raw events
         self.unstained_negative_events_beads = None    # beads unstained raw events
+        self.negative_profile_warnings = []            # labels; shown once at end of run()
+        self.insufficient_events_warnings = []         # tubenames; shown once at end of run()
 
         self.progress_target = len(self.samples['single_stain_controls'])
         # self.progress_target = len(self.samples['single_stain_controls'][:5]) # quick test
@@ -491,6 +492,27 @@ class SpectralAutoGenerator(QObject):
 
         logger.info('SpectralAutoGenerator: regenerated spectral model and raw gating hierarchy:')
         logger.info(self.raw_gating.get_gate_hierarchy(output='json'))
+
+        if self.bus and self.negative_profile_warnings:
+            labels = ', '.join(f'"{label}"' for label in self.negative_profile_warnings)
+            combined_warning = (
+                f'The following control(s) have a negative profile — the negative gate '
+                f'has higher mean fluorescence than the positive: {labels}.\n\n'
+                f'These controls have been added but will not unmix correctly. '
+                f'Run Control Cleaning to fix this.'
+            )
+            self.bus.warningMessage.emit(combined_warning)
+
+        if self.bus and self.insufficient_events_warnings:
+            tubenames = ', '.join(f'"{name}"' for name in self.insufficient_events_warnings)
+            combined_insufficient = (
+                f'The following sample(s) have fewer than two events in the '
+                f'"{self.base_gate_label}" base gate, so a spectral control could not be '
+                f'defined for them: {tubenames}.\n\n'
+                f'Adjust the "{self.base_gate_label}" gate to make sure the relevant events '
+                f'for all your single stain control samples are within it.'
+            )
+            self.bus.warningMessage.emit(combined_insufficient)
 
         if self.bus:
             self.bus.progress.emit(self.progress_target, self.progress_target)
@@ -674,12 +696,7 @@ class SpectralAutoGenerator(QObject):
 
                         if len(pos_events_all) < 2:
                             warnings.warn(f'Control sample has less than two events in base gate {self.base_gate_label}: cannot define spectral control')
-                            if self.bus:
-                                self.bus.warningMessage.emit(
-                                    f'{sample_path} has less than two events in "{self.base_gate_label}" gate: cannot define spectral control.\n\n'
-                                    f'The spectral auto generator is using "{self.base_gate_label}" as a base gate '
-                                    f'within your raw data. Adjust this gate to make sure the relevant events for '
-                                    f'all your single stain control samples are within it.')
+                            self.insufficient_events_warnings.append(tubename)
                             return False
 
                         # Determine AF reference for orthogonalisation:
@@ -856,8 +873,7 @@ class SpectralAutoGenerator(QObject):
                             f'Run Control Cleaning to fix this.'
                         )
                         warnings.warn(profile_warning)
-                        if self.bus:
-                            self.bus.warningMessage.emit(profile_warning)
+                        self.negative_profile_warnings.append(control['label'])
                         abs_max = np.abs(profile).max()
                         profile = np.abs(profile) / abs_max if abs_max > 0 else positive_profile
 
@@ -894,6 +910,7 @@ class SpectralAutoGenerator(QObject):
 # ---------------------------------------------------------------------------
 
 TARGET_N  = 50   # minimum events needed for a reliable profile
+MIN_EVENTS_FOR_CLEANING = 20   # below this, skip cleaning entirely — too few events for cosine/kNN selection to be meaningful
 
 class SpectralCleaner(QObject):
     """
@@ -920,9 +937,11 @@ class SpectralCleaner(QObject):
         self.fluor_ch_ids    = controller.filtered_raw_fluorescence_channel_ids
         self.ceiling         = controller.experiment.settings['raw']['magnitude_ceiling']
         self._cytometer_key: str | None = controller.experiment.settings['raw'].get('cytometer_db_col')
+        self._collected_warnings: list[str] = []   # gathered across run(), emitted as one dialog at the end
 
     @with_busy_cursor
     def run(self):
+        self._collected_warnings = []
 
         eligible_external = [
             c for c in self.spectral_model
@@ -965,6 +984,21 @@ class SpectralCleaner(QObject):
 
         logger.info(f'SpectralCleaner: cleaned {len(eligible_external)} cell controls '
                     f'and {len(eligible_internal)} internal/bead controls.')
+
+        # Emit all collected skip/failure messages as a single dialog, rather
+        # than one QMessageBox per control (which can crash Qt on macOS when
+        # fired repeatedly from a worker thread).
+        if self._collected_warnings and self.bus:
+            if len(self._collected_warnings) == 1:
+                combined = f'Control Cleaning: {self._collected_warnings[0]}'
+            else:
+                combined = (
+                    f'Control Cleaning: {len(self._collected_warnings)} control(s) had issues:\n\n'
+                    + '\n'.join(f'- {w}' for w in self._collected_warnings)
+                )
+            self.bus.warningMessage.emit(combined)
+        self._collected_warnings = []
+
         self.cleaningFinished.emit()
 
     def _cleaning_fingerprint(self, control: dict) -> dict:
@@ -1075,23 +1109,30 @@ class SpectralCleaner(QObject):
                 neg_events_internal = None
                 tube_name = control.get('universal_negative_name') or ''
                 if not tube_name:
-                    logger.warning(f'SpectralCleaner: no negative assigned for "{label}" — skipping.')
+                    msg = f'"{label}": no negative assigned — skipping cleaning.'
+                    logger.warning(f'SpectralCleaner: {msg}')
+                    self._collected_warnings.append(msg)
                     return
                 all_samples_rev2 = {v: k for k, v in self.samples['all_samples'].items()}
                 neg_rel_path = all_samples_rev2.get(tube_name)
                 if not neg_rel_path:
-                    logger.warning(f'SpectralCleaner: negative tube "{tube_name}" not found — skipping.')
+                    msg = f'"{label}": negative tube "{tube_name}" not found — skipping cleaning.'
+                    logger.warning(f'SpectralCleaner: {msg}')
+                    self._collected_warnings.append(msg)
                     return
                 neg_full_path = str(self.experiment_dir / neg_rel_path)
                 neg_sample = sample_from_fcs(neg_full_path)
                 neg_events, neg_scatter_all = get_raw_events(
                     neg_sample, self.fluor_ch_ids,
-                    gate_label=None,
+                    gate_label=base_gate_label,
                     gating_strategy=self.raw_gating,
                     extra_channel_ids=scatter_ch_ids,
                 )
-                if len(neg_events) == 0:
-                    logger.warning(f'SpectralCleaner: no negative events for "{label}" — skipping.')
+                if len(neg_events) < MIN_EVENTS_FOR_CLEANING:
+                    msg = (f'"{label}": only {len(neg_events)} negative event(s) — '
+                           f'skipping cleaning, need at least {MIN_EVENTS_FOR_CLEANING}.')
+                    logger.warning(f'SpectralCleaner: {msg}')
+                    self._collected_warnings.append(msg)
                     return
                 neg_scatter = _fsc_ssc_cols(neg_scatter_all) if neg_scatter_all.shape[1] > 2 else neg_scatter_all
 
@@ -1113,13 +1154,12 @@ class SpectralCleaner(QObject):
             else:
                 n_sat_neg = 0
 
-            if len(pos_events) == 0:
-                msg = (f'SpectralCleaner: no positive events for "{label}" after saturation '
-                       f'exclusion — skipping cleaning. Use the existing profile or adjust '
-                       f'the positive gate.')
-                logger.warning(msg)
-                if self.bus:
-                    self.bus.statusMessage.emit(msg)
+            if len(pos_events) < MIN_EVENTS_FOR_CLEANING:
+                msg = (f'"{label}": only {len(pos_events)} positive event(s) after saturation '
+                       f'exclusion — skipping cleaning (need at least {MIN_EVENTS_FOR_CLEANING}). '
+                       f'Existing profile, if any, is unaffected.')
+                logger.warning(f'SpectralCleaner: {msg}')
+                self._collected_warnings.append(msg)
                 return  # leave cleaned_events untouched; profiles[label] is the fallback
 
             if use_internal:
@@ -1128,7 +1168,8 @@ class SpectralCleaner(QObject):
                 n_int_neg   = max(2, n_pos // 10)
                 order_peak  = np.argsort(pos_events[:, expected_peak_ch_idx])
                 int_neg_idx = order_peak[:n_int_neg]
-                top_idx     = order_peak[-min(100, n_pos):]
+                remaining   = order_peak[n_int_neg:]                      # exclude neg-selection events from signal pool
+                top_idx     = remaining[-min(100, len(remaining)):]
 
                 neg_mean     = pos_events[int_neg_idx].mean(axis=0)
                 spectral_sub = pos_events[top_idx] - neg_mean
@@ -1170,11 +1211,9 @@ class SpectralCleaner(QObject):
 
             n_surviving = len(pos_sel)
             if n_surviving < TARGET_N:
-                msg = (f'SpectralCleaner: only {n_surviving} events for "{label}" '
-                       f'after cleaning; profile may be unreliable.')
-                logger.warning(msg)
-                if self.bus:
-                    self.bus.statusMessage.emit(msg)
+                msg = f'"{label}": only {n_surviving} events after cleaning; profile may be unreliable.'
+                logger.warning(f'SpectralCleaner: {msg}')
+                self._collected_warnings.append(msg)
 
             result = CleanResult(
                 spectral_sub          = spectral_sub,
@@ -1213,7 +1252,6 @@ class SpectralCleaner(QObject):
             )
 
         except Exception as e:
-            msg = f'SpectralCleaner: failed to clean "{label}": {e}'
-            logger.error(msg)
-            if self.bus:
-                self.bus.warningMessage.emit(msg)
+            msg = f'"{label}": failed to clean: {e}'
+            logger.error(f'SpectralCleaner: {msg}')
+            self._collected_warnings.append(msg)

@@ -751,6 +751,15 @@ class SpectralControlsEditor(QFrame):
                     ' — press Recalculate to update spectral profiles.'
                 )
 
+    def _emit_spectral_model_updated_when_mode_switch_done(self):
+        # Guards against emitting while controller.set_mode is mid-flight on its
+        # own worker thread (e.g. a tab switch), which previously raced with
+        # refresh_spectral_process and corrupted shared state / crashed.
+        if getattr(self.controller, 'mode_switch_in_progress', False):
+            QTimer.singleShot(50, self._emit_spectral_model_updated_when_mode_switch_done)
+        else:
+            self.bus.spectralModelUpdated.emit()
+
     def refresh_comboboxes(self):
         if getattr(self, '_refreshing_comboboxes', False):
             return
@@ -971,10 +980,20 @@ class SpectralControlsEditor(QFrame):
                 control_valid = self.profile_updater.generate(
                     self.model._data[row], self.spectral_library_search_results
                 )
-                self.refresh_comboboxes()
-                self.setEnabled(True)
-                if control_valid:
-                    self.bus.spectralModelUpdated.emit()
+
+                def _finish_toggle():
+                    # refresh_comboboxes() rebuilds this row's checkbox, tearing
+                    # down the current one (setIndexWidget(..., None) + setParent(None)).
+                    # Doing that synchronously would delete this checkbox while its
+                    # own toggled() signal is still unwinding on the call stack —
+                    # a native-crash-causing reentrancy hazard. Defer to the next
+                    # event-loop tick so toggled() finishes first.
+                    self.refresh_comboboxes()
+                    self.setEnabled(True)
+                    if control_valid:
+                        self._emit_spectral_model_updated_when_mode_switch_done()
+
+                QTimer.singleShot(0, _finish_toggle)
 
             cb.toggled.connect(_on_toggle)
             self.view.setIndexWidget(proxy_uc_idx, cb)

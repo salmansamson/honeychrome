@@ -16,6 +16,28 @@ from honeychrome.controller_components.cytometer_whitelist import resolve_cytome
 import logging
 logger = logging.getLogger(__name__)
 
+# $PnV (detector voltage) on most instruments; Cytek Mosaic stores the
+# equivalent per-channel setting under $PnG (gain) instead. Either is
+# accepted as "the detector setting for channel n".
+_PNV_PATTERN = re.compile(r'^p(\d+)[vg]$', re.IGNORECASE)
+
+
+def _extract_pnv_values(text_dict, n_channels):
+    """Per-channel $PnV/$PnG (detector voltage/gain) values, 1-indexed to match PnN order."""
+    pnv = [None] * n_channels
+    for key, value in text_dict.items():
+        match = _PNV_PATTERN.match(str(key).lstrip('$'))
+        if not match:
+            continue
+        idx = int(match.group(1)) - 1
+        if 0 <= idx < n_channels:
+            try:
+                pnv[idx] = float(value)
+            except (TypeError, ValueError):
+                pnv[idx] = None
+    return pnv
+
+
 class ImportFCSController(QObject):
     finished = Signal()
 
@@ -26,8 +48,19 @@ class ImportFCSController(QObject):
         self.experiment = experiment
         self.bus = bus
 
-    @with_busy_cursor
     def reconfigure_experiment_from_fcs_files(self):
+        """Thin wrapper — safe to call directly from the main thread only.
+
+        `import_fcs_files_widget.py` already runs the import on its own
+        QThread, so it connects to `_reconfigure_experiment_from_fcs_files_impl`
+        directly rather than this wrapper, to avoid nesting
+        @with_busy_cursor's WorkerThread/QEventLoop (and its main-thread-only
+        cursor calls) inside an already-background thread.
+        """
+        self._reconfigure_experiment_from_fcs_files_impl()
+
+    @with_busy_cursor
+    def _reconfigure_experiment_from_fcs_files_impl(self):
         self.experiment.scan_sample_tree()
         experiment_dir = self.experiment.generate_subdirs()
         # single_stain_controls = self.experiment.samples['single_stain_controls']
@@ -41,6 +74,7 @@ class ImportFCSController(QObject):
                 # all_sample_channels = {}
                 all_sample_pnn = {}
                 all_sample_pnr = {}
+                all_sample_pnv = {}
                 first_sample_metadata = None
                 for n, sample_path in enumerate(raw_samples):
                     # Replace NA keyword values before any numeric conversion.
@@ -50,6 +84,7 @@ class ImportFCSController(QObject):
                             _fd.text[_k] = '0'
                     all_sample_pnn[sample_path] = _fd.pnn_labels
                     all_sample_pnr[sample_path] = _fd.pnr_values
+                    all_sample_pnv[sample_path] = _extract_pnv_values(_fd.text, len(_fd.pnn_labels))
                     if first_sample_metadata is None:
                         first_sample_metadata = _fd
 
@@ -68,6 +103,8 @@ class ImportFCSController(QObject):
                 )
                 channel_mismatch_note = None  # set below if files differ; folded into the single end-of-import dialog
                 time_missing_note = None  # set below if no Time channel; folded into the same dialog
+                voltage_mismatch_note = None  # set below if PnV/PnG differs across files; folded into the same dialog
+                voltage_unavailable_note = None  # set below for ID7000, which reports no PnV/PnG at all
 
                 if cyt_info is not None:
                     _fl_ids = cyt_info.fluorescence_channel_ids
@@ -234,6 +271,54 @@ class ImportFCSController(QObject):
                         width_ceiling = float(np.max([pnr[event_channels_pnn_stripped.index(c)] for c in width_channels]))
                     n_scatter_channels = len(scatter_channel_ids)
                     n_fluorophore_channels = len(fluorescence_channel_ids)
+
+                    # Voltage consistency check — fluorescence channels only.
+                    # Some instruments (e.g. ID7000) allow controls/samples to
+                    # be run at different voltages; Honeychrome does not yet
+                    # adjust for this, so flag it rather than silently
+                    # unmixing across mismatched gains.
+                    fluor_names = [event_channels_pnn[i] for i in fluorescence_channel_ids]
+                    voltage_by_file = {
+                        sp: dict(zip(all_sample_pnn[sp], all_sample_pnv[sp]))
+                        for sp in raw_samples
+                    }
+                    mismatched_voltages = {}
+                    for ch in fluor_names:
+                        seen = {
+                            voltage_by_file[sp][ch]
+                            for sp in raw_samples
+                            if voltage_by_file[sp].get(ch) is not None
+                        }
+                        if len(seen) > 1:
+                            mismatched_voltages[ch] = {
+                                sp: voltage_by_file[sp].get(ch) for sp in raw_samples
+                            }
+                    if mismatched_voltages:
+                        logger.debug(
+                            'Voltage/gain mismatch detail (%d of %d whitelisted '
+                            'fluorescence channels): %s',
+                            len(mismatched_voltages), len(fluor_names), mismatched_voltages,
+                        )
+                        voltage_mismatch_note = (
+                            f'Voltage/gain mismatch detected across imported files in '
+                            f'{len(mismatched_voltages)} of {len(fluor_names)} critical '
+                            f'fluorescence channel(s).\n'
+                            'Honeychrome does not currently adjust for voltage '
+                            'differences between controls and samples — unmixing '
+                            'accuracy may be affected.'
+                        )
+                        warnings.warn(voltage_mismatch_note)
+
+                    # ID7000 files carry no $PnV/$PnG keywords at all, so a
+                    # mismatch can never be detected either way — warn
+                    # unconditionally instead.
+                    if cyt_info is not None and cyt_info.db_col == 'ID7000':
+                        voltage_unavailable_note = (
+                            'Unmixing in Honeychrome assumes identical settings '
+                            'between controls and samples. ID7000 files run on '
+                            'One-Max or All-Max may exhibit inaccurate unmixing.'
+                        )
+                        warnings.warn(voltage_unavailable_note)
 
                     self.experiment.settings['raw']['area_channels'] = area_channels
                     self.experiment.settings['raw']['height_channels'] = height_channels
@@ -406,9 +491,17 @@ class ImportFCSController(QObject):
                             f'Time channel ID: {self.experiment.settings['raw']['time_channel_id']}\n'
                             f'Event ID channel ID: {self.experiment.settings['raw']['event_id_channel_id']}\n'
                             )
-                    # Fold any collected notes (channel mismatch, missing Time channel)
-                    # into this single dialog instead of emitting separately
-                    notes = [n for n in (channel_mismatch_note, time_missing_note) if n]
+                    # Fold any collected notes (channel mismatch, missing Time channel,
+                    # voltage mismatch, ID7000 voltage-unavailable) into this single
+                    # dialog instead of emitting separately
+                    notes = [
+                        n for n in (
+                            channel_mismatch_note,
+                            time_missing_note,
+                            voltage_mismatch_note,
+                            voltage_unavailable_note,
+                        ) if n
+                    ]
                     if notes:
                         text = '\n\n'.join(notes) + '\n\n' + text
                     logger.info(text)
