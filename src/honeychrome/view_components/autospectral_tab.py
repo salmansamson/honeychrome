@@ -892,11 +892,28 @@ class AutoSpectralTab(QWidget):
         info.setWordWrap(True)
         layout.addWidget(info)
 
+        # Frozen header row (profile names) — does not scroll vertically.
+        # Its own horizontal scrollbar is hidden and driven by the body's.
+        self._assign_header_scroll = QScrollArea()
+        self._assign_header_scroll.setWidgetResizable(True)
+        self._assign_header_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._assign_header_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._assign_header_scroll.setFrameShape(QScrollArea.NoFrame)
+        self._assign_header_widget = QWidget()
+        self._assign_header_layout = QGridLayout(self._assign_header_widget)
+        self._assign_header_layout.setSpacing(6)
+        self._assign_header_layout.setContentsMargins(0, 0, 0, 0)
+        self._assign_header_layout.setAlignment(Qt.AlignLeft)
+        self._assign_header_scroll.setWidget(self._assign_header_widget)
+        layout.addWidget(self._assign_header_scroll)
+
         # Scrollable grid: rows = non-SSC samples, columns = AF profiles
+        # Min/max here are just the pre-populate defaults; _rebuild_assignment_grid()
+        # re-sizes this to fit the actual sample count each time it's called.
         self._assign_scroll = QScrollArea()
         self._assign_scroll.setWidgetResizable(True)
-        self._assign_scroll.setMinimumHeight(120)
-        self._assign_scroll.setMaximumHeight(300)
+        self._assign_scroll.setMinimumHeight(240)
+        self._assign_scroll.setMaximumHeight(900)
         self._assign_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._assign_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self._assign_grid_widget = QWidget()
@@ -905,6 +922,11 @@ class AutoSpectralTab(QWidget):
         self._assign_grid_layout.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self._assign_scroll.setWidget(self._assign_grid_widget)
         layout.addWidget(self._assign_scroll)
+
+        # Keep header columns aligned with body columns when scrolling sideways.
+        self._assign_scroll.horizontalScrollBar().valueChanged.connect(
+            self._assign_header_scroll.horizontalScrollBar().setValue
+        )
 
         self._assign_checkboxes: dict = {}
 
@@ -1379,9 +1401,17 @@ class AutoSpectralTab(QWidget):
         """
         Rebuild the samples × profiles checkbox grid.
         Only non-Single-Stain-Control samples are shown.
-        Row 0 = header (profile names).  Rows 1+ = one per sample.
+        The profile-name header lives in a separate frozen widget/layout
+        (self._assign_header_layout) above the scrollable body grid, kept
+        column-aligned with it. Body row 0 = first sample (no header row
+        inside the scrolling grid anymore).
         """
         self._assign_checkboxes.clear()
+        while self._assign_header_layout.count():
+            item = self._assign_header_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
         while self._assign_grid_layout.count():
             item = self._assign_grid_layout.takeAt(0)
             w = item.widget()
@@ -1400,22 +1430,30 @@ class AutoSpectralTab(QWidget):
             self._assign_grid_layout.addWidget(
                 QLabel('No profiles or non-SSC samples available yet.'), 0, 0
             )
+            self._assign_header_scroll.setFixedHeight(1)
+            self._assign_scroll.setMinimumHeight(60)
+            self._assign_scroll.setMaximumHeight(60)
             return
 
-        # Header
+        # Header (frozen row, own layout — not row 0 of the scrolling body)
         corner = QLabel('Sample')
         corner.setStyleSheet('font-weight: bold;')
-        self._assign_grid_layout.addWidget(corner, 0, 0, Qt.AlignLeft)
+        self._assign_header_layout.addWidget(corner, 0, 0, Qt.AlignLeft)
 
+        AF_SUFFIX = ' AutoSpectral AF'
         for col, pname in enumerate(profile_names, start=1):
-            display = pname if len(pname) <= 28 else pname[:26] + '…'
+            display = pname
+            if display.endswith(AF_SUFFIX):
+                display = display[:-len(AF_SUFFIX)]
+            if len(display) > 28:
+                display = display[:26] + '…'
             lbl = QLabel(display)
             lbl.setStyleSheet('font-weight: bold;')
             lbl.setToolTip(pname)
-            self._assign_grid_layout.addWidget(lbl, 0, col, Qt.AlignCenter)
+            self._assign_header_layout.addWidget(lbl, 0, col, Qt.AlignCenter)
 
-        # Sample rows
-        for row, (sample_path, display_name) in enumerate(non_ssc.items(), start=1):
+        # Sample rows (scrolling body — row 0 is now the first sample)
+        for row, (sample_path, display_name) in enumerate(non_ssc.items()):
             name_lbl = QLabel(display_name)
             name_lbl.setToolTip(sample_path)
             if sample_path == self.controller.current_sample_path:
@@ -1432,6 +1470,53 @@ class AutoSpectralTab(QWidget):
                 )
                 self._assign_grid_layout.addWidget(cb, row, col, Qt.AlignCenter)
                 self._assign_checkboxes[(sample_path, pname)] = cb
+
+        # Force header and body columns to the same pixel width so checkboxes
+        # line up under their profile-name label, regardless of which is wider.
+        n_cols = len(profile_names) + 1
+        for col in range(n_cols):
+            header_item = self._assign_header_layout.itemAtPosition(0, col)
+            body_item = self._assign_grid_layout.itemAtPosition(0, col)
+            header_w = header_item.widget().sizeHint().width() if header_item else 0
+            body_w = body_item.widget().sizeHint().width() if body_item else 0
+            width = max(header_w, body_w)
+            self._assign_header_layout.setColumnMinimumWidth(col, width)
+            self._assign_grid_layout.setColumnMinimumWidth(col, width)
+
+        # Size the header strip to fit one row of (bold) labels exactly.
+        self._assign_header_layout.activate()
+        row_height = max(
+            self._assign_header_layout.itemAtPosition(0, col).widget().sizeHint().height()
+            for col in range(n_cols)
+        )
+        margins = self._assign_header_layout.contentsMargins()
+        self._assign_header_scroll.setFixedHeight(
+            row_height + margins.top() + margins.bottom() + 10
+        )
+
+        # Size the body strip to fit ALL sample rows (up to a generous cap),
+        # so the grid doesn't need its own inner scrollbar for typical sample
+        # counts — the tab's outer QScrollArea handles page-level scrolling
+        # instead. Beyond the cap, the inner scrollbar takes back over.
+        self._assign_grid_layout.activate()
+        n_rows = len(non_ssc)
+        row_heights = [
+            self._assign_grid_layout.itemAtPosition(r, 0).widget().sizeHint().height()
+            for r in range(n_rows)
+        ]
+        grid_margins = self._assign_grid_layout.contentsMargins()
+        content_height = (
+            sum(row_heights)
+            + self._assign_grid_layout.spacing() * max(n_rows - 1, 0)
+            + grid_margins.top() + grid_margins.bottom()
+        )
+
+        MIN_ASSIGN_HEIGHT = 240   # doubled from the old fixed 120px minimum
+        MAX_ASSIGN_HEIGHT = 900   # safety cap for very large sample counts
+        target_height = max(MIN_ASSIGN_HEIGHT, min(content_height, MAX_ASSIGN_HEIGHT))
+        self._assign_scroll.setMinimumHeight(MIN_ASSIGN_HEIGHT)
+        self._assign_scroll.setMaximumHeight(MAX_ASSIGN_HEIGHT)
+        self._assign_scroll.setFixedHeight(target_height)
 
     def _make_assignment_handler(self, sample_path: str, profile_name: str, cb: QCheckBox):
         def handler(_state):

@@ -125,7 +125,7 @@ def sample_from_fcs(path, bus=None):
         sample = _load_fcs_with_repaired_delimiter(path)
 
     # Replace literal 'NA' keyword values (some FACSDiscover files write these).
-    meta = sample.get_metadata().get('text', {})
+    meta = sample.get_metadata()
     if meta:
         na_keys = [k for k, v in meta.items() if str(v).strip().upper() == 'NA']
         for k in na_keys:
@@ -287,6 +287,20 @@ def define_fcs_keywords(
     import re
     from datetime import datetime, timezone
 
+    # Keywords Honeychrome recomputes fresh elsewhere in this function (or in
+    # write_fcs). Raw values for these must never be carried through, or they
+    # end up as duplicate keywords alongside the correct ones — since raw
+    # keyword keys now come back lowercased/$-stripped from get_metadata(),
+    # they no longer collide by exact key string with the ones we write below.
+    _RECOMPUTED_KEYWORDS = {
+        'FIL', 'PAR', 'TOT', 'DATATYPE', 'BYTEORD', 'MODE', 'NEXTDATA',
+        'BEGINANALYSIS', 'ENDANALYSIS', 'BEGINSTEXT', 'ENDSTEXT',
+        'BEGINDATA', 'ENDDATA', 'ORIGINALITY', 'LAST_MODIFIED', 'LAST_MODIFIER',
+        'HONEYCHROME', 'UNMIXINGMETHOD', 'SPILLOVER',
+        'SPECTRA', 'FLUOROCHROMES', 'AUTOFLUORESCENCE', 'WEIGHTS',
+        'BDCHORUSDATARECORD',
+    }
+
     # ---- 1. Carry-through non-parameter keywords from raw file ----
     # Guard against malformed keyword dicts produced by FlowIO when the FCS
     # TEXT delimiter byte is wrong (FACSDiscover export bug): corrupt entries
@@ -299,7 +313,7 @@ def define_fcs_keywords(
         and len(k) <= 64
         and not re.match(r'^\$?P\d+', k, re.IGNORECASE)
         and not re.match(r'^\$?CH\d+', k, re.IGNORECASE)
-        and k.upper() not in ('BDCHORUSDATARECORD',)
+        and k.lstrip('$').upper() not in _RECOMPUTED_KEYWORDS
     }
 
     # ---- 2. Whitelist for raw param carry-through ----
@@ -474,11 +488,14 @@ def _format_spillover(fl_pnn: list[str], spillover: np.ndarray) -> str:
     Serialise the fine-tuning spillover matrix as an FCS 3.1 $SPILLOVER string.
     fl_pnn: ordered list of fluorophore $PnN names (must match spillover shape).
     spillover: square (n_fluor x n_fluor) matrix.
+    Written row-major, untransposed: spillover[i][j] (row i spills into column j)
+    matches FlowJo's own row/column convention directly now that Changes 1 and 2
+    apply the same convention internally without an extra transpose.
     """
     n = len(fl_pnn)
     if spillover is None or spillover.shape != (n, n):
         return ''
-    vals = ','.join(f'{v:.8g}' for v in spillover.T.flatten())
+    vals = ','.join(f'{v:.8g}' for v in spillover.flatten())
     names = ','.join(fl_pnn)
     return f'{n},{names},{vals}'
 
@@ -1007,7 +1024,7 @@ def calc_stats(data_for_cytometry_plots, initialise=True):
                     channels = [dim.id for dim in gate_node.gate.dimensions]
                     intensity = {}
                     rCV = {}
-                    if len(gate_membership[gate_id]) > 0:
+                    if gate_membership[gate_id].sum() > 0:
                         intensity = {channel: event_data[gate_membership[gate_id], pnn.index(channel)].mean() for channel in channels}
                         rCV = {channel: robust_cv(event_data[gate_membership[gate_id], pnn.index(channel)]) for channel in channels}
 

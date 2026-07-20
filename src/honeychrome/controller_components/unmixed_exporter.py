@@ -216,7 +216,7 @@ class UnmixedExporter(QObject):
                         if ch in _sample_ch_idx:
                             raw_event_data[:, dst] = _all_events[:, _sample_ch_idx[ch]]
                 np.nan_to_num(raw_event_data, copy=False, nan=0.0)
-                raw_keywords: dict[str, str] = cast(dict[str, str], sample.get_metadata().get('text', {}))
+                raw_keywords: dict[str, str] = cast(dict[str, str], sample.get_metadata())
                 n_events = sample.event_count
 
                 if n_events > 0:
