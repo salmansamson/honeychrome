@@ -61,6 +61,38 @@ def get_project_files():
             print('WARNING: libomp not found via brew — OpenMP will not be '
                   'available in the built app; falling back to NumPy path.')
 
+    # AutoSpectral Optimization kernel (bundled_plugins/) also links OpenMP on
+    # macOS, but unlike _af_kernel it is never hidden-imported (loaded
+    # dynamically by plugin_loaders.py), so PyInstaller's Analysis phase never
+    # sees it as a binary dependency and never applies its automatic
+    # @loader_path rewrite. Copying libomp.dylib alongside it is not sufficient
+    # on its own — the compiled extension's own load command still points at
+    # the absolute Homebrew path unless rewritten explicitly.
+    if platform.system() == 'Darwin':
+        try:
+            libomp_prefix = subprocess.check_output(
+                ['brew', '--prefix', 'libomp'], stderr=subprocess.DEVNULL
+            ).decode().strip()
+            libomp_src = os.path.join(libomp_prefix, 'lib', 'libomp.dylib')
+            opt_kernel_dir = os.path.join(
+                project_root, 'src', 'honeychrome', 'bundled_plugins'
+            )
+            for fname in os.listdir(opt_kernel_dir):
+                if fname.startswith('_autospectral_opt_kernel') and fname.endswith('.dylib'):
+                    opt_kernel_path = os.path.join(opt_kernel_dir, fname)
+                    if os.path.exists(libomp_src):
+                        libomp_dest = os.path.join(opt_kernel_dir, 'libomp.dylib')
+                        shutil.copy2(libomp_src, libomp_dest)
+                        subprocess.run([
+                            'install_name_tool', '-change',
+                            libomp_src, '@loader_path/libomp.dylib',
+                            opt_kernel_path,
+                        ], check=True)
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print('WARNING: could not rewrite libomp dependency for the '
+                  'AutoSpectral Optimization kernel — it may fail to load '
+                  'OpenMP on machines without Homebrew libomp installed.')
+
     return assets
 
 def main():
